@@ -1,0 +1,205 @@
+import { apFetch, isAPConfigured, getOAuthToken } from '../config/ap.js';
+import { env } from '../config/env.js';
+import { AppError } from '../middleware/error-handler.js';
+import * as quoteService from './quote.service.js';
+import type { QuoteData } from '@ntm/shared';
+
+const AP_BASE_URL = 'https://public-api.alternativepayments.io';
+
+// ── Customer Management ─────────────────────────────────────────────
+
+export async function createCustomer(quote: QuoteData): Promise<string> {
+  if (!isAPConfigured()) throw new AppError(503, 'Alternative Payments not configured');
+
+  const res = await apFetch('/customers', {
+    method: 'POST',
+    body: JSON.stringify({
+      name: quote.customer.businessName,
+      email: quote.customer.email,
+      external_id: quote.quoteNumber,
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new AppError(502, `AP customer creation failed (${res.status}): ${text}`);
+  }
+
+  const data = await res.json();
+  return data.id;
+}
+
+// ── Invoice Management ──────────────────────────────────────────────
+
+export async function createInvoice(
+  quote: QuoteData,
+  apCustomerId: string,
+): Promise<{ invoiceId: string; paymentLink: string }> {
+  if (!isAPConfigured()) throw new AppError(503, 'Alternative Payments not configured');
+
+  const lineItems = buildLineItems(quote);
+  if (lineItems.length === 0) throw new AppError(400, 'No payable items found');
+
+  const dueDate = new Date();
+  dueDate.setDate(dueDate.getDate() + 30);
+
+  const res = await apFetch('/invoices', {
+    method: 'POST',
+    body: JSON.stringify({
+      customer_id: apCustomerId,
+      currency: 'USD',
+      due_date: dueDate.toISOString().slice(0, 10),
+      line_items: lineItems,
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new AppError(502, `AP invoice creation failed (${res.status}): ${text}`);
+  }
+
+  const invoice = await res.json();
+
+  // Get the hosted payment link
+  const linkRes = await apFetch(`/invoices/${invoice.id}/payment-link`);
+  const linkData = linkRes.ok ? await linkRes.json() : { url: '' };
+
+  return { invoiceId: invoice.id, paymentLink: linkData.url || '' };
+}
+
+// ── Checkout Token ──────────────────────────────────────────────────
+
+export async function getCheckoutToken(
+  apCustomerId: string,
+  apInvoiceId: string,
+): Promise<string> {
+  const token = await getOAuthToken();
+
+  const res = await fetch(`${AP_BASE_URL}/v1/checkout-auth/init`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      customer_id: apCustomerId,
+      invoice_id: apInvoiceId,
+    }),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new AppError(502, `AP checkout token failed (${res.status}): ${text}`);
+  }
+
+  const data = await res.json();
+  return data.access_token || data.token;
+}
+
+// ── Full Checkout Flow ──────────────────────────────────────────────
+
+export async function createCheckout(quote: QuoteData): Promise<{
+  checkoutToken: string;
+  invoiceId: string;
+  paymentLink: string;
+  customerId: string;
+}> {
+  const customerId = await createCustomer(quote);
+  const { invoiceId, paymentLink } = await createInvoice(quote, customerId);
+  const checkoutToken = await getCheckoutToken(customerId, invoiceId);
+
+  // Persist AP session on the quote
+  await quoteService.updateQuoteAPSession(
+    quote.quoteNumber,
+    customerId,
+    invoiceId,
+    paymentLink,
+  );
+
+  return { checkoutToken, invoiceId, paymentLink, customerId };
+}
+
+// ── Payment Link (for returning customers) ──────────────────────────
+
+export async function getOrCreatePaymentLink(quote: QuoteData): Promise<{
+  checkoutToken: string;
+  invoiceId: string;
+  paymentLink: string;
+}> {
+  // If there's an existing invoice, try to get a fresh checkout token
+  if (quote.apInvoiceId && quote.apCustomerId) {
+    try {
+      const checkoutToken = await getCheckoutToken(quote.apCustomerId, quote.apInvoiceId);
+      const linkRes = await apFetch(`/invoices/${quote.apInvoiceId}/payment-link`);
+      const linkData = linkRes.ok ? await linkRes.json() : { url: quote.apPaymentLink || '' };
+      return {
+        checkoutToken,
+        invoiceId: quote.apInvoiceId,
+        paymentLink: linkData.url || quote.apPaymentLink || '',
+      };
+    } catch {
+      // Token expired or invoice invalid, create new checkout
+    }
+  }
+
+  const result = await createCheckout(quote);
+  return {
+    checkoutToken: result.checkoutToken,
+    invoiceId: result.invoiceId,
+    paymentLink: result.paymentLink,
+  };
+}
+
+// ── Webhook Handling ────────────────────────────────────────────────
+
+export async function handleInvoicePaid(invoiceId: string) {
+  const quote = await quoteService.markQuotePaid(invoiceId);
+  return quote;
+}
+
+export async function handlePaymentFailed(invoiceId: string) {
+  const quote = await quoteService.getQuoteByAPInvoice(invoiceId);
+  if (quote) {
+    await quoteService.updateQuoteStatus(quote.quoteNumber, 'accepted');
+  }
+}
+
+// ── Line Item Builder ───────────────────────────────────────────────
+
+function buildLineItems(quote: QuoteData) {
+  const items: Array<{ description: string; amount: number; quantity: number }> = [];
+
+  // 1. Onboarding & Setup (one-time)
+  if (quote.onboarding.finalCost > 0) {
+    items.push({
+      description: `Onboarding & Setup (${quote.onboarding.userCount} users)`,
+      amount: Math.round(quote.onboarding.finalCost * 100),
+      quantity: 1,
+    });
+  }
+
+  // 2. One-time addons
+  for (const addon of quote.selectedAddons) {
+    if (addon.pricingType === 'one-time-only') {
+      const amount = addon.setupPrice ?? addon.price;
+      if (amount && amount > 0) {
+        items.push({
+          description: addon.name,
+          amount: Math.round(amount * 100),
+          quantity: addon.quantity,
+        });
+      }
+    }
+
+    // 3. Setup fees from dual-pricing addons
+    if (addon.pricingType === 'both' && addon.setupPrice && addon.setupPrice > 0) {
+      items.push({
+        description: `${addon.name} - Setup Fee`,
+        amount: Math.round(addon.setupPrice * 100),
+        quantity: addon.quantity,
+      });
+    }
+  }
+
+  return items;
+}

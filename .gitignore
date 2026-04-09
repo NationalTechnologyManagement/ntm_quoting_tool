@@ -1,0 +1,12 @@
+node_modules/
+dist/
+build/
+.env
+REFERENCE ONLY/
+.env.local
+.env.production
+*.log
+.DS_Store
+coverage/
+.turbo/
+prisma/*.db

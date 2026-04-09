@@ -1,0 +1,20 @@
+[phases.setup]
+aptPkgs = ["chromium"]
+
+[phases.install]
+cmds = ["npm ci --include=dev"]
+
+[phases.build]
+cmds = [
+  "npm run build --workspace=shared",
+  "npm run build --workspace=client",
+  "cd server && npx prisma generate && cd ..",
+  "npm run build --workspace=server"
+]
+
+[start]
+cmd = "cd server && npx prisma migrate deploy && npx tsx prisma/seed.ts && cd .. && npm start"
+
+[variables]
+PUPPETEER_EXECUTABLE_PATH = "/usr/bin/chromium"
+PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"

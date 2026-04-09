@@ -1,0 +1,162 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ── Packages ─────────────────────────────────────────────────────────
+
+model Package {
+  id               String   @id @default(cuid())
+  name             String
+  pricePerUser     Float
+  pricePerLocation Float
+  frequency        String   @default("monthly") // monthly | annually | one-time
+  features         Json     @default("[]")       // string[]
+  isBestValue      Boolean  @default(false)
+  sortOrder        Int      @default(0)
+  active           Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("packages")
+}
+
+// ── Addons ───────────────────────────────────────────────────────────
+
+model Addon {
+  id                 String   @id @default(cuid())
+  name               String
+  description        String
+  price              Float
+  frequency          String   @default("monthly")
+  active             Boolean  @default(true)
+  recurringPrice     Float?
+  recurringFrequency String?
+  setupPrice         Float?
+  pricingType        String   @default("recurring-only") // recurring-only | one-time-only | both
+  sortOrder          Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("addons")
+}
+
+// ── Promo Codes ──────────────────────────────────────────────────────
+
+model PromoCode {
+  id           String   @id @default(cuid())
+  code         String   @unique
+  discount     Float
+  discountType String   // percentage | fixed
+  applyTo      String   // one-time | monthly | onboarding
+  active       Boolean  @default(true)
+  maxUses      Int?
+  currentUses  Int      @default(0)
+  expiresAt    DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("promo_codes")
+}
+
+// ── Terms ────────────────────────────────────────────────────────────
+
+model Terms {
+  id          String   @id @default(cuid())
+  version     String   @unique
+  content     String
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("terms")
+}
+
+// ── Quotes ───────────────────────────────────────────────────────────
+
+model Quote {
+  id                 String    @id @default(cuid())
+  quoteNumber        String    @unique
+  status             String    @default("draft") // draft | sent | accepted | checkout_pending | paid | expired
+  customer           Json      // CustomerInfo snapshot
+  selectedPackage    Json      // QuoteSelectedPackage snapshot
+  selectedAddons     Json      // QuoteSelectedAddon[] snapshot
+  onboarding         Json      // QuoteOnboarding snapshot
+  appliedPromoCodes  Json      @default("[]") // AppliedPromoCode[] snapshot
+  totals             Json      // QuoteTotals snapshot
+  terms              Json      // { version, id, url, content } snapshot
+  agreement          Json?     // QuoteAgreement (filled on acceptance)
+  orderNumber        String?   @unique
+
+  // Alternative Payments
+  apCustomerId       String?
+  apInvoiceId        String?
+  apPaymentLink      String?
+
+  // ConnectWise
+  cwCompanyId        Int?
+  cwContactId        Int?
+  cwOpportunityId    Int?
+  cwProjectId        Int?
+  cwAgreementId      Int?
+
+  // GoHighLevel
+  ghlContactId       String?
+  ghlOpportunityId   String?
+
+  expiresAt          DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  contracts          Contract[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("quotes")
+}
+
+// ── Contracts ────────────────────────────────────────────────────────
+
+model Contract {
+  id         String   @id @default(cuid())
+  quoteId    String
+  quote      Quote    @relation(fields: [quoteId], references: [id])
+  pdfUrl     String?
+  pdfData    Bytes?
+  emailedAt  DateTime?
+  createdAt  DateTime @default(now())
+
+  @@map("contracts")
+}
+
+// ── Admin Users ──────────────────────────────────────────────────────
+
+model AdminUser {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("admin_users")
+}
+
+// ── Audit Logs ───────────────────────────────────────────────────────
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  action    String
+  entity    String
+  entityId  String?
+  data      Json?
+  adminId   String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([entity, entityId])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
