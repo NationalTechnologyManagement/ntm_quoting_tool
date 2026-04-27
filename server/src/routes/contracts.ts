@@ -17,6 +17,39 @@ router.get('/api/admin/contracts/:quoteId/preview', requireAuth, async (req, res
   res.type('html').send(html);
 });
 
+// Admin-only: list contracts for a quote (to expose for delete).
+router.get('/api/admin/quotes/:quoteId/contracts', requireAuth, async (req, res) => {
+  const quoteId = req.params.quoteId as string;
+  const dbQuote = await prisma.quote.findFirst({
+    where: { OR: [{ id: quoteId }, { quoteNumber: quoteId }] },
+    select: { id: true },
+  });
+  if (!dbQuote) {
+    res.status(404).json({ error: 'Quote not found' });
+    return;
+  }
+  const contracts = await prisma.contract.findMany({
+    where: { quoteId: dbQuote.id },
+    orderBy: { createdAt: 'desc' },
+    select: { id: true, pdfUrl: true, emailedAt: true, createdAt: true },
+  });
+  res.json({ contracts });
+});
+
+// Admin-only: delete a generated contract record. Removes the PDF blob and
+// row entirely. The associated Quote is unaffected. Use to clean up old
+// drafts that were superseded by a re-issued contract.
+router.delete('/api/admin/contracts/:contractId', requireAuth, async (req, res) => {
+  const contractId = req.params.contractId as string;
+  const existing = await prisma.contract.findUnique({ where: { id: contractId } });
+  if (!existing) {
+    res.status(404).json({ error: 'Contract not found' });
+    return;
+  }
+  await prisma.contract.delete({ where: { id: contractId } });
+  res.json({ success: true });
+});
+
 // Generate contract PDF and email it
 router.post('/api/contracts/:quoteId/generate', async (req, res) => {
   const quoteId = req.params.quoteId as string;

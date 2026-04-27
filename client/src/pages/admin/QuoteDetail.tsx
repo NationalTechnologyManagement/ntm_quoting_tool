@@ -32,6 +32,13 @@ interface CustomItem {
   addedAt?: string;
 }
 
+interface ContractRow {
+  id: string;
+  pdfUrl: string | null;
+  emailedAt: string | null;
+  createdAt: string;
+}
+
 const fmt = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 
@@ -42,6 +49,7 @@ const QuoteDetail = () => {
 
   const [quote, setQuote] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
+  const [contracts, setContracts] = useState<ContractRow[]>([]);
 
   // New-item form
   const [name, setName] = useState('');
@@ -60,12 +68,27 @@ const QuoteDetail = () => {
     if (!id) return;
     setLoading(true);
     try {
-      const data = await adminApi.getQuote(id);
+      const [data, contractList] = await Promise.all([
+        adminApi.getQuote(id),
+        adminApi.listContracts(id).catch(() => ({ contracts: [] })),
+      ]);
       setQuote(data);
+      setContracts(contractList.contracts ?? []);
     } catch {
       toast.error('Failed to load quote');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const removeContract = async (contractId: string) => {
+    if (!confirm('Delete this generated contract? The Quote remains; only the PDF record is removed.')) return;
+    try {
+      await adminApi.deleteContract(contractId);
+      toast.success('Contract deleted');
+      await fetchQuote();
+    } catch (e: any) {
+      toast.error(e?.message || 'Delete failed');
     }
   };
 
@@ -223,6 +246,44 @@ const QuoteDetail = () => {
               </Button>
             )}
           </div>
+        </Card>
+
+        {/* Generated contracts */}
+        <Card className="p-6">
+          <h3 className="text-lg font-semibold mb-3">Generated Contracts</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            Contract PDFs are generated automatically when payment is captured. Delete is permanent —
+            removes the stored PDF record. The signed PDF in the customer's email inbox is unaffected.
+          </p>
+          {contracts.length === 0 ? (
+            <p className="text-sm text-muted-foreground italic">No contracts generated yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {contracts.map((c) => (
+                <div
+                  key={c.id}
+                  className="flex items-center justify-between p-3 bg-secondary/40 border border-border rounded-md"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="font-mono text-xs text-muted-foreground">{c.id}</p>
+                    <p className="text-sm">
+                      Generated {new Date(c.createdAt).toLocaleString()}
+                      {c.emailedAt ? ` · emailed ${new Date(c.emailedAt).toLocaleString()}` : ' · not emailed'}
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-destructive hover:bg-destructive/10"
+                    onClick={() => removeContract(c.id)}
+                    title="Delete contract"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </Card>
 
         {/* Custom items */}

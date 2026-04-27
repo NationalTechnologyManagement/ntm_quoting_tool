@@ -224,6 +224,16 @@ export const adminApi = {
   testCW: () => apiRequest<any>('/api/admin/settings/integrations/cw/test', { method: 'POST' }),
   testEmail: () => apiRequest<any>('/api/admin/settings/integrations/email/test', { method: 'POST' }),
 
+  // Contracts — list + delete
+  listContracts: (quoteId: string) =>
+    apiRequest<{
+      contracts: Array<{ id: string; pdfUrl: string | null; emailedAt: string | null; createdAt: string }>;
+    }>(`/api/admin/quotes/${encodeURIComponent(quoteId)}/contracts`),
+  deleteContract: (contractId: string) =>
+    apiRequest<{ success: true }>(`/api/admin/contracts/${encodeURIComponent(contractId)}`, {
+      method: 'DELETE',
+    }),
+
   // Contract preview (HTML)
   getContractPreviewHtml: async (quoteId: string): Promise<string> => {
     const token = localStorage.getItem('adminToken');

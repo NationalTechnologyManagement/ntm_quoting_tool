@@ -153,8 +153,11 @@ export function invalidateCwConfigCache(): void {
   cache = null;
 }
 
-// Names that should be required (not 'null' sentinel) before provisioning will work.
+// Keys that the orchestrator actually depends on to complete provisioning.
 // Used by the admin UI to surface "you still need to set X" warnings.
+// Custom-field keys are intentionally NOT in this list — the crossref step
+// silently skips when they're unset, so they're optional. Set them once the
+// "Quote ID" custom fields are created on Company / Agreement / Project in CW.
 export const REQUIRED_KEYS_FOR_PROVISIONING: CwConfigKey[] = [
   'project.typeId',
   'project.templateId',
@@ -162,6 +165,4 @@ export const REQUIRED_KEYS_FOR_PROVISIONING: CwConfigKey[] = [
   'project.defaultManagerMemberId',
   'opportunity.defaultSalesRepMemberId',
   'agreement.currencyId',
-  'customField.companyQuoteId',
-  'customField.agreementQuoteId',
 ];
