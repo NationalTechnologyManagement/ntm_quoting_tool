@@ -21,4 +21,24 @@ router.get('/api/admin/me', requireAuth, async (req, res) => {
   res.json({ user: req.admin });
 });
 
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8),
+});
+
+router.post(
+  '/api/admin/change-password',
+  requireAuth,
+  validate(changePasswordSchema),
+  async (req, res) => {
+    const { currentPassword, newPassword } = req.body as z.infer<typeof changePasswordSchema>;
+    if (!req.admin) {
+      res.status(401).json({ error: 'Not authenticated' });
+      return;
+    }
+    await authService.changePassword(req.admin.userId, currentPassword, newPassword);
+    res.json({ success: true });
+  },
+);
+
 export default router;

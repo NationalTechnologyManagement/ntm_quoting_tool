@@ -204,6 +204,23 @@ export const adminApi = {
   testCW: () => apiRequest<any>('/api/admin/settings/integrations/cw/test', { method: 'POST' }),
   testEmail: () => apiRequest<any>('/api/admin/settings/integrations/email/test', { method: 'POST' }),
 
+  // Contract preview (HTML)
+  getContractPreviewHtml: async (quoteId: string): Promise<string> => {
+    const token = localStorage.getItem('adminToken');
+    const res = await fetch(`/api/admin/contracts/${encodeURIComponent(quoteId)}/preview`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) throw new Error(`Preview failed: ${res.status}`);
+    return res.text();
+  },
+
+  // Account
+  changePassword: (currentPassword: string, newPassword: string) =>
+    apiRequest<{ success: true }>('/api/admin/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+
   // CW reference config
   getCwConfig: () =>
     apiRequest<{

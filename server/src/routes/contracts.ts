@@ -4,8 +4,18 @@ import * as quoteService from '../services/quote.service.js';
 import * as contractService from '../services/contract.service.js';
 import * as pdfService from '../services/pdf.service.js';
 import * as emailService from '../services/email.service.js';
+import { requireAuth } from '../middleware/auth.js';
 
 const router = Router();
+
+// Admin-only: render the contract HTML for preview (no PDF, no email).
+// Uses the same buildContractHtml the PDF generator uses so preview === PDF.
+router.get('/api/admin/contracts/:quoteId/preview', requireAuth, async (req, res) => {
+  const quoteId = req.params.quoteId as string;
+  const quote = await quoteService.getQuote(quoteId);
+  const html = contractService.buildContractHtml(quote);
+  res.type('html').send(html);
+});
 
 // Generate contract PDF and email it
 router.post('/api/contracts/:quoteId/generate', async (req, res) => {

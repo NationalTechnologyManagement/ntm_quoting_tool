@@ -21,6 +21,8 @@ import TermsManagement from "./pages/admin/TermsManagement";
 import QuoteManagement from "./pages/admin/QuoteManagement";
 import IntegrationSettings from "./pages/admin/IntegrationSettings";
 import CwReferenceData from "./pages/admin/CwReferenceData";
+import Account from "./pages/admin/Account";
+import ContractPreview from "./pages/admin/ContractPreview";
 import QuoteLookup from "./pages/QuoteLookup";
 import NotFound from "./pages/NotFound";
 
@@ -48,6 +50,9 @@ const App = () => (
               <Route path="/admin/quotes" element={<QuoteManagement />} />
               <Route path="/admin/integrations" element={<IntegrationSettings />} />
               <Route path="/admin/cw-reference-ids" element={<CwReferenceData />} />
+              <Route path="/admin/account" element={<Account />} />
+              <Route path="/admin/contracts/preview" element={<ContractPreview />} />
+              <Route path="/admin/contracts/preview/:quoteNumber" element={<ContractPreview />} />
               <Route path="/admin/packages" element={<PackageManagement />} />
               <Route path="/admin/addons" element={<AddonManagement />} />
               <Route path="/admin/promo-codes" element={<PromoCodeManagement />} />

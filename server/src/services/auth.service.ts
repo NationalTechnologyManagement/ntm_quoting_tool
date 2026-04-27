@@ -30,3 +30,25 @@ export async function validateToken(token: string) {
     return null;
   }
 }
+
+export async function changePassword(
+  userId: string,
+  currentPassword: string,
+  newPassword: string,
+) {
+  const user = await prisma.adminUser.findUnique({ where: { id: userId } });
+  if (!user) throw new AppError(404, 'User not found');
+
+  const valid = await bcrypt.compare(currentPassword, user.passwordHash);
+  if (!valid) throw new AppError(401, 'Current password is incorrect');
+
+  if (newPassword.length < 8) {
+    throw new AppError(400, 'New password must be at least 8 characters');
+  }
+
+  const passwordHash = await bcrypt.hash(newPassword, 12);
+  await prisma.adminUser.update({
+    where: { id: userId },
+    data: { passwordHash },
+  });
+}

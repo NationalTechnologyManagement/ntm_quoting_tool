@@ -72,6 +72,18 @@ const AdminNav = () => {
               >
                 CW IDs
               </Button>
+              <Button
+                variant={currentPath.startsWith('/admin/contracts') ? 'default' : 'ghost'}
+                onClick={() => navigate('/admin/contracts/preview')}
+              >
+                Contract
+              </Button>
+              <Button
+                variant={currentPath === '/admin/account' ? 'default' : 'ghost'}
+                onClick={() => navigate('/admin/account')}
+              >
+                Account
+              </Button>
             </div>
             <div className="flex gap-2 border-l pl-4">
               <Button variant="outline" onClick={() => navigate('/')}>

@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { adminApi } from '@/services/api';
 import AdminNav from '@/components/admin/AdminNav';
@@ -37,6 +38,30 @@ const AddonManagement = () => {
     setEditableAddons(updated);
   };
 
+  const addAddon = () => {
+    const newAddon: Addon = {
+      id: `addon-${Date.now()}`,
+      name: 'New Add-On',
+      description: '',
+      price: 0,
+      frequency: 'monthly',
+      active: true,
+      recurringPrice: 0,
+      recurringFrequency: 'monthly',
+      setupPrice: 0,
+      pricingType: 'recurring-only',
+    };
+    setEditableAddons([...editableAddons, newAddon]);
+    toast.success('Added — fill in details and save');
+  };
+
+  const removeAddon = (index: number) => {
+    const addon = editableAddons[index];
+    if (!confirm(`Remove "${addon.name}"? This deactivates it on save.`)) return;
+    const updated = editableAddons.filter((_, i) => i !== index);
+    setEditableAddons(updated);
+  };
+
   const handleSave = async () => {
     // Validate all addons have at least one price configured
     const invalidAddons = editableAddons.filter(addon => {
@@ -60,17 +85,27 @@ const AddonManagement = () => {
 
     setLoading(true);
     try {
-      const originalIds = new Set(addons.map(a => a.id));
+      const originalIds = new Set(addons.map((a) => a.id));
+      const editedIds = new Set(editableAddons.map((a) => a.id));
 
-      // Update existing addons
+      // Create new + update existing
       for (const addon of editableAddons) {
         if (originalIds.has(addon.id)) {
           await adminApi.updateAddon(addon.id, addon);
+        } else {
+          await adminApi.createAddon(addon);
+        }
+      }
+
+      // Soft-delete (active=false) addons removed in the UI
+      for (const original of addons) {
+        if (!editedIds.has(original.id)) {
+          await adminApi.deleteAddon(original.id);
         }
       }
 
       await refreshConfig();
-      toast.success('Add-ons saved successfully!');
+      toast.success('Add-ons saved');
     } catch (error) {
       toast.error('Failed to save add-ons');
     } finally {
@@ -86,9 +121,14 @@ const AddonManagement = () => {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="mb-6">
-          <h2 className="text-3xl font-bold text-foreground">Add-On Management</h2>
-          <p className="text-muted-foreground mt-1">Configure optional add-on services</p>
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h2 className="text-3xl font-bold text-foreground">Add-On Management</h2>
+            <p className="text-muted-foreground mt-1">Configure optional add-on services</p>
+          </div>
+          <Button onClick={addAddon} className="gap-2">
+            <Plus className="w-4 h-4" /> Add Add-On
+          </Button>
         </div>
 
         <div className="space-y-6">
@@ -96,17 +136,28 @@ const AddonManagement = () => {
             <Card key={addon.id} className="p-6 shadow-card">
               <div className="flex items-start justify-between mb-4">
                 <h3 className="text-xl font-semibold text-foreground">
-                  Add-On {index + 1}
+                  {addon.name || `Add-On ${index + 1}`}
                 </h3>
-                <div className="flex items-center gap-2">
-                  <Label htmlFor={`active-${index}`} className="text-sm">
-                    {addon.active ? 'Active' : 'Inactive'}
-                  </Label>
-                  <Switch
-                    id={`active-${index}`}
-                    checked={addon.active}
-                    onCheckedChange={(checked) => updateAddon(index, 'active', checked)}
-                  />
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <Label htmlFor={`active-${index}`} className="text-sm">
+                      {addon.active ? 'Active' : 'Inactive'}
+                    </Label>
+                    <Switch
+                      id={`active-${index}`}
+                      checked={addon.active}
+                      onCheckedChange={(checked) => updateAddon(index, 'active', checked)}
+                    />
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeAddon(index)}
+                    title="Remove add-on"
+                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
                 </div>
               </div>
 
