@@ -156,7 +156,14 @@ const QuoteInfo = () => {
             <ArrowLeft className="w-4 h-4 mr-2" /> Back to Packages
           </Button>
 
-          <div className="text-center space-y-2">
+          <div className="text-center space-y-3">
+            <div className="flex justify-center">
+              <img
+                src="/ntm-logo.png"
+                alt="NTM"
+                className="w-16 h-16 md:w-20 md:h-20 drop-shadow-[0_0_20px_rgba(232,127,55,0.2)]"
+              />
+            </div>
             <h1 className="text-4xl font-bold text-foreground">Tell us about your business</h1>
             <p className="text-muted-foreground">
               You picked <span className="text-primary font-semibold">{selectedPackage.name}</span>. A few details and we'll generate your quote.

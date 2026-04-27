@@ -34,8 +34,15 @@ const QuoteBuilder = () => {
     <div className="min-h-screen bg-background">
       <SiteHeader />
       <div className="max-w-6xl mx-auto space-y-10 py-12 px-4">
-        {/* Header */}
-        <div className="text-center space-y-3 animate-fade-in">
+        {/* Header — centered NTM shield above the page title for brand presence */}
+        <div className="text-center space-y-4 animate-fade-in">
+          <div className="flex justify-center">
+            <img
+              src="/ntm-logo.png"
+              alt="NTM"
+              className="w-20 h-20 md:w-24 md:h-24 drop-shadow-[0_0_24px_rgba(232,127,55,0.25)]"
+            />
+          </div>
           <h1 className="text-4xl md:text-5xl font-bold text-foreground">Choose Your Package</h1>
           <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
             Three plans built for different stages of growth. Pick the one that fits, then we'll size the quote to your team.
