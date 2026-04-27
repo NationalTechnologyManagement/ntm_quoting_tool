@@ -458,10 +458,15 @@ async function createProject(
   const start = todayISO();
   const end = plusDaysISO(durationDays);
 
+  // Project name (CW's summary/title field) format: "<Package> - <Company> - <Date>"
+  // per NTM convention. Date is ISO (YYYY-MM-DD) so projects sort chronologically.
+  const projectName =
+    `${quote.selectedPackage.name} - ${quote.customer.businessName} - ${start}`;
+
   const project = await cwJson<any>('/project/projects', {
     method: 'POST',
     body: JSON.stringify({
-      name: `Onboarding - ${quote.customer.businessName}`,
+      name: projectName,
       company: { id: companyId },
       contact: { id: contactId },
       board: { id: boardId },
