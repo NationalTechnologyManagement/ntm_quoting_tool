@@ -1,281 +1,140 @@
-# Test Environment Runbook
+# Test / Deploy Environment
 
-Stand up the quoting tool locally and walk it through the **1 location / 25 users / Voice-for-10** scenario from `Obsidian-Vault/Projects/ntm_quoting_tool-workflow-example.md`.
+Workflow is **Railway-first**: every change ships via `git push origin master`. There is no local dev step. The Railway service `ntm-quoting-tool` (project `Connectwise-Services`, service id `b42f7ec7-89a1-4369-874f-2a1dc4b9a1e8`) auto-builds on push and runs migrations + seed on each deploy.
 
-Three test "levels" — start at Level 1, only proceed to 2/3 once 1 works.
+## Environments
 
-| Level | What it validates | What you need |
+| | URL | Postgres |
 |---|---|---|
-| **1. UI smoke** | Schema, wizard, admin UI, quote DB row | Local Node + Postgres only |
-| **2. CW dry-run** | Full orchestrator logic without touching real CW | Above + `CW_DRY_RUN=true` |
-| **3. End-to-end** | Real CW writes + real AP payment | Above + AP sandbox + ngrok + write-enabled CW key |
+| Production | https://ntm-quoting-tool-production.up.railway.app | Railway service `Quoting tool` (private DNS: `postgres-fxf8.railway.internal`) |
+
+There is no separate staging environment. To run an experiment, branch off, push, and use `CW_DRY_RUN=true` so CW writes are stubbed.
 
 ---
 
-## Prerequisites (one-time install)
+## Build pipeline
 
-In an **admin** PowerShell:
+1. **Trigger:** push to `master` (Railway auto-detects via GitHub integration).
+2. **Build phases** (defined in `nixpacks.toml`):
+   - `setup` — apt-installs `chromium` for Puppeteer PDF generation.
+   - `install` — `npm install --include=dev`. Lenient on lockfile drift so dev-dep changes don't require a local `npm install`.
+   - `build` —
+     1. `npm run build --workspace=shared` (TS compile)
+     2. `npm run build --workspace=client` (Vite production bundle)
+     3. `cd server && npx prisma generate` (Prisma client codegen)
+     4. `npm run build --workspace=server` (TS compile)
+3. **Start command** (defined in `railway.json`):
+   ```
+   cd server && npx prisma migrate deploy && npx tsx prisma/seed.ts && cd .. && npm start
+   ```
+   - `migrate deploy` applies pending migrations (idempotent — re-applying produces no-ops)
+   - `seed` upserts default packages, addons, promo codes, terms, admin user, and CW config keys. Existing rows are preserved (`update: {}` in seed).
+4. **Health check:** `/health` returns 200 if Postgres is reachable, 503 otherwise. Railway gates traffic on this.
 
-```powershell
-winget install OpenJS.NodeJS.LTS
-winget install PostgreSQL.PostgreSQL.17
-winget install ngrok.ngrok    # only needed for Level 3
-```
-
-Restart your shell after install. Verify:
-
-```powershell
-node --version    # should print v20.x or v22.x
-psql --version    # already there: 18.3
-ngrok version
-```
-
-The Postgres installer prompts for a superuser password — remember it.
-
----
-
-## Level 1 — UI smoke test
-
-### 1. Create the database
-
-```powershell
-$env:PGPASSWORD = '<your postgres superuser password>'
-psql -U postgres -c "CREATE DATABASE quoting_dev;"
-```
-
-### 2. Create `.env` at the repo root
-
-`C:\Github\ntm_quoting_tool\.env`:
-
-```dotenv
-DATABASE_URL=postgresql://postgres:<password>@localhost:5432/quoting_dev
-PORT=3001
-NODE_ENV=development
-FRONTEND_URL=http://localhost:8080
-JWT_SECRET=local-dev-only-change-in-prod-please-make-this-long-enough
-
-INITIAL_ADMIN_EMAIL=admin@ntm.local
-INITIAL_ADMIN_PASSWORD=changeme123
-
-# Level 1: all integrations disabled. The orchestrator no-ops cleanly when these are blank.
-AP_CLIENT_ID=
-AP_CLIENT_SECRET=
-AP_WEBHOOK_SECRET=
-RESEND_API_KEY=
-FROM_EMAIL=quotes@trustntm.com
-GHL_API_KEY=
-GHL_LOCATION_ID=
-
-CW_COMPANY_ID=
-CW_PUBLIC_KEY=
-CW_PRIVATE_KEY=
-CW_CLIENT_ID=
-CW_BASE_URL=https://api-na.myconnectwise.net/v4_6_release/apis/3.0
-CW_DRY_RUN=false
-
-CW_RETRY_DISABLED=true
-```
-
-### 3. Install, migrate, seed
-
-```powershell
-cd C:\Github\ntm_quoting_tool
-npm install
-cd server
-npx prisma generate
-npx prisma migrate deploy
-npm run db:seed
-cd ..
-```
-
-### 4. Run the dev server
-
-```powershell
-npm run dev
-```
-
-Two ports:
-- **client (Vite):** http://localhost:8080
-- **server (Express):** http://localhost:3001
-
-### 5. Walk the customer flow
-
-1. Open http://localhost:8080
-2. Click "Get Started"
-3. **Quote Builder** → pick **SafeSecure**
-4. **Summary** → fill in:
-   - Name: Test User
-   - Email: youremail@yourdomain.test
-   - Phone: 555-0100
-   - Business Name: **Acme Inc**
-   - Address: 123 Main St
-   - **User Count: 25**
-   - **Location Count: 1**
-5. Pick the **Phone System** add-on, **quantity 10**
-6. Verify the totals match the Obsidian doc:
-   - Recurring: **$1,624/mo**
-   - One-time today: **$10,000**
-7. **Terms** → check "I accept" → Continue
-8. **Quote Review** → e-sign → click **Save Quote**
-
-### 6. Verify in DB and admin UI
-
-In a new shell:
-
-```powershell
-$env:PGPASSWORD = '<password>'
-psql -U postgres -d quoting_dev -c "SELECT \"quoteNumber\", status, \"provisioningStatus\", \"cwCompanyId\" FROM quotes ORDER BY \"createdAt\" DESC LIMIT 5;"
-```
-
-Expected: one row, `status=draft`, `provisioningStatus=pending`, `cwCompanyId=NULL` (CW is disabled).
-
-Then admin UI:
-- http://localhost:8080/admin/login → admin@ntm.local / changeme123
-- `/admin/quotes` — see the quote row
-- `/admin/cw-reference-ids` — see all CW config keys, all required ones marked
-- `/admin/packages` — see Essentials/SafeSecure/SafeSecure Plus with `cwAgreementTypeId` 36/37/38
-
-⛳ **Stop here if Level 1 looks right.** Next level adds CW.
+Failure modes and how they manifest in logs:
+- **Lockfile / dep mismatch** → fails at `install` phase. Fix: change to a more lenient install (`npm install` already used).
+- **TS compile error** → fails at `build`. Pull build logs via Railway dashboard or GraphQL.
+- **Prisma migration error** → fails at start. Check logs for the migration name.
+- **Seed error** → start fails after migrate. Usually a data shape mismatch; check the failing upsert.
+- **Healthcheck timeout** → app process started but `/health` not 200. Likely DATABASE_URL wrong or Postgres unreachable.
 
 ---
 
-## Level 2 — CW dry-run
+## Environment variables
 
-Validates that the orchestrator runs all 11 steps end-to-end against real CW reads, but **doesn't write** anything to CW. Useful to confirm reference IDs are right, packages map correctly, and step state is recorded.
+Set via Railway dashboard or GraphQL. Categories:
 
-### 1. Update `.env`
+### Core (must be set, already set)
+- `DATABASE_URL` → `${{Quoting tool.DATABASE_URL}}` (Railway reference; internal DNS, no public exposure)
+- `NODE_ENV=production`
+- `JWT_SECRET=<64-char random hex>` (rotate by setting a new value; existing admin sessions invalidate)
+- `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD` (used only when no admin user exists yet)
+- `FROM_EMAIL=quotes@trustntm.com`
+- `FRONTEND_URL=${{RAILWAY_PUBLIC_DOMAIN}}`
 
-```dotenv
-CW_COMPANY_ID=ntm
-CW_PUBLIC_KEY=<paste from 1Password / CW integrator key>
-CW_PRIVATE_KEY=<paste from 1Password / CW integrator key>
-CW_CLIENT_ID=<paste from CW developer console>
-CW_BASE_URL=https://api-na.myconnectwise.net/v4_6_release/apis/3.0
-CW_DRY_RUN=true
-```
+### CW (currently in dry-run; flip when ready)
+- `CW_BASE_URL`, `CW_COMPANY_ID`, `CW_CLIENT_ID`, `CW_PUBLIC_KEY`, `CW_PRIVATE_KEY`
+- `CW_DRY_RUN=true` — set this back to `false` (or remove) once the API key has write scopes and you've confirmed real test data lands correctly. While `true`, the orchestrator runs end-to-end but every non-GET to CW is logged as `[CW DRY RUN] POST ...` and returns a fake id so step state still progresses.
+- `CW_RETRY_DISABLED=true` — keep `true` while in dry-run; the retry worker has no value when CW writes are stubbed.
 
-> Never commit real keys to this file. They live in your local `.env` (gitignored) or in Railway's environment-variable UI.
+### AP, GHL, Resend (set when those flows are needed)
+- `AP_CLIENT_ID`, `AP_CLIENT_SECRET`, `AP_WEBHOOK_SECRET` — leave blank to disable Purchase Now button.
+- `GHL_API_KEY`, `GHL_LOCATION_ID` — leave blank to skip GHL contact/opportunity creation.
+- `RESEND_API_KEY` — leave blank to skip email sending (quote save still works, just no email).
 
-Restart `npm run dev`.
-
-### 2. Walk the same customer flow as Level 1
-
-After clicking Save Quote, the server logs will show entries like:
-
-```
-[CW DRY RUN] POST /company/companies (would have sent body, returning fake id 942817453)
-[CW DRY RUN] POST /company/contacts ...
-[CW DRY RUN] POST /sales/opportunities ...
-```
-
-### 3. Verify step state
-
-```powershell
-psql -U postgres -d quoting_dev -c "SELECT step, status, \"cwId\", \"lastError\" FROM cw_provisioning_steps ORDER BY \"updatedAt\";"
-```
-
-Expected: rows for `company`, `contact`, `opportunity` all `status=success` with cwId in the 900M+ range (the dry-run sentinel).
-
-### 4. Trigger payment-completed manually (no real AP needed)
-
-To exercise the rest of the orchestrator (agreement, additions, activate, project, crossref, handoff):
-
-```powershell
-# From server/
-tsx scripts/cw-dry-run.ts QT-<your-quote-number>
-```
-
-Output shows per-step status. All should be `success` (or `skipped` for `crossref` because the custom fields don't exist).
-
-⛳ **Stop here if dry-run passes.** Next level wires real money + real CW writes.
+### Notifications + Rewst (optional)
+- `NOTIFY_WEBHOOK_URL` — Slack/Teams webhook for provisioning lifecycle pings.
+- `REWST_TRIGGER_URL`, `REWST_AUTH_TOKEN` — kicks off Rewst onboarding workflow at handoff step.
 
 ---
 
-## Level 3 — End-to-end with AP sandbox
+## Common operations
 
-Validates real payment capture and real CW provisioning. **Will create real CW objects** under the company name you put in the wizard, so use a clearly-fake company name like "Acme Inc - TEST".
+### Watch a deploy
 
-### 1. Get AP sandbox credentials
+Railway dashboard: project `Connectwise-Services` → service `ntm-quoting-tool` → Deployments. Status one of `INITIALIZING / BUILDING / DEPLOYING / SUCCESS / FAILED / CRASHED`.
 
-Email `support@alternativepayments.io` and ask for sandbox API credentials + a webhook secret. They should provide a separate `https://sandbox.api.alternativepayments.io` base URL — note we may need to make that configurable in `ap.service.ts` (currently hardcoded to production).
+### Pull recent build logs (when a deploy fails)
 
-### 2. Get write-enabled CW key
+Easiest: Railway dashboard. For programmatic access, the GraphQL API at `https://backboard.railway.com/graphql/v2` with `Authorization: Bearer <token>` and a `buildLogs(deploymentId, limit, filter)` query returns logs filtered by severity.
 
-The current API key is read-only. Have your CW admin grant write access on:
-- `/company/companies` (PATCH)
-- `/company/contacts` (POST)
-- `/sales/opportunities` (POST/PATCH)
-- `/sales/opportunities/{id}/notes` (POST)
-- `/finance/agreements` (POST/PATCH)
-- `/finance/agreements/{id}/additions` (POST)
-- `/project/projects` (POST/PATCH)
+### Pull runtime logs
 
-Either upgrade the existing read-only audit key or issue a separate write-enabled one. Update `.env` with whichever.
+`railway logs` (CLI) when linked to the service, or via the dashboard.
 
-### 3. Have ops create the three custom fields in CW
+### Inspect the database
 
-(Optional but recommended for the cross-reference step.)
-- Company → "Quote ID" text field
-- Agreement → "Quote ID" text field
-- Project → "Agreement Number" text field
-
-Once created, find their IDs via `GET /system/userDefinedFields?conditions=caption='Quote ID'` and set `customField.companyQuoteId`, `customField.agreementQuoteId`, `customField.projectAgreementNumber` in `/admin/cw-reference-ids`.
-
-### 4. Have ops set `cwProductId` on each NTM addon
-
-Visit `/admin/addons` and paste the CW catalog product ID for every addon. Without these, recurring agreements won't get the addon as a line item (the `additions` step will fail with "Missing cwProductId for addons: …").
-
-### 5. Run ngrok for AP webhook delivery
-
+`DATABASE_PUBLIC_URL` is exposed as a TCP proxy by Railway:
+```
+postgresql://postgres:<password>@switchback.proxy.rlwy.net:19172/railway
+```
+Connect with `psql` (already installed on the user's machine):
 ```powershell
-ngrok http 3001
+$env:PGPASSWORD = '<from Railway dashboard>'
+psql -h switchback.proxy.rlwy.net -p 19172 -U postgres -d railway -c "SELECT \"quoteNumber\", status, \"provisioningStatus\" FROM quotes ORDER BY \"createdAt\" DESC LIMIT 10;"
 ```
 
-Copy the HTTPS forwarding URL (e.g. `https://abc123.ngrok-free.app`). Register it in the AP dashboard as the webhook target: `<that url>/api/webhooks/ap`.
+### Force a redeploy (no code change)
 
-### 6. Update `.env`
+Railway dashboard → Deployments → "Redeploy" on the latest. Or via CLI / GraphQL `serviceInstanceRedeploy`.
 
-```dotenv
-CW_DRY_RUN=false
-CW_RETRY_DISABLED=false
-AP_CLIENT_ID=<sandbox client id>
-AP_CLIENT_SECRET=<sandbox client secret>
-AP_WEBHOOK_SECRET=<from AP dashboard>
-RESEND_API_KEY=<your prod or test Resend key>
-```
+### Roll back
 
-Restart `npm run dev`.
+Railway dashboard → Deployments → click an old SUCCESS deployment → "Redeploy". This re-uses the Docker image of that earlier build.
 
-### 7. Walk through with a fake test customer
+### Test mode walkthrough (no real money, no real CW writes)
 
-Use a clearly-fake business name (e.g., "ZZZ TEST - delete me - 2026-04-27"). Click Purchase Now, complete payment with the AP-provided test card.
+1. Confirm `CW_DRY_RUN=true` on the service.
+2. Confirm AP credentials are blank (so Purchase Now stays disabled).
+3. Visit https://ntm-quoting-tool-production.up.railway.app
+4. Walk the wizard with the example: 1 location, 25 users, Phone System × 10. Should display $1,624/mo + $10,000 first invoice.
+5. Save Quote — check `/admin/quotes` (login: env `INITIAL_ADMIN_EMAIL` / `INITIAL_ADMIN_PASSWORD`).
+6. Verify CW step rows in DB:
+   ```
+   psql ... -c "SELECT step, status, \"cwId\" FROM cw_provisioning_steps ORDER BY \"updatedAt\";"
+   ```
+   Expect `company`, `contact`, `opportunity` rows with `cwId` in the 900M+ range (dry-run sentinel).
 
-### 8. Watch logs and CW
+### Going live (real CW writes)
 
-You should see, in order:
-1. Server log: `[AP] customer/invoice/checkout created`
-2. Browser redirects to AP hosted checkout
-3. AP completes → redirects to `/payment-success`
-4. AP webhook hits ngrok → server processes
-5. Server logs each CW step
-6. CW shows: Customer "ZZZ TEST", Won opportunity, Active SafeSecure agreement, Onboarding project
+When ready:
+1. Have CW admin grant the integrator key write scopes on Companies, Contacts, Opportunities, Agreements, AgreementAdditions, Projects.
+2. In `/admin/cw-reference-ids`, fill in the three Quote ID custom field IDs (after ops creates the fields in CW).
+3. In `/admin/addons`, set `cwProductId` per addon from CW's procurement catalog.
+4. In `/admin/packages`, confirm `cwAgreementTypeId` is 36/37/38 for Essentials/SafeSecure/SafeSecure Plus (seeded by default).
+5. Set `CW_DRY_RUN=false` and `CW_RETRY_DISABLED=false` on the Railway service.
+6. Trigger a redeploy so the env vars take effect.
+7. Run a quote with a clearly-fake company name to validate before real customers.
 
-### 9. Cleanup
+### Going live (real AP payments)
 
-In CW UI: archive the test company, cancel the agreement, delete the project. Or leave them with the obvious "TEST" name and let them age out.
+Separately:
+1. Get AP sandbox creds from `support@alternativepayments.io`. Set `AP_CLIENT_ID`, `AP_CLIENT_SECRET`, `AP_WEBHOOK_SECRET`.
+2. Register the webhook URL in the AP dashboard: `https://ntm-quoting-tool-production.up.railway.app/api/webhooks/ap`. AP doesn't need ngrok — Railway gives a public URL out of the box.
+3. Walk the wizard, click Purchase Now, complete payment with AP test card, watch logs for the webhook → CW provisioning chain.
 
 ---
 
-## Troubleshooting
+## Why no local dev
 
-**`prisma migrate deploy` says "database is empty / no migrations applied"** → that's fine on first run; migrations will be applied. If it errors with permission, try `migrate dev` instead.
-
-**Vite says "EADDRINUSE :8080"** → another process owns 8080; either kill it or change `vite.config.ts`.
-
-**Server logs `[CW] Not configured — skipping`** → CW env vars not set. Either expected (Level 1) or add them to `.env`.
-
-**`prisma migrate dev` complains about drift** → safe on a fresh DB; if it's an existing one, check what's drifted before resetting.
-
-**Prisma client generation fails on Windows** → close any running `npm run dev` first; Prisma can't overwrite the generated client while it's loaded.
-
-**ngrok URL keeps changing** → free-tier ngrok rotates the URL each restart. For longer test sessions, use the paid `--domain=<reserved>` flag, or use Cloudflare Tunnel as a free alternative.
+Per [memory: Railway-first workflow](file:///C:/Users/GeneAldaco/.claude/projects/C--Github/memory/feedback_railway_first_workflow.md): the user does not run code locally. Build configs must tolerate lockfile drift. Tests, dry-run scripts, and `npm install` instructions are dead code for this workflow. All validation happens on Railway.
