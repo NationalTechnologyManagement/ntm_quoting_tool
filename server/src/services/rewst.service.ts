@@ -2,7 +2,7 @@
 // URL is set via env REWST_TRIGGER_URL (and optionally REWST_AUTH_TOKEN).
 // No-op when unset so dev/staging don't fire production workflows.
 
-import { env } from '../config/env.js';
+import { cred } from './integration-credentials.service.js';
 
 interface OnboardingPayload {
   quoteNumber: string;
@@ -12,12 +12,13 @@ interface OnboardingPayload {
 }
 
 export async function triggerOnboarding(p: OnboardingPayload): Promise<void> {
-  const url = env.REWST_TRIGGER_URL;
+  const url = cred('REWST_TRIGGER_URL');
   if (!url) return;
 
   try {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (env.REWST_AUTH_TOKEN) headers.Authorization = `Bearer ${env.REWST_AUTH_TOKEN}`;
+    const token = cred('REWST_AUTH_TOKEN');
+    if (token) headers.Authorization = `Bearer ${token}`;
     const res = await fetch(url, {
       method: 'POST',
       headers,

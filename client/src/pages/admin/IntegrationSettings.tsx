@@ -4,6 +4,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Loader2,
   CheckCircle,
@@ -13,6 +15,9 @@ import {
   Building2,
   Users,
   Mail,
+  Eye,
+  EyeOff,
+  Save,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { adminApi } from '@/services/api';
@@ -241,17 +246,188 @@ const IntegrationSettings = () => {
           )}
         </div>
 
+        <CredentialsEditor />
+
         <Card className="p-6 mt-6 bg-muted/50">
-          <h3 className="font-semibold mb-2">How to configure integrations</h3>
+          <h3 className="font-semibold mb-2">How credentials work</h3>
           <p className="text-sm text-muted-foreground">
-            Integration credentials are managed through environment variables in your Railway dashboard.
-            Navigate to your service settings, add the required variables, and redeploy. The status above
-            will update automatically once credentials are detected.
+            Each credential can come from either Railway environment variables (set on the service)
+            or the form below. Values entered here override the env var at runtime — no redeploy
+            needed. Clearing a field deletes the override and falls back to the env var. Secret
+            values (private keys, API secrets) are masked until you click the eye icon to reveal.
           </p>
         </Card>
       </div>
     </div>
   );
 };
+
+// ── Credentials editor ───────────────────────────────────────────────
+
+interface CredRow {
+  key: string;
+  value: string;
+  source: 'db' | 'env' | 'unset';
+  masked: boolean;
+  notes: string | null;
+}
+
+const SECTION_BY_PREFIX: Record<string, string> = {
+  CW_: 'ConnectWise Manage',
+  AP_: 'Alternative Payments',
+  GHL_: 'GoHighLevel',
+  RESEND_: 'Email (Resend)',
+  FROM_: 'Email (Resend)',
+  NOTIFY_: 'Notifications',
+  REWST_: 'Rewst',
+};
+
+function sectionFor(key: string): string {
+  for (const prefix of Object.keys(SECTION_BY_PREFIX)) {
+    if (key.startsWith(prefix)) return SECTION_BY_PREFIX[prefix];
+  }
+  return 'Other';
+}
+
+function CredentialsEditor() {
+  const [rows, setRows] = useState<CredRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [reveal, setReveal] = useState(false);
+  const [draft, setDraft] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState<Record<string, boolean>>({});
+
+  const fetchRows = async (revealValues = reveal) => {
+    setLoading(true);
+    try {
+      const data = await adminApi.getCredentials(revealValues);
+      setRows(data.rows);
+      const next: Record<string, string> = {};
+      for (const r of data.rows) next[r.key] = r.masked ? '' : r.value;
+      setDraft(next);
+    } catch {
+      toast.error('Failed to load credentials');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRows(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const toggleReveal = async () => {
+    const next = !reveal;
+    setReveal(next);
+    await fetchRows(next);
+  };
+
+  const save = async (key: string) => {
+    setSaving((s) => ({ ...s, [key]: true }));
+    try {
+      await adminApi.setCredential(key, draft[key] || '');
+      toast.success(`Saved ${key}${(draft[key] || '') === '' ? ' (cleared)' : ''}`);
+      await fetchRows(reveal);
+    } catch {
+      toast.error(`Failed to save ${key}`);
+    } finally {
+      setSaving((s) => ({ ...s, [key]: false }));
+    }
+  };
+
+  if (loading && rows.length === 0) {
+    return (
+      <Card className="p-6 mt-6">
+        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+      </Card>
+    );
+  }
+
+  // Group rows by section
+  const grouped = new Map<string, CredRow[]>();
+  for (const r of rows) {
+    const s = sectionFor(r.key);
+    if (!grouped.has(s)) grouped.set(s, []);
+    grouped.get(s)!.push(r);
+  }
+
+  return (
+    <div className="mt-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-xl font-semibold">Credentials</h3>
+          <p className="text-sm text-muted-foreground">
+            Edit any credential below to override its env-var value at runtime.
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={toggleReveal}>
+          {reveal ? <EyeOff className="w-4 h-4 mr-2" /> : <Eye className="w-4 h-4 mr-2" />}
+          {reveal ? 'Hide secrets' : 'Reveal secrets'}
+        </Button>
+      </div>
+
+      {[...grouped.entries()].map(([section, items]) => (
+        <Card key={section} className="p-6">
+          <h4 className="text-lg font-semibold mb-4">{section}</h4>
+          <div className="space-y-3">
+            {items.map((r) => {
+              const dirty = (draft[r.key] ?? '') !== (r.masked ? '' : r.value);
+              return (
+                <div key={r.key} className="grid grid-cols-12 gap-3 items-center">
+                  <div className="col-span-4">
+                    <code className="text-sm font-mono text-foreground">{r.key}</code>
+                    <Badge
+                      variant="secondary"
+                      className={`ml-2 text-xs ${
+                        r.source === 'db'
+                          ? 'bg-primary/20 text-primary'
+                          : r.source === 'env'
+                            ? 'bg-muted text-muted-foreground'
+                            : 'bg-destructive/20 text-destructive'
+                      }`}
+                    >
+                      {r.source === 'db' ? 'overridden' : r.source === 'env' ? 'from env' : 'unset'}
+                    </Badge>
+                  </div>
+                  <div className="col-span-7">
+                    <Input
+                      value={draft[r.key] ?? ''}
+                      onChange={(e) => setDraft((d) => ({ ...d, [r.key]: e.target.value }))}
+                      placeholder={r.masked && !reveal ? r.value : 'Not set'}
+                      type={r.masked && !reveal ? 'password' : 'text'}
+                      className="font-mono"
+                    />
+                  </div>
+                  <div className="col-span-1">
+                    <Button
+                      size="sm"
+                      variant={dirty ? 'default' : 'outline'}
+                      disabled={!dirty || saving[r.key]}
+                      onClick={() => save(r.key)}
+                      title={
+                        (draft[r.key] || '') === ''
+                          ? 'Clearing this will fall back to the env var (or leave it unset)'
+                          : 'Save override'
+                      }
+                    >
+                      {saving[r.key] ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Save className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-4 text-xs text-muted-foreground">
+            Tip: leave a field blank and click save to clear an override and fall back to the env var.
+          </p>
+        </Card>
+      ))}
+    </div>
+  );
+}
 
 export default IntegrationSettings;

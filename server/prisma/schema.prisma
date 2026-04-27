@@ -95,6 +95,10 @@ model Quote {
   agreement          Json?     // QuoteAgreement (filled on acceptance)
   orderNumber        String?   @unique
 
+  // Custom line items added by NTM staff after the customer built the quote.
+  // Shape: [{ id, name, description, quantity, recurringPrice?, oneTimePrice?, addedBy?, addedAt }]
+  customItems        Json     @default("[]")
+
   // Alternative Payments
   apCustomerId       String?
   apInvoiceId        String?
@@ -176,6 +180,21 @@ model AdminUser {
   updatedAt    DateTime @updatedAt
 
   @@map("admin_users")
+}
+
+// ── Integration Credentials ──────────────────────────────────────────
+// Editable from /admin/integrations. Loaded into a synchronous cache on
+// process start (see integration-credentials.service.ts). DB values
+// override matching env vars at runtime, so the same Railway service
+// can be reconfigured without redeploys.
+
+model IntegrationCredential {
+  key       String   @id   // matches the env-var name, e.g. "CW_PUBLIC_KEY"
+  value     String
+  notes     String?
+  updatedAt DateTime @updatedAt
+
+  @@map("integration_credentials")
 }
 
 // ── ConnectWise Reference Config ─────────────────────────────────────

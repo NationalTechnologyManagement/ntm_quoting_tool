@@ -1,7 +1,7 @@
 // Slack/Teams notifications for provisioning lifecycle events.
 // Webhook URL is configured via env (NOTIFY_WEBHOOK_URL). Empty / unset = no-op.
 
-import { env } from '../config/env.js';
+import { cred } from './integration-credentials.service.js';
 
 interface ProvisionedPayload {
   quoteNumber: string;
@@ -20,7 +20,7 @@ interface FailedPayload {
 }
 
 async function postWebhook(text: string, blocks?: unknown): Promise<void> {
-  const url = env.NOTIFY_WEBHOOK_URL;
+  const url = cred('NOTIFY_WEBHOOK_URL');
   if (!url) return; // no-op when not configured
 
   try {

@@ -313,8 +313,16 @@ const QuoteManagement = () => {
                           <Button
                             variant="ghost"
                             size="sm"
+                            onClick={() => navigate(`/admin/quotes/${q.quoteNumber}`)}
+                            title="Open admin detail (custom items, contract preview, retry)"
+                          >
+                            <FileText className="w-4 h-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
                             onClick={() => window.open(`/quote-review?id=${q.quoteNumber}`, '_blank')}
-                            title="View quote"
+                            title="Customer view (new tab)"
                           >
                             <ExternalLink className="w-4 h-4" />
                           </Button>

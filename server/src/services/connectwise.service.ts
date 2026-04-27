@@ -5,6 +5,7 @@
 
 import { prisma } from '../config/prisma.js';
 import { env } from '../config/env.js';
+import { cred } from './integration-credentials.service.js';
 import { getCwConfig, type CwConfigKey } from './cw-config.service.js';
 import {
   getStep,
@@ -31,7 +32,7 @@ export class CwHardFailError extends Error {
 // ── HTTP client ───────────────────────────────────────────────────────
 
 function isCWConfigured(): boolean {
-  return !!(env.CW_COMPANY_ID && env.CW_PUBLIC_KEY && env.CW_PRIVATE_KEY && env.CW_CLIENT_ID);
+  return !!(cred('CW_COMPANY_ID') && cred('CW_PUBLIC_KEY') && cred('CW_PRIVATE_KEY') && cred('CW_CLIENT_ID'));
 }
 
 async function cwFetch(path: string, options: RequestInit = {}): Promise<Response> {
@@ -51,15 +52,17 @@ async function cwFetch(path: string, options: RequestInit = {}): Promise<Respons
     });
   }
 
-  const credentials = Buffer.from(
-    `${env.CW_COMPANY_ID}+${env.CW_PUBLIC_KEY}:${env.CW_PRIVATE_KEY}`,
-  ).toString('base64');
+  const companyId = cred('CW_COMPANY_ID') || '';
+  const pub = cred('CW_PUBLIC_KEY') || '';
+  const priv = cred('CW_PRIVATE_KEY') || '';
+  const baseUrl = cred('CW_BASE_URL') || env.CW_BASE_URL;
+  const credentials = Buffer.from(`${companyId}+${pub}:${priv}`).toString('base64');
 
-  return fetch(`${env.CW_BASE_URL}${path}`, {
+  return fetch(`${baseUrl}${path}`, {
     ...options,
     headers: {
       Authorization: `Basic ${credentials}`,
-      clientId: env.CW_CLIENT_ID!,
+      clientId: cred('CW_CLIENT_ID') || '',
       'Content-Type': 'application/json',
       ...options.headers,
     },

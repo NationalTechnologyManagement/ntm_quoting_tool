@@ -1,4 +1,4 @@
-import { env } from './env.js';
+import { cred } from '../services/integration-credentials.service.js';
 
 const AP_BASE_URL = 'https://public-api.alternativepayments.io';
 
@@ -10,7 +10,7 @@ export async function getOAuthToken(): Promise<string> {
     return cachedToken.token;
   }
 
-  const credentials = Buffer.from(`${env.AP_CLIENT_ID}:${env.AP_CLIENT_SECRET}`).toString('base64');
+  const credentials = Buffer.from(`${cred('AP_CLIENT_ID') || ''}:${cred('AP_CLIENT_SECRET') || ''}`).toString('base64');
 
   const res = await fetch(`${AP_BASE_URL}/oauth/token`, {
     method: 'POST',
@@ -49,5 +49,10 @@ export async function apFetch(path: string, options: RequestInit = {}): Promise<
 }
 
 export function isAPConfigured(): boolean {
-  return !!(env.AP_CLIENT_ID && env.AP_CLIENT_SECRET);
+  return !!(cred('AP_CLIENT_ID') && cred('AP_CLIENT_SECRET'));
+}
+
+/** Reset cached OAuth token. Called after admin updates AP credentials. */
+export function resetAPTokenCache(): void {
+  cachedToken = null;
 }

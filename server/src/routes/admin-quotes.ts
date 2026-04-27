@@ -1,6 +1,8 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { prisma } from '../config/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
+import { validate } from '../middleware/validate.js';
 import { replayProvisioning } from '../services/connectwise.service.js';
 import { getAllSteps } from '../services/cw-state.service.js';
 
@@ -103,6 +105,98 @@ router.get('/api/admin/quotes/:id/provisioning', requireAuth, async (req, res) =
     steps,
   });
 });
+
+// ── Custom line items (NTM staff-added) ─────────────────────────────
+// Lets ops add a one-off charge (recurring or one-time) to an existing quote
+// that isn't part of the standard package/addon catalog. Recalculates totals
+// after each change. Custom items are billed via AP on the next invoice (if
+// one-time) or rolled into the CW agreement Additions (if recurring).
+
+const customItemSchema = z.object({
+  name: z.string().min(1),
+  description: z.string().optional().default(''),
+  quantity: z.number().int().min(1),
+  recurringPrice: z.number().nullable().optional(),
+  recurringFrequency: z.enum(['monthly', 'annually']).nullable().optional(),
+  oneTimePrice: z.number().nullable().optional(),
+});
+
+router.post(
+  '/api/admin/quotes/:id/custom-items',
+  requireAuth,
+  validate(customItemSchema),
+  async (req, res) => {
+    const id = req.params.id as string;
+    const item = req.body as z.infer<typeof customItemSchema>;
+    if ((item.recurringPrice ?? 0) <= 0 && (item.oneTimePrice ?? 0) <= 0) {
+      res.status(400).json({ error: 'Item needs at least one price (recurring or one-time)' });
+      return;
+    }
+    const quote = await prisma.quote.findFirst({
+      where: { OR: [{ id }, { quoteNumber: id }] },
+    });
+    if (!quote) {
+      res.status(404).json({ error: 'Quote not found' });
+      return;
+    }
+    const existing = (quote.customItems as any[]) ?? [];
+    const newItem = {
+      id: `custom-${Date.now()}`,
+      ...item,
+      addedBy: req.admin?.email ?? 'admin',
+      addedAt: new Date().toISOString(),
+    };
+    const customItems = [...existing, newItem];
+    const totals = recalcTotalsWithCustom(quote, customItems);
+    await prisma.quote.update({
+      where: { id: quote.id },
+      data: { customItems, totals },
+    });
+    res.json({ success: true, item: newItem, totals });
+  },
+);
+
+router.delete('/api/admin/quotes/:id/custom-items/:itemId', requireAuth, async (req, res) => {
+  const id = req.params.id as string;
+  const itemId = req.params.itemId as string;
+  const quote = await prisma.quote.findFirst({
+    where: { OR: [{ id }, { quoteNumber: id }] },
+  });
+  if (!quote) {
+    res.status(404).json({ error: 'Quote not found' });
+    return;
+  }
+  const existing = (quote.customItems as any[]) ?? [];
+  const customItems = existing.filter((i) => i.id !== itemId);
+  const totals = recalcTotalsWithCustom(quote, customItems);
+  await prisma.quote.update({
+    where: { id: quote.id },
+    data: { customItems, totals },
+  });
+  res.json({ success: true, totals });
+});
+
+function recalcTotalsWithCustom(quote: any, customItems: any[]) {
+  // Start from the snapshotted base costs (package + addons), then add custom
+  // items on top. Onboarding and one-time addon costs are read from the
+  // existing totals (which already include the portal-waiver if applicable).
+  const baseRecurring = (quote.totals?.recurringCosts ?? 0) - sumCustomRecurring((quote.customItems as any[]) ?? []);
+  const baseOneTime = (quote.totals?.oneTimeCosts ?? 0) - sumCustomOneTime((quote.customItems as any[]) ?? []);
+  const customRecurring = sumCustomRecurring(customItems);
+  const customOneTime = sumCustomOneTime(customItems);
+  return {
+    ...quote.totals,
+    recurringCosts: Math.max(0, baseRecurring) + customRecurring,
+    oneTimeCosts: Math.max(0, baseOneTime) + customOneTime,
+  };
+}
+
+function sumCustomRecurring(items: any[]): number {
+  return items.reduce((sum, i) => sum + (Number(i.recurringPrice) || 0) * (Number(i.quantity) || 1), 0);
+}
+function sumCustomOneTime(items: any[]): number {
+  return items.reduce((sum, i) => sum + (Number(i.oneTimePrice) || 0) * (Number(i.quantity) || 1), 0);
+}
 
 // Manual replay of CW provisioning. Resets failed steps to pending and re-runs
 // the pipeline. Successful steps short-circuit via the resume logic.

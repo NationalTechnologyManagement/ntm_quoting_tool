@@ -178,6 +178,26 @@ export const adminApi = {
   },
   getQuote: (id: string) => apiRequest<any>(`/api/admin/quotes/${id}`),
   getQuoteStats: () => apiRequest<any>('/api/admin/quotes/stats/summary'),
+  addCustomItem: (
+    id: string,
+    item: {
+      name: string;
+      description?: string;
+      quantity: number;
+      recurringPrice?: number | null;
+      recurringFrequency?: 'monthly' | 'annually' | null;
+      oneTimePrice?: number | null;
+    },
+  ) =>
+    apiRequest<{ success: true; item: any; totals: any }>(
+      `/api/admin/quotes/${encodeURIComponent(id)}/custom-items`,
+      { method: 'POST', body: JSON.stringify(item) },
+    ),
+  removeCustomItem: (id: string, itemId: string) =>
+    apiRequest<{ success: true; totals: any }>(
+      `/api/admin/quotes/${encodeURIComponent(id)}/custom-items/${encodeURIComponent(itemId)}`,
+      { method: 'DELETE' },
+    ),
   getQuoteProvisioning: (id: string) =>
     apiRequest<{
       quoteNumber: string;
@@ -219,6 +239,24 @@ export const adminApi = {
     apiRequest<{ success: true }>('/api/admin/change-password', {
       method: 'POST',
       body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+
+  // Integration credentials (editable)
+  getCredentials: (reveal = false) =>
+    apiRequest<{
+      keys: string[];
+      rows: Array<{
+        key: string;
+        value: string;
+        source: 'db' | 'env' | 'unset';
+        masked: boolean;
+        notes: string | null;
+      }>;
+    }>(`/api/admin/settings/credentials${reveal ? '?reveal=1' : ''}`),
+  setCredential: (key: string, value: string, notes?: string | null) =>
+    apiRequest<{ success: true }>('/api/admin/settings/credentials', {
+      method: 'PUT',
+      body: JSON.stringify({ key, value, notes: notes ?? null }),
     }),
 
   // CW reference config

@@ -1,10 +1,10 @@
-import { env } from '../config/env.js';
 import type { LeadPayload, QuoteData } from '@ntm/shared';
+import { cred } from './integration-credentials.service.js';
 
 const GHL_API_BASE = 'https://services.leadconnectorhq.com';
 
 function isGHLConfigured(): boolean {
-  return !!(env.GHL_API_KEY);
+  return !!(cred('GHL_API_KEY'));
 }
 
 async function ghlFetch(path: string, options: RequestInit = {}): Promise<Response> {
@@ -12,7 +12,7 @@ async function ghlFetch(path: string, options: RequestInit = {}): Promise<Respon
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${env.GHL_API_KEY}`,
+      Authorization: `Bearer ${cred('GHL_API_KEY')}`,
       Version: '2021-07-28',
       ...options.headers,
     },
@@ -37,7 +37,7 @@ export async function createLead(payload: LeadPayload) {
         phone: payload.customer.phone,
         companyName: payload.customer.businessName,
         address1: payload.customer.address,
-        locationId: env.GHL_LOCATION_ID,
+        locationId: cred('GHL_LOCATION_ID'),
         source: payload.source,
         tags: ['quote-builder'],
         customFields: [
@@ -68,7 +68,7 @@ async function findContactByEmail(email: string): Promise<string | null> {
   try {
     // v2 duplicate search by email
     const res = await ghlFetch(
-      `/contacts/search/duplicate?locationId=${env.GHL_LOCATION_ID}&email=${encodeURIComponent(email)}`,
+      `/contacts/search/duplicate?locationId=${cred('GHL_LOCATION_ID')}&email=${encodeURIComponent(email)}`,
     );
     if (!res.ok) return null;
     const data = await res.json();
@@ -125,7 +125,7 @@ export async function createOrUpdateContact(
         phone: customer.phone,
         companyName: customer.businessName,
         address1: customer.address,
-        locationId: env.GHL_LOCATION_ID,
+        locationId: cred('GHL_LOCATION_ID'),
         tags: ['quote-builder'],
         customFields: [
           { key: 'userCount', field_value: String(customer.userCount) },
@@ -162,7 +162,7 @@ export async function createOpportunity(
 
   try {
     // Get pipelines (v2)
-    const pipelineRes = await ghlFetch(`/opportunities/pipelines?locationId=${env.GHL_LOCATION_ID}`);
+    const pipelineRes = await ghlFetch(`/opportunities/pipelines?locationId=${cred('GHL_LOCATION_ID')}`);
     if (!pipelineRes.ok) {
       console.error('[GHL] Failed to fetch pipelines:', pipelineRes.status);
       return null;
@@ -187,7 +187,7 @@ export async function createOpportunity(
         status: 'open',
         contactId: ghlContactId,
         monetaryValue: quote.totals.grandTotal,
-        locationId: env.GHL_LOCATION_ID,
+        locationId: cred('GHL_LOCATION_ID'),
       }),
     });
 
@@ -241,7 +241,7 @@ export async function addContactNote(
   try {
     await ghlFetch(`/contacts/${ghlContactId}/notes`, {
       method: 'POST',
-      body: JSON.stringify({ body, userId: env.GHL_LOCATION_ID }),
+      body: JSON.stringify({ body, userId: cred('GHL_LOCATION_ID') }),
     });
   } catch (error) {
     console.error('[GHL] Add contact note error:', error);

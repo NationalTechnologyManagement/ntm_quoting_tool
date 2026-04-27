@@ -5,10 +5,15 @@ import { env } from './config/env.js';
 import { prisma } from './config/prisma.js';
 import { createApp } from './app.js';
 import { startCwRetryWorker } from './services/cw-retry.worker.js';
+import { initCredentialsCache } from './services/integration-credentials.service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 async function main() {
+  // Hydrate integration credentials from DB before any handler runs so that
+  // the first inbound request sees the correct merged env/DB view.
+  await initCredentialsCache();
+
   const app = createApp();
 
   // In production, serve the built React app
