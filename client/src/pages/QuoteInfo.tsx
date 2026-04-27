@@ -1,0 +1,381 @@
+import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useQuote, Addon } from '@/contexts/QuoteContext';
+import { leadApi } from '@/services/api';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Check, ChevronDown, ChevronUp, ArrowLeft } from 'lucide-react';
+import { toast } from 'sonner';
+
+const QuoteInfo = () => {
+  const navigate = useNavigate();
+  const { customerInfo, setCustomerInfo, selectedPackage, selectedAddons, setSelectedAddons, addons } = useQuote();
+
+  const [formData, setFormData] = useState(customerInfo);
+  const [formErrors, setFormErrors] = useState<Record<string, boolean>>({});
+  const [showAddons, setShowAddons] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const activeAddons = addons.filter((addon) => addon.active);
+
+  // If they navigated here without picking a package, send them back.
+  useEffect(() => {
+    if (!selectedPackage) navigate('/quote-builder');
+  }, [selectedPackage, navigate]);
+
+  const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+  const formatPhoneNumber = (value: string) => {
+    const cleaned = value.replace(/\D/g, '');
+    const match = cleaned.match(/^(\d{0,3})(\d{0,3})(\d{0,4})$/);
+    if (match) {
+      return !match[2] ? match[1] : `(${match[1]}) ${match[2]}${match[3] ? '-' + match[3] : ''}`;
+    }
+    return value;
+  };
+
+  const handleInputChange = (field: string, value: string | number) => {
+    let processedValue = value;
+    if (field === 'phone' && typeof value === 'string') processedValue = formatPhoneNumber(value);
+    setFormData((prev) => ({ ...prev, [field]: processedValue }));
+    if (formErrors[field]) setFormErrors((prev) => ({ ...prev, [field]: false }));
+  };
+
+  const isFieldValid = (field: string): boolean => {
+    const value = formData[field as keyof typeof formData];
+    if (field === 'email') return typeof value === 'string' && value.length > 0 && isValidEmail(value);
+    if (field === 'phone') {
+      const cleaned = typeof value === 'string' ? value.replace(/\D/g, '') : '';
+      return cleaned.length === 10;
+    }
+    if (field === 'userCount' || field === 'locationCount') {
+      const n = Number(value);
+      return n > 0 && Number.isInteger(n);
+    }
+    return typeof value === 'string' && value.trim().length > 0;
+  };
+
+  const isFormValid = () =>
+    isFieldValid('name') &&
+    isFieldValid('businessName') &&
+    isFieldValid('email') &&
+    isFieldValid('phone') &&
+    isFieldValid('address') &&
+    isFieldValid('userCount') &&
+    isFieldValid('locationCount') &&
+    selectedPackage !== null;
+
+  const handleContinue = async () => {
+    if (!isFormValid()) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+    setIsSubmitting(true);
+
+    const packageCost = selectedPackage
+      ? selectedPackage.pricePerUser * formData.userCount + selectedPackage.pricePerLocation * formData.locationCount
+      : 0;
+
+    try {
+      await leadApi.create({
+        customer: {
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          businessName: formData.businessName,
+          address: formData.address,
+          userCount: formData.userCount,
+          locationCount: formData.locationCount,
+          referrerCode: formData.referrerCode || null,
+        },
+        selectedPackage: selectedPackage
+          ? {
+              id: selectedPackage.id,
+              name: selectedPackage.name,
+              pricePerUser: selectedPackage.pricePerUser,
+              pricePerLocation: selectedPackage.pricePerLocation,
+              frequency: selectedPackage.frequency,
+              calculatedPrice: packageCost,
+            }
+          : null,
+        selectedAddons: selectedAddons.map((addon) => ({
+          id: addon.id,
+          name: addon.name,
+          description: addon.description,
+          price: addon.price,
+          quantity: addon.quantity,
+          frequency: addon.frequency,
+          totalPrice: addon.price * addon.quantity,
+          pricingType: addon.pricingType,
+          recurringPrice: addon.recurringPrice || null,
+          recurringFrequency: addon.recurringFrequency || null,
+          setupPrice: addon.setupPrice || null,
+          totalRecurringCost: addon.recurringPrice ? addon.recurringPrice * addon.quantity : 0,
+          totalSetupCost: addon.setupPrice ? addon.setupPrice * addon.quantity : 0,
+        })),
+        timestamp: new Date().toISOString(),
+        source: 'quote-info',
+      });
+    } catch (err) {
+      console.error('Lead create failed:', err);
+    }
+
+    setCustomerInfo(formData);
+    navigate('/summary');
+  };
+
+  const toggleAddon = (addon: Addon) => {
+    const isSelected = selectedAddons.some((a) => a.id === addon.id);
+    if (isSelected) setSelectedAddons(selectedAddons.filter((a) => a.id !== addon.id));
+    else setSelectedAddons([...selectedAddons, { ...addon, quantity: 1 }]);
+  };
+
+  const updateAddonQuantity = (addonId: string, quantity: number) => {
+    setSelectedAddons(
+      selectedAddons.map((addon) => (addon.id === addonId ? { ...addon, quantity: Math.max(1, quantity) } : addon)),
+    );
+  };
+
+  if (!selectedPackage) return null;
+
+  return (
+    <div className="min-h-screen bg-background py-12 px-4">
+      <div className="max-w-5xl mx-auto space-y-8">
+        {/* Header with back button + selected package summary */}
+        <div className="space-y-4 animate-fade-in">
+          <Button
+            variant="ghost"
+            onClick={() => navigate('/quote-builder')}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Packages
+          </Button>
+
+          <div className="text-center space-y-2">
+            <h1 className="text-4xl font-bold text-foreground">Tell us about your business</h1>
+            <p className="text-muted-foreground">
+              You picked <span className="text-primary font-semibold">{selectedPackage.name}</span>. A few details and we'll generate your quote.
+            </p>
+          </div>
+        </div>
+
+        {/* Customer Information */}
+        <Card className="p-6 md:p-8 bg-card border-border shadow-card hover:shadow-card-hover transition-all duration-300 animate-slide-up">
+          <h2 className="text-2xl font-semibold mb-6 text-foreground">Customer Information</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <FormField
+              id="name"
+              label="Full Name *"
+              value={formData.name}
+              valid={isFieldValid('name')}
+              onChange={(v) => handleInputChange('name', v)}
+              placeholder="John Doe"
+            />
+            <FormField
+              id="businessName"
+              label="Business Name *"
+              value={formData.businessName}
+              valid={isFieldValid('businessName')}
+              onChange={(v) => handleInputChange('businessName', v)}
+              placeholder="Acme Corp"
+            />
+            <FormField
+              id="email"
+              label="Email Address *"
+              type="email"
+              value={formData.email}
+              valid={isFieldValid('email')}
+              onChange={(v) => handleInputChange('email', v)}
+              placeholder="john@example.com"
+            />
+            <FormField
+              id="phone"
+              label="Phone Number *"
+              type="tel"
+              value={formData.phone}
+              valid={isFieldValid('phone')}
+              onChange={(v) => handleInputChange('phone', v)}
+              placeholder="(555) 555-5555"
+            />
+            <div className="md:col-span-2">
+              <FormField
+                id="address"
+                label="Business Address *"
+                value={formData.address}
+                valid={isFieldValid('address')}
+                onChange={(v) => handleInputChange('address', v)}
+                placeholder="123 Main St, City, State, ZIP"
+              />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="referrerCode">Referrer Code (Optional)</Label>
+              <Input
+                id="referrerCode"
+                value={formData.referrerCode || ''}
+                onChange={(e) => handleInputChange('referrerCode', e.target.value.toUpperCase())}
+                placeholder="Enter code if you were referred"
+                className="uppercase font-mono"
+                maxLength={20}
+              />
+            </div>
+          </div>
+        </Card>
+
+        {/* Service Details */}
+        <Card
+          className="p-6 md:p-8 bg-card border-border shadow-card hover:shadow-card-hover transition-all duration-300 animate-slide-up"
+          style={{ animationDelay: '0.05s' }}
+        >
+          <h2 className="text-2xl font-semibold mb-6 text-foreground">Service Details</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <Label htmlFor="userCount">Number of Users *</Label>
+              <div className="relative">
+                <Input
+                  id="userCount"
+                  type="number"
+                  min="1"
+                  value={formData.userCount || ''}
+                  onChange={(e) => handleInputChange('userCount', parseInt(e.target.value) || 0)}
+                  placeholder="e.g., 10"
+                  className="pr-10"
+                />
+                {isFieldValid('userCount') && <Check className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-primary" />}
+              </div>
+              <p className="text-xs text-muted-foreground">Total number of users</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="locationCount">Number of Locations *</Label>
+              <div className="relative">
+                <Input
+                  id="locationCount"
+                  type="number"
+                  min="1"
+                  value={formData.locationCount || ''}
+                  onChange={(e) => handleInputChange('locationCount', parseInt(e.target.value) || 0)}
+                  placeholder="e.g., 1"
+                  className="pr-10"
+                />
+                {isFieldValid('locationCount') && <Check className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-primary" />}
+              </div>
+              <p className="text-xs text-muted-foreground">Total number of physical locations</p>
+            </div>
+          </div>
+        </Card>
+
+        {/* Add-ons */}
+        {activeAddons.length > 0 && (
+          <div className="space-y-4 animate-slide-up" style={{ animationDelay: '0.1s' }}>
+            <Button
+              variant="outline"
+              className="w-full justify-between bg-card border-border hover:bg-secondary/60"
+              onClick={() => setShowAddons(!showAddons)}
+            >
+              <span>Want to add premium features?</span>
+              {showAddons ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+            </Button>
+            {showAddons && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                {activeAddons.map((addon) => {
+                  const selectedAddon = selectedAddons.find((a) => a.id === addon.id);
+                  const isSelected = !!selectedAddon;
+                  const quantity = selectedAddon?.quantity || 1;
+                  return (
+                    <Card
+                      key={addon.id}
+                      className={`p-4 bg-card border-border shadow-card transition-all duration-300 hover:shadow-card-hover hover:-translate-y-0.5 ${
+                        isSelected ? 'ring-2 ring-primary border-primary/40' : ''
+                      }`}
+                    >
+                      <div className="flex gap-3">
+                        <Checkbox checked={isSelected} onCheckedChange={() => toggleAddon(addon)} className="mt-1" />
+                        <div className="flex-1 space-y-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <h4 className="font-semibold text-foreground">{addon.name}</h4>
+                            <div className="text-right">
+                              {addon.pricingType === 'both' ? (
+                                <>
+                                  <span className="text-sm font-semibold text-primary block">
+                                    ${addon.recurringPrice}/{addon.recurringFrequency}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground block">+ ${addon.setupPrice} setup</span>
+                                </>
+                              ) : addon.pricingType === 'recurring-only' ? (
+                                <span className="text-sm font-semibold text-primary">
+                                  ${addon.recurringPrice}/{addon.recurringFrequency}
+                                </span>
+                              ) : (
+                                <span className="text-sm font-semibold text-primary">${addon.setupPrice} one-time</span>
+                              )}
+                            </div>
+                          </div>
+                          <p className="text-sm text-muted-foreground">{addon.description}</p>
+                          {isSelected && (
+                            <div className="flex items-center gap-3 pt-2">
+                              <Label htmlFor={`quantity-${addon.id}`} className="text-sm">
+                                Quantity:
+                              </Label>
+                              <Input
+                                id={`quantity-${addon.id}`}
+                                type="number"
+                                min="1"
+                                max="999"
+                                value={quantity}
+                                onChange={(e) => updateAddonQuantity(addon.id, parseInt(e.target.value) || 1)}
+                                className="w-20 h-8"
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Continue */}
+        <div className="flex justify-center pt-4">
+          <Button
+            size="lg"
+            onClick={handleContinue}
+            disabled={!isFormValid() || isSubmitting}
+            className="px-12 h-12 text-lg shadow-card hover:shadow-card-hover hover:-translate-y-0.5 transition-all"
+          >
+            {isSubmitting ? 'Processing...' : 'Continue to Summary'}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+interface FormFieldProps {
+  id: string;
+  label: string;
+  value: string;
+  valid: boolean;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  type?: string;
+}
+
+function FormField({ id, label, value, valid, onChange, placeholder, type = 'text' }: FormFieldProps) {
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
+      <div className="relative">
+        <Input id={id} type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="pr-10" />
+        {valid && <Check className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-primary" />}
+      </div>
+    </div>
+  );
+}
+
+export default QuoteInfo;

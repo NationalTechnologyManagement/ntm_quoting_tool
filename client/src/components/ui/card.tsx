@@ -3,7 +3,17 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 
 const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(({ className, ...props }, ref) => (
-  <div ref={ref} className={cn("rounded-lg border bg-card text-card-foreground shadow-sm", className)} {...props} />
+  <div
+    ref={ref}
+    // bg-card is solid (no alpha), shadow-card gives a real drop shadow on the
+    // dark theme, ring-1 ring-border/40 adds a subtle inner outline so the card
+    // edge stays defined when a parent applies hover-lift / scale animations.
+    className={cn(
+      "rounded-lg border border-border bg-card text-card-foreground shadow-card ring-1 ring-border/30",
+      className,
+    )}
+    {...props}
+  />
 ));
 Card.displayName = "Card";
 

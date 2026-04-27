@@ -7,6 +7,7 @@ import { QuoteProvider } from "./contexts/QuoteContext";
 import { AuthProvider } from "./contexts/AuthContext";
 import Landing from "./pages/Landing";
 import QuoteBuilder from "./pages/QuoteBuilder";
+import QuoteInfo from "./pages/QuoteInfo";
 import Summary from "./pages/Summary";
 import Terms from "./pages/Terms";
 import QuoteReview from "./pages/QuoteReview";
@@ -36,6 +37,7 @@ const App = () => (
             <Routes>
               <Route path="/" element={<Landing />} />
               <Route path="/quote-builder" element={<QuoteBuilder />} />
+              <Route path="/quote-info" element={<QuoteInfo />} />
               <Route path="/summary" element={<Summary />} />
               <Route path="/terms" element={<Terms />} />
               <Route path="/quote-review" element={<QuoteReview />} />
