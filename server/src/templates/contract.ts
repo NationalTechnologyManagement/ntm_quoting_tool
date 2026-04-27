@@ -87,7 +87,8 @@ export function buildContractHtml(quote: QuoteData): string {
   <meta charset="UTF-8">
   <style>
     @page {
-      margin: 0.6in 0.7in;
+      /* Margins are set by Puppeteer's pdf() options (see pdf.service.ts) so
+         this only declares the page-counter footer. */
       @bottom-center { content: counter(page) " of " counter(pages); font-size: 8pt; color: #999; }
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
