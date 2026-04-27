@@ -836,10 +836,15 @@ const Summary = () => {
                 <div className="p-4 rounded-lg bg-gradient-card border border-border">
                   <p className="text-sm text-muted-foreground mb-1">Due Today</p>
                   <p className="text-3xl font-bold text-foreground">
-                    ${(finalOnboardingCost + finalOneTimeCosts).toFixed(2)}
+                    ${(finalOnboardingCost + finalOneTimeCosts + finalRecurringCosts).toFixed(2)}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    ${finalOnboardingCost.toFixed(2)} onboarding + ${finalOneTimeCosts.toFixed(2)} one-time
+                    {finalOnboardingCost > 0 && `$${finalOnboardingCost.toFixed(2)} onboarding + `}
+                    {finalOneTimeCosts > 0 && `$${finalOneTimeCosts.toFixed(2)} one-time + `}
+                    {`$${finalRecurringCosts.toFixed(2)} first month`}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {`Then $${finalRecurringCosts.toFixed(2)}/month from month 2 onward.`}
                   </p>
                 </div>
               </div>

@@ -154,6 +154,15 @@ function plusDaysISO(days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+// First day of the month after today's. Used as the CW agreement's billStartDate
+// so CW doesn't double-bill month 1 — AP already captured it as "First month"
+// on the upfront invoice.
+function firstOfNextMonthISO(): string {
+  const d = new Date();
+  const next = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+  return next.toISOString().slice(0, 10);
+}
+
 // ── Step implementations ──────────────────────────────────────────────
 
 async function findOrCreateCompany(
@@ -329,6 +338,9 @@ async function createAgreement(
     );
   }
   const today = todayISO();
+  // billStartDate is first of next month: AP already captured month 1 as the
+  // "First month" line on the upfront invoice, so CW starts billing from month 2.
+  const billStart = firstOfNextMonthISO();
   const billCycleId = intCfg(cfg, 'agreement.billCycleId');
   const billTermsId = intCfg(cfg, 'agreement.billTermsId');
   const locationId = intCfg(cfg, 'agreement.locationId');
@@ -347,7 +359,7 @@ async function createAgreement(
       startDate: today,
       noEndingDateFlag: true,
       billAmount: quote.totals.recurringCosts,
-      billStartDate: today,
+      billStartDate: billStart,
       agreementStatus: 'Inactive',
       ...(billCycleId ? { billCycleId } : {}),
       ...(billTermsId ? { billTermsId } : {}),

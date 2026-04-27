@@ -587,12 +587,15 @@ export default function QuoteReview() {
             <div className="text-center">
               <h3 className="text-2xl font-semibold text-green-900 dark:text-green-100 mb-2">Due Today</h3>
               <div className="text-5xl font-bold text-green-900 dark:text-green-100 mb-3">
-                ${(quoteData.totals.onboardingCost + quoteData.totals.oneTimeCosts).toFixed(2)}
+                ${(quoteData.totals.onboardingCost + quoteData.totals.oneTimeCosts + quoteData.totals.recurringCosts).toFixed(2)}
               </div>
               <p className="text-sm text-green-700 dark:text-green-300">
-                Includes onboarding (${quoteData.totals.onboardingCost.toFixed(2)})
-                {quoteData.totals.oneTimeCosts > 0 &&
-                  ` + one-time add-ons ($${quoteData.totals.oneTimeCosts.toFixed(2)})`}
+                {quoteData.totals.onboardingCost > 0 && `Onboarding ($${quoteData.totals.onboardingCost.toFixed(2)}) + `}
+                {quoteData.totals.oneTimeCosts > 0 && `One-time ($${quoteData.totals.oneTimeCosts.toFixed(2)}) + `}
+                {`First month ($${quoteData.totals.recurringCosts.toFixed(2)})`}
+              </p>
+              <p className="text-xs text-green-700 dark:text-green-300 mt-2">
+                {`Then $${quoteData.totals.recurringCosts.toFixed(2)}/month starting next billing cycle.`}
               </p>
             </div>
           </Card>

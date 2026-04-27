@@ -169,7 +169,8 @@ export async function handlePaymentFailed(invoiceId: string) {
 function buildLineItems(quote: QuoteData) {
   const items: Array<{ description: string; amount: number; quantity: number }> = [];
 
-  // 1. Onboarding & Setup (one-time)
+  // 1. Onboarding & Setup (one-time). Skipped when waived — finalCost = 0
+  //    for 36-month plans signed online (per NTM policy).
   if (quote.onboarding.finalCost > 0) {
     items.push({
       description: `Onboarding & Setup (${quote.onboarding.userCount} users)`,
@@ -178,7 +179,7 @@ function buildLineItems(quote: QuoteData) {
     });
   }
 
-  // 2. One-time addons
+  // 2. One-time addons (legacy placeholder addons; current NTM catalog has none)
   for (const addon of quote.selectedAddons) {
     if (addon.pricingType === 'one-time-only') {
       const amount = addon.setupPrice ?? addon.price;
@@ -191,7 +192,7 @@ function buildLineItems(quote: QuoteData) {
       }
     }
 
-    // 3. Setup fees from dual-pricing addons
+    // 3. Setup fees from dual-pricing addons (also legacy)
     if (addon.pricingType === 'both' && addon.setupPrice && addon.setupPrice > 0) {
       items.push({
         description: `${addon.name} - Setup Fee`,
@@ -199,6 +200,17 @@ function buildLineItems(quote: QuoteData) {
         quantity: addon.quantity,
       });
     }
+  }
+
+  // 4. First month's recurring charge — captured upfront via AP so the customer
+  //    has paid something real even when onboarding is waived. CW agreement
+  //    handles months 2+. Composed of package recurring + recurring addons.
+  if (quote.totals.recurringCosts > 0) {
+    items.push({
+      description: `First month — ${quote.selectedPackage.name}`,
+      amount: Math.round(quote.totals.recurringCosts * 100),
+      quantity: 1,
+    });
   }
 
   return items;
