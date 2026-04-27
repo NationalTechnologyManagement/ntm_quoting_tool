@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Check, ChevronDown, ChevronUp, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
+import { SiteHeader } from '@/components/SiteHeader';
 
 const QuoteInfo = () => {
   const navigate = useNavigate();
@@ -142,8 +143,9 @@ const QuoteInfo = () => {
   if (!selectedPackage) return null;
 
   return (
-    <div className="min-h-screen bg-background py-12 px-4">
-      <div className="max-w-5xl mx-auto space-y-8">
+    <div className="min-h-screen bg-background">
+      <SiteHeader />
+      <div className="max-w-5xl mx-auto space-y-8 py-12 px-4">
         {/* Header with back button + selected package summary */}
         <div className="space-y-4 animate-fade-in">
           <Button

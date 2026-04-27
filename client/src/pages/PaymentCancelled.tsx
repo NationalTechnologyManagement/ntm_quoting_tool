@@ -2,10 +2,13 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { XCircle } from 'lucide-react';
+import { SiteHeader } from '@/components/SiteHeader';
 
 export default function PaymentCancelled() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/30 px-4">
+    <div className="min-h-screen bg-background">
+      <SiteHeader />
+      <div className="flex items-center justify-center px-4 py-20">
       <Card className="max-w-md w-full p-8 text-center animate-fade-in">
         <div className="mb-6">
           <div className="w-16 h-16 bg-yellow-100 dark:bg-yellow-950/30 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -28,6 +31,7 @@ export default function PaymentCancelled() {
           </Button>
         </div>
       </Card>
+      </div>
     </div>
   );
 }

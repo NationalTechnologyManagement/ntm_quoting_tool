@@ -22,6 +22,7 @@ import {
   Tag,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { SiteHeader } from "@/components/SiteHeader";
 
 interface QuoteData {
   quoteNumber: string;
@@ -223,40 +224,47 @@ export default function QuoteReview() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-muted/30">
-        <Card className="p-8 text-center animate-fade-in">
-          <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4 text-primary" />
-          <p className="text-muted-foreground">Loading quote details...</p>
-        </Card>
+      <div className="min-h-screen bg-background">
+        <SiteHeader />
+        <div className="flex items-center justify-center py-20">
+          <Card className="p-8 text-center animate-fade-in">
+            <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4 text-primary" />
+            <p className="text-muted-foreground">Loading quote details...</p>
+          </Card>
+        </div>
       </div>
     );
   }
 
   if (error || !quoteData) {
     return (
-      <div className="min-h-screen flex items-center justify-center px-4 bg-muted/30">
-        <Card className="max-w-md w-full p-8 text-center animate-fade-in">
-          <AlertCircle className="w-12 h-12 mx-auto mb-4 text-destructive" />
-          <h2 className="text-xl font-semibold mb-2">Quote Not Found</h2>
-          <p className="text-muted-foreground mb-6">
-            {error || "The quote you are looking for could not be found or has expired."}
-          </p>
-          <div className="space-y-3">
-            <Button asChild className="w-full">
-              <Link to="/">Return to Home</Link>
-            </Button>
-            <Button variant="outline" className="w-full" asChild>
-              <a href="mailto:support@yourcompany.com">Contact Support</a>
-            </Button>
-          </div>
-        </Card>
+      <div className="min-h-screen bg-background">
+        <SiteHeader />
+        <div className="flex items-center justify-center px-4 py-20">
+          <Card className="max-w-md w-full p-8 text-center animate-fade-in">
+            <AlertCircle className="w-12 h-12 mx-auto mb-4 text-destructive" />
+            <h2 className="text-xl font-semibold mb-2">Quote Not Found</h2>
+            <p className="text-muted-foreground mb-6">
+              {error || "The quote you are looking for could not be found or has expired."}
+            </p>
+            <div className="space-y-3">
+              <Button asChild className="w-full">
+                <Link to="/">Return to Home</Link>
+              </Button>
+              <Button variant="outline" className="w-full" asChild>
+                <a href="mailto:support@trustntm.com">Contact Support</a>
+              </Button>
+            </div>
+          </Card>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-muted/30 py-12 px-4">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-background">
+      <SiteHeader />
+      <div className="max-w-4xl mx-auto py-12 px-4">
         {/* Header Section */}
         <div className="text-center mb-8 animate-fade-in">
           <h1 className="text-4xl font-bold mb-2">Quote Review & Acceptance</h1>

@@ -4,6 +4,7 @@ import { ArrowLeft, AlertCircle } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuote } from "@/contexts/QuoteContext";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { SiteHeader } from "@/components/SiteHeader";
 
 const Terms = () => {
   const navigate = useNavigate();
@@ -24,8 +25,9 @@ const Terms = () => {
   });
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20 py-12 px-4">
-      <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-b from-background to-muted/20">
+      <SiteHeader />
+      <div className="max-w-4xl mx-auto py-12 px-4">
         <Button
           variant="ghost"
           onClick={() => navigate(-1)}

@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Search, FileText, ArrowRight } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 import { quoteLookupApi } from '@/services/api';
+import { SiteHeader } from '@/components/SiteHeader';
 
 interface QuoteResult {
   quoteNumber: string;
@@ -67,8 +68,9 @@ export default function QuoteLookup() {
   };
 
   return (
-    <div className="min-h-screen bg-muted/30 py-12 px-4">
-      <div className="max-w-2xl mx-auto">
+    <div className="min-h-screen bg-background">
+      <SiteHeader />
+      <div className="max-w-2xl mx-auto py-12 px-4">
         <div className="text-center mb-8">
           <h1 className="text-4xl font-bold mb-2">Find Your Quote</h1>
           <p className="text-muted-foreground">

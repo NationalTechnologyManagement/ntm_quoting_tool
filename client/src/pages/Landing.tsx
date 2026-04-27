@@ -2,10 +2,12 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, CheckCircle2, Sparkles, Shield, Zap, Target, Clock, Lock, TrendingUp, Users, Star, Award, Phone, Mail, MessageCircle, Database, BarChart3, Workflow } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { SiteHeader } from '@/components/SiteHeader';
 
 const Landing = () => {
   return (
     <div className="min-h-screen">
+      <SiteHeader />
       {/* Hero Section */}
       <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-gradient-hero">
         {/* Animated background elements */}

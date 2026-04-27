@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Check, Star, Search, ArrowRight, FileSearch, X } from 'lucide-react';
+import { SiteHeader } from '@/components/SiteHeader';
 
 const QuoteBuilder = () => {
   const navigate = useNavigate();
@@ -30,8 +31,9 @@ const QuoteBuilder = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background py-12 px-4">
-      <div className="max-w-6xl mx-auto space-y-10">
+    <div className="min-h-screen bg-background">
+      <SiteHeader />
+      <div className="max-w-6xl mx-auto space-y-10 py-12 px-4">
         {/* Header */}
         <div className="text-center space-y-3 animate-fade-in">
           <h1 className="text-4xl md:text-5xl font-bold text-foreground">Choose Your Package</h1>

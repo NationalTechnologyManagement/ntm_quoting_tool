@@ -2,16 +2,19 @@ import { useSearchParams, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { CheckCircle } from 'lucide-react';
+import { SiteHeader } from '@/components/SiteHeader';
 
 export default function PaymentSuccess() {
   const [searchParams] = useSearchParams();
   const sessionId = searchParams.get('session_id');
   const paymentId = searchParams.get('payment_id') || searchParams.get('id');
-  
+
   const displayId = sessionId || paymentId;
-  
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-muted/30 px-4">
+    <div className="min-h-screen bg-background">
+      <SiteHeader />
+      <div className="flex items-center justify-center px-4 py-20">
       <Card className="max-w-md w-full p-8 text-center animate-fade-in">
         <div className="mb-6">
           <div className="w-16 h-16 bg-green-100 dark:bg-green-950/30 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -43,6 +46,7 @@ export default function PaymentSuccess() {
           </Button>
         </div>
       </Card>
+      </div>
     </div>
   );
 }

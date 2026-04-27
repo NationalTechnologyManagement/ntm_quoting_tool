@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Mail, CreditCard, ChevronDown, ChevronUp, ArrowLeft, AlertCircle, X } from "lucide-react";
 import { toast } from "sonner";
+import { SiteHeader } from "@/components/SiteHeader";
 
 const generateQuoteNumber = (type: "quote" | "order") => {
   const prefix = type === "quote" ? "QT" : "OR";
@@ -412,8 +413,9 @@ const Summary = () => {
   };
 
   return (
-    <div className="min-h-screen bg-muted/30 py-12 px-4">
-      <div className="max-w-6xl mx-auto">
+    <div className="min-h-screen bg-background">
+      <SiteHeader />
+      <div className="max-w-6xl mx-auto py-12 px-4">
         {/* Back button */}
         <Button variant="ghost" onClick={() => navigate("/quote-builder")} className="mb-6">
           <ArrowLeft className="w-4 h-4 mr-2" />

@@ -20,7 +20,14 @@ const AdminNav = () => {
     <nav className="bg-card border-b border-border shadow-sm">
       <div className="max-w-7xl mx-auto px-4 py-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-foreground">Admin Dashboard</h1>
+          <div className="flex items-center gap-3">
+            <img
+              src="/ntm-logo.png"
+              alt=""
+              className="w-9 h-9 drop-shadow-md"
+            />
+            <h1 className="text-2xl font-bold text-foreground">Admin Dashboard</h1>
+          </div>
           <div className="flex items-center gap-4">
             <div className="flex gap-2">
               <Button
