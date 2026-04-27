@@ -14,10 +14,12 @@
     --background: 216 65% 11%;
     --foreground: 0 0% 100%;
 
-    --card: 216 50% 12%;
+    /* Card surfaces are noticeably lighter than background so cards/forms
+       don't blend into the page. */
+    --card: 216 45% 20%;
     --card-foreground: 0 0% 100%;
 
-    --popover: 216 50% 12%;
+    --popover: 216 45% 20%;
     --popover-foreground: 0 0% 100%;
 
     /* NTM orange */
@@ -25,12 +27,13 @@
     --primary-foreground: 0 0% 100%;
     --primary-dark: 21 75% 45%;
 
-    /* Slightly lighter navy for sub-surfaces */
-    --secondary: 216 40% 16%;
+    /* Sub-surface used for input fields and section dividers */
+    --secondary: 216 40% 24%;
     --secondary-foreground: 0 0% 100%;
 
-    --muted: 216 40% 16%;
-    --muted-foreground: 216 20% 70%;
+    --muted: 216 35% 22%;
+    /* Lifted muted-foreground for legibility on the dark theme */
+    --muted-foreground: 216 25% 88%;
 
     /* Accent shares the orange to keep existing `bg-accent` CTAs vibrant.
        Secondary is the navy sub-surface — use that where you want subdued. */
@@ -40,8 +43,9 @@
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 216 40% 20%;
-    --input: 216 40% 20%;
+    /* Visible borders + form-field surface (bumped from 20% to 30% lightness) */
+    --border: 216 40% 30%;
+    --input: 216 40% 28%;
     --ring: 21 75% 55%;
 
     --radius: 0.5rem;
