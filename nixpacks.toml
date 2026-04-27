@@ -2,7 +2,11 @@
 aptPkgs = ["chromium"]
 
 [phases.install]
-cmds = ["npm ci --include=dev"]
+# `npm install` instead of `npm ci` — the lockfile may lag the package.json
+# whenever a dev-only dep is added (e.g., vitest) without local node access.
+# Tradeoff: slightly slower install + lockfile mutation at build time. Acceptable
+# until we have a CI step that updates package-lock.json on every PR.
+cmds = ["npm install --include=dev"]
 
 [phases.build]
 cmds = [
