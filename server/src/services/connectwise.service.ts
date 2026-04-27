@@ -463,6 +463,37 @@ async function createProject(
   const projectName =
     `${quote.selectedPackage.name} - ${quote.customer.businessName} - ${start}`;
 
+  // Description: everything the onboarding PM needs to scope the work — sizing,
+  // pricing, addon list with quantities and unit prices, customer contact, and
+  // links back to the quote/order so they can pull the full record.
+  const fmtMoney = (n: number) => `$${n.toFixed(2)}`;
+  const addonLines = quote.selectedAddons.length
+    ? quote.selectedAddons.map((a) => {
+        const recurring = a.recurringPrice ? `${fmtMoney(a.recurringPrice)}/${a.recurringFrequency || 'mo'}` : null;
+        const setup = a.setupPrice ? `${fmtMoney(a.setupPrice)} setup` : null;
+        const pricing = [recurring, setup].filter(Boolean).join(', ');
+        return `  - ${a.name} × ${a.quantity}${pricing ? ` (${pricing})` : ''}`;
+      })
+    : ['  (none)'];
+  const referrer = (quote.customer as any).referrerCode;
+  const description = [
+    `Package: ${quote.selectedPackage.name}`,
+    `Sizing: ${quote.customer.userCount} user(s), ${quote.customer.locationCount} location(s)`,
+    `Recurring: ${fmtMoney(quote.totals.recurringCosts)}/${quote.totals.recurringFrequency}`,
+    `One-time: ${fmtMoney(quote.totals.onboardingCost + quote.totals.oneTimeCosts)} (onboarding ${fmtMoney(quote.totals.onboardingCost)} + addons ${fmtMoney(quote.totals.oneTimeCosts)})`,
+    '',
+    'Add-ons:',
+    ...addonLines,
+    '',
+    `Customer contact: ${quote.customer.name} <${quote.customer.email}> ${quote.customer.phone}`,
+    `Address: ${quote.customer.address}`,
+    ...(referrer ? [`Referrer: ${referrer}`] : []),
+    '',
+    `Quote: ${quote.quoteNumber}`,
+    `Order: ${(quote as any).orderNumber || 'N/A'}`,
+    `Signed: ${start}`,
+  ].join('\n');
+
   const project = await cwJson<any>('/project/projects', {
     method: 'POST',
     body: JSON.stringify({
@@ -476,14 +507,7 @@ async function createProject(
       ...(typeId ? { type: { id: typeId } } : {}),
       ...(templateId ? { projectTemplateId: templateId } : {}),
       ...(managerId ? { manager: { id: managerId } } : {}),
-      description: [
-        `Package: ${quote.selectedPackage.name}`,
-        `Users: ${quote.customer.userCount}`,
-        `Locations: ${quote.customer.locationCount}`,
-        `Quote: ${quote.quoteNumber}`,
-        `Order: ${(quote as any).orderNumber || 'N/A'}`,
-        `Addons: ${quote.selectedAddons.map((a) => a.name).join(', ') || 'None'}`,
-      ].join('\n'),
+      description,
     }),
   });
   return project.id;
