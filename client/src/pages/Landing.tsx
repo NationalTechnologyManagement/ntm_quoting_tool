@@ -16,10 +16,19 @@ const Landing = () => {
 
         <div className="relative z-10 container mx-auto px-4 py-20 text-center">
           <div className="max-w-4xl mx-auto space-y-8 animate-fade-in">
+            {/* NTM Logo */}
+            <div className="flex justify-center">
+              <img
+                src="/ntm-logo.png"
+                alt="National Technology Management"
+                className="w-24 h-24 md:w-32 md:h-32 drop-shadow-2xl"
+              />
+            </div>
+
             {/* Badge */}
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 text-white">
-              <Sparkles className="w-4 h-4" />
-              <span className="text-sm font-medium">Professional Quote Builder</span>
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-white">
+              <Sparkles className="w-4 h-4 text-primary" />
+              <span className="text-sm font-medium">National Technology Management</span>
             </div>
 
             {/* Main Heading */}
