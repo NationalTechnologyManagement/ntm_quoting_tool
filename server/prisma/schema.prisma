@@ -20,6 +20,7 @@ model Package {
   sortOrder           Int      @default(0)
   active              Boolean  @default(true)
   cwAgreementTypeId   Int?     // CW agreement type to use when this package is sold
+  agreementMonths     Int      @default(0) // 0 = month-to-month; 36 = waives onboarding when signed online
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
 

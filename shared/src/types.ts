@@ -11,6 +11,9 @@ export interface Package {
   // CW agreement type id this package maps to. Required for `createAgreement`
   // to work; nullable so the schema doesn't break legacy rows during migration.
   cwAgreementTypeId?: number | null;
+  // Term length in months. 0 = month-to-month. 36 = 3-year agreement (auto
+  // waives the onboarding fee per NTM policy when signed online).
+  agreementMonths?: number;
 }
 
 export interface Addon {

@@ -1,35 +1,67 @@
 import type { Package, Addon, PromoCode, TermsContent } from './types.js';
 
+// NTM onboarding pricing rule (per ntm-sales-kb-upload-only/onboarding-fee.docx):
+// Onboarding fee = 2 × calculated monthly service total (per-user × users +
+// per-location × locations). Auto-waived when the customer signs a 36-month
+// agreement through the online portal (this app). Month-to-month plans pay it.
+export const ONBOARDING_FEE_MULTIPLIER = 2;
+export const ONBOARDING_WAIVER_TERM_MONTHS = 36;
+
+// Legacy: kept for backwards compatibility with old quotes that snapshotted a
+// flat per-user onboarding cost. New quotes use computeOnboardingFee().
 export const ONBOARDING_COST_PER_USER = 200;
+
 export const QUOTE_VALIDITY_DAYS = 30;
 
-// Package names + cwAgreementTypeId mapping decided 2026-04-27:
-// reuse legacy CW agreement types (00791/00792/00793) — confirmed against NTM CW.
-// Pricing is placeholder; ops should adjust via the admin UI.
+/** Compute base onboarding fee for a given package + sizing. */
+export function computeOnboardingFee(
+  pkg: Pick<Package, 'pricePerUser' | 'pricePerLocation' | 'agreementMonths'>,
+  userCount: number,
+  locationCount: number,
+): { base: number; waived: boolean; final: number } {
+  const monthly =
+    pkg.pricePerUser * userCount + pkg.pricePerLocation * locationCount;
+  const base = monthly * ONBOARDING_FEE_MULTIPLIER;
+  const waived = (pkg.agreementMonths ?? 0) >= ONBOARDING_WAIVER_TERM_MONTHS;
+  return { base, waived, final: waived ? 0 : base };
+}
+
+// Real NTM pricing audited 2026-04-27 from ntm-sales-kb-upload-only/.
+// Features lifted from plan-comparison.csv. cwAgreementTypeId mapping reuses
+// legacy CW agreement types (36/37/38), confirmed against NTM CW production.
 export const defaultPackages: Package[] = [
   {
     id: 'package-1',
     name: 'Essentials',
-    pricePerUser: 29,
-    pricePerLocation: 50,
+    pricePerUser: 59,
+    pricePerLocation: 300,
     frequency: 'monthly',
-    features: ['Up to 10 users', '5GB storage', 'Email support', 'Basic analytics'],
+    agreementMonths: 0, // month-to-month
+    features: [
+      '8x5 business hours support (24x7 emergencies)',
+      'Remote management & support',
+      'Network operations center',
+      'Antivirus + MDR + EDR',
+      'DNS filtering',
+      'Automated patching & software deployment',
+    ],
     isBestValue: false,
     cwAgreementTypeId: 36, // CW: "00791 Essentials Package"
   },
   {
     id: 'package-2',
     name: 'SafeSecure',
-    pricePerUser: 49,
-    pricePerLocation: 99,
+    pricePerUser: 99,
+    pricePerLocation: 400,
     frequency: 'monthly',
+    agreementMonths: 36,
     features: [
-      'Unlimited users',
-      '50GB storage',
-      'Priority phone support',
-      'Advanced analytics',
-      'API access',
-      'Custom integrations',
+      'Everything in Essentials',
+      'Vendor liaison',
+      'Darkweb monitoring',
+      'Mobile device management (MDM)',
+      'Email encryption',
+      'Microsoft 365 backups',
     ],
     isBestValue: true,
     cwAgreementTypeId: 37, // CW: "00792 SafeSecure Package"
@@ -37,138 +69,83 @@ export const defaultPackages: Package[] = [
   {
     id: 'package-3',
     name: 'SafeSecure Plus',
-    pricePerUser: 79,
-    pricePerLocation: 149,
+    pricePerUser: 149,
+    pricePerLocation: 500,
     frequency: 'monthly',
+    agreementMonths: 36,
     features: [
-      'Unlimited users',
-      '500GB storage',
-      '24/7 dedicated support',
-      'Advanced analytics & reporting',
-      'Full API access',
-      'Custom integrations',
-      'Dedicated account manager',
-      'SLA guarantee',
-      'White-label options',
+      'Everything in SafeSecure',
+      '24x7 support included',
+      'On-site support included',
+      'Advanced threat protection',
     ],
     isBestValue: false,
     cwAgreementTypeId: 38, // CW: "00793 SafeSecure Plus Package"
   },
 ];
 
+// Real NTM addon catalog from ntm-sales-kb-upload-only/add-on-pricing.csv.
+// All recurring-only with no setup fee. cwProductId left null — ops fills these
+// in via /admin/addons after looking up each item in CW's procurement catalog.
 export const defaultAddons: Addon[] = [
   {
-    id: 'addon-1',
-    name: 'Premium Support',
-    description: '24/7 phone and email support with 1-hour response time',
-    price: 99,
+    id: 'addon-voice-voip',
+    name: 'Voice Phone (VoIP)',
+    description: 'Cloud VoIP phone line. Billed per phone line per month.',
+    price: 25,
     frequency: 'monthly',
-    recurringPrice: 99,
+    recurringPrice: 25,
     recurringFrequency: 'monthly',
     setupPrice: 0,
     pricingType: 'recurring-only',
     active: true,
   },
   {
-    id: 'addon-2',
-    name: 'Advanced Analytics',
-    description: 'Custom reporting dashboard with real-time insights',
-    price: 149,
+    id: 'addon-teams-phone',
+    name: 'Microsoft Teams Phone',
+    description: 'Microsoft Teams Phone licensing. Billed per user per month.',
+    price: 15,
     frequency: 'monthly',
-    recurringPrice: 149,
+    recurringPrice: 15,
     recurringFrequency: 'monthly',
     setupPrice: 0,
     pricingType: 'recurring-only',
     active: true,
   },
   {
-    id: 'addon-3',
-    name: 'Onboarding Training',
-    description: '4 hours of personalized training for your team',
-    price: 499,
-    frequency: 'one-time',
-    setupPrice: 499,
-    pricingType: 'one-time-only',
-    active: true,
-  },
-  {
-    id: 'addon-4',
-    name: 'API Access',
-    description: 'Full REST API with documentation and support',
-    price: 199,
+    id: 'addon-efax',
+    name: 'eFaxing',
+    description: 'Cloud fax service. Billed per fax line per month.',
+    price: 25,
     frequency: 'monthly',
-    recurringPrice: 199,
+    recurringPrice: 25,
     recurringFrequency: 'monthly',
     setupPrice: 0,
     pricingType: 'recurring-only',
     active: true,
   },
   {
-    id: 'addon-5',
-    name: 'Phone System',
-    description: 'Cloud-based phone system with call routing',
-    price: 30,
+    id: 'addon-m365-backups',
+    name: 'Microsoft SaaS Backups',
+    description: 'Backups of Microsoft 365 mailboxes (mail, OneDrive, SharePoint). Billed per mailbox per month.',
+    price: 6,
     frequency: 'monthly',
-    recurringPrice: 30,
-    recurringFrequency: 'monthly',
-    setupPrice: 500,
-    pricingType: 'both',
-    active: true,
-  },
-  {
-    id: 'addon-6',
-    name: 'Access Control',
-    description: 'Digital access control and door management',
-    price: 20,
-    frequency: 'monthly',
-    recurringPrice: 20,
+    recurringPrice: 6,
     recurringFrequency: 'monthly',
     setupPrice: 0,
     pricingType: 'recurring-only',
     active: true,
   },
   {
-    id: 'addon-7',
-    name: 'CCTV Integration',
-    description: 'Security camera system integration',
-    price: 20,
+    id: 'addon-server-mgmt',
+    name: 'Server Management per VM',
+    description: 'Managed server services. Billed per managed virtual machine per month.',
+    price: 175,
     frequency: 'monthly',
-    recurringPrice: 20,
-    recurringFrequency: 'monthly',
-    setupPrice: 350,
-    pricingType: 'both',
-    active: true,
-  },
-  {
-    id: 'addon-8',
-    name: 'Data Backup',
-    description: 'Automated daily backups with 30-day retention',
-    price: 79,
-    frequency: 'monthly',
-    recurringPrice: 79,
+    recurringPrice: 175,
     recurringFrequency: 'monthly',
     setupPrice: 0,
     pricingType: 'recurring-only',
-    active: true,
-  },
-  {
-    id: 'addon-9',
-    name: 'Custom Branding',
-    description: 'White-label customization of your portal',
-    price: 199,
-    frequency: 'one-time',
-    setupPrice: 199,
-    pricingType: 'one-time-only',
-    active: true,
-  },
-  {
-    id: 'addon-10',
-    name: 'Migration Service',
-    description: 'Full data migration from your existing system',
-    price: 999,
-    frequency: 'one-time',
-    setupPrice: 999,
-    pricingType: 'one-time-only',
     active: true,
   },
 ];

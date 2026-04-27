@@ -9,6 +9,8 @@ export interface Package {
   frequency: 'monthly' | 'annually' | 'one-time';
   features: string[];
   isBestValue?: boolean;
+  cwAgreementTypeId?: number | null;
+  agreementMonths?: number; // 0 = month-to-month; 36 = waives onboarding when signed online
 }
 
 export interface Addon {
@@ -23,6 +25,23 @@ export interface Addon {
   recurringFrequency?: 'monthly' | 'annually';
   setupPrice?: number;
   pricingType: 'recurring-only' | 'one-time-only' | 'both';
+  cwProductId?: number | null;
+}
+
+// Onboarding fee = 2x monthly recurring; auto-waived for 36-month plans signed
+// online. Mirrors shared/src/constants.ts computeOnboardingFee — duplicated here
+// because the client doesn't import @ntm/shared.
+export const ONBOARDING_FEE_MULTIPLIER = 2;
+export const ONBOARDING_WAIVER_TERM_MONTHS = 36;
+export function computeOnboardingFee(
+  pkg: Pick<Package, 'pricePerUser' | 'pricePerLocation' | 'agreementMonths'>,
+  userCount: number,
+  locationCount: number,
+): { base: number; waived: boolean; final: number } {
+  const monthly = pkg.pricePerUser * userCount + pkg.pricePerLocation * locationCount;
+  const base = monthly * ONBOARDING_FEE_MULTIPLIER;
+  const waived = (pkg.agreementMonths ?? 0) >= ONBOARDING_WAIVER_TERM_MONTHS;
+  return { base, waived, final: waived ? 0 : base };
 }
 
 export interface SelectedAddon extends Addon {
@@ -84,175 +103,103 @@ interface QuoteContextType {
 const QuoteContext = createContext<QuoteContextType | null>(null);
 
 // Version number - increment this when adding new default data
-const CONFIG_VERSION = 8;
+const CONFIG_VERSION = 9;
 
+// Mirrors shared/src/constants.ts (real NTM pricing from ntm-sales-kb-upload-only).
+// Used as offline fallback only — production data comes from /api/config.
 const defaultPackages: Package[] = [
   {
     id: 'package-1',
-    name: 'Starter Package',
-    pricePerUser: 29,
-    pricePerLocation: 50,
+    name: 'Essentials',
+    pricePerUser: 59,
+    pricePerLocation: 300,
     frequency: 'monthly',
-    features: ['Up to 10 users', '5GB storage', 'Email support', 'Basic analytics'],
+    features: [
+      '8x5 business hours support (24x7 emergencies)',
+      'Remote management & support',
+      'Network operations center',
+      'Antivirus + MDR + EDR',
+      'DNS filtering',
+      'Automated patching & software deployment',
+    ],
     isBestValue: false,
+    agreementMonths: 0,
   },
   {
     id: 'package-2',
-    name: 'Professional Package',
-    pricePerUser: 49,
-    pricePerLocation: 99,
+    name: 'SafeSecure',
+    pricePerUser: 99,
+    pricePerLocation: 400,
     frequency: 'monthly',
     features: [
-      'Unlimited users',
-      '50GB storage',
-      'Priority phone support',
-      'Advanced analytics',
-      'API access',
-      'Custom integrations',
+      'Everything in Essentials',
+      'Vendor liaison',
+      'Darkweb monitoring',
+      'Mobile device management (MDM)',
+      'Email encryption',
+      'Microsoft 365 backups',
     ],
     isBestValue: true,
+    agreementMonths: 36,
   },
   {
     id: 'package-3',
-    name: 'Enterprise Package',
-    pricePerUser: 79,
-    pricePerLocation: 149,
+    name: 'SafeSecure Plus',
+    pricePerUser: 149,
+    pricePerLocation: 500,
     frequency: 'monthly',
     features: [
-      'Unlimited users',
-      '500GB storage',
-      '24/7 dedicated support',
-      'Advanced analytics & reporting',
-      'Full API access',
-      'Custom integrations',
-      'Dedicated account manager',
-      'SLA guarantee',
-      'White-label options',
+      'Everything in SafeSecure',
+      '24x7 support included',
+      'On-site support included',
+      'Advanced threat protection',
     ],
     isBestValue: false,
+    agreementMonths: 36,
   },
 ];
 
+// Real NTM addons (per ntm-sales-kb-upload-only/add-on-pricing.csv).
 const defaultAddons: Addon[] = [
   {
-    id: 'addon-1',
-    name: 'Premium Support',
-    description: '24/7 phone and email support with 1-hour response time',
-    price: 99,
-    frequency: 'monthly',
-    recurringPrice: 99,
-    recurringFrequency: 'monthly',
-    setupPrice: 0,
-    pricingType: 'recurring-only',
-    active: true,
+    id: 'addon-voice-voip',
+    name: 'Voice Phone (VoIP)',
+    description: 'Cloud VoIP phone line. Billed per phone line per month.',
+    price: 25, frequency: 'monthly',
+    recurringPrice: 25, recurringFrequency: 'monthly', setupPrice: 0,
+    pricingType: 'recurring-only', active: true,
   },
   {
-    id: 'addon-2',
-    name: 'Advanced Analytics',
-    description: 'Custom reporting dashboard with real-time insights',
-    price: 149,
-    frequency: 'monthly',
-    recurringPrice: 149,
-    recurringFrequency: 'monthly',
-    setupPrice: 0,
-    pricingType: 'recurring-only',
-    active: true,
+    id: 'addon-teams-phone',
+    name: 'Microsoft Teams Phone',
+    description: 'Microsoft Teams Phone licensing. Billed per user per month.',
+    price: 15, frequency: 'monthly',
+    recurringPrice: 15, recurringFrequency: 'monthly', setupPrice: 0,
+    pricingType: 'recurring-only', active: true,
   },
   {
-    id: 'addon-3',
-    name: 'Onboarding Training',
-    description: '4 hours of personalized training for your team',
-    price: 499,
-    frequency: 'one-time',
-    recurringPrice: undefined,
-    recurringFrequency: undefined,
-    setupPrice: 499,
-    pricingType: 'one-time-only',
-    active: true,
+    id: 'addon-efax',
+    name: 'eFaxing',
+    description: 'Cloud fax service. Billed per fax line per month.',
+    price: 25, frequency: 'monthly',
+    recurringPrice: 25, recurringFrequency: 'monthly', setupPrice: 0,
+    pricingType: 'recurring-only', active: true,
   },
   {
-    id: 'addon-4',
-    name: 'API Access',
-    description: 'Full REST API with documentation and support',
-    price: 199,
-    frequency: 'monthly',
-    recurringPrice: 199,
-    recurringFrequency: 'monthly',
-    setupPrice: 0,
-    pricingType: 'recurring-only',
-    active: true,
+    id: 'addon-m365-backups',
+    name: 'Microsoft SaaS Backups',
+    description: 'Backups of Microsoft 365 mailboxes (mail, OneDrive, SharePoint). Billed per mailbox per month.',
+    price: 6, frequency: 'monthly',
+    recurringPrice: 6, recurringFrequency: 'monthly', setupPrice: 0,
+    pricingType: 'recurring-only', active: true,
   },
   {
-    id: 'addon-5',
-    name: 'Phone System',
-    description: 'Cloud-based phone system with call routing',
-    price: 30,
-    frequency: 'monthly',
-    recurringPrice: 30,
-    recurringFrequency: 'monthly',
-    setupPrice: 500,
-    pricingType: 'both',
-    active: true,
-  },
-  {
-    id: 'addon-6',
-    name: 'Access Control',
-    description: 'Digital access control and door management',
-    price: 20,
-    frequency: 'monthly',
-    recurringPrice: 20,
-    recurringFrequency: 'monthly',
-    setupPrice: 0,
-    pricingType: 'recurring-only',
-    active: true,
-  },
-  {
-    id: 'addon-7',
-    name: 'CCTV Integration',
-    description: 'Security camera system integration',
-    price: 20,
-    frequency: 'monthly',
-    recurringPrice: 20,
-    recurringFrequency: 'monthly',
-    setupPrice: 350,
-    pricingType: 'both',
-    active: true,
-  },
-  {
-    id: 'addon-8',
-    name: 'Data Backup',
-    description: 'Automated daily backups with 30-day retention',
-    price: 79,
-    frequency: 'monthly',
-    recurringPrice: 79,
-    recurringFrequency: 'monthly',
-    setupPrice: 0,
-    pricingType: 'recurring-only',
-    active: true,
-  },
-  {
-    id: 'addon-9',
-    name: 'Custom Branding',
-    description: 'White-label customization of your portal',
-    price: 199,
-    frequency: 'one-time',
-    recurringPrice: undefined,
-    recurringFrequency: undefined,
-    setupPrice: 199,
-    pricingType: 'one-time-only',
-    active: true,
-  },
-  {
-    id: 'addon-10',
-    name: 'Migration Service',
-    description: 'Full data migration from your existing system',
-    price: 999,
-    frequency: 'one-time',
-    recurringPrice: undefined,
-    recurringFrequency: undefined,
-    setupPrice: 999,
-    pricingType: 'one-time-only',
-    active: true,
+    id: 'addon-server-mgmt',
+    name: 'Server Management per VM',
+    description: 'Managed server services. Billed per managed virtual machine per month.',
+    price: 175, frequency: 'monthly',
+    recurringPrice: 175, recurringFrequency: 'monthly', setupPrice: 0,
+    pricingType: 'recurring-only', active: true,
   },
 ];
 

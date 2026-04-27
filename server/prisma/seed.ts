@@ -14,59 +14,68 @@ async function main() {
   console.log('Seeding database...');
 
   // ── Packages ──
-  // Idempotent: existing rows are not overwritten (so live pricing edits survive),
-  // but we backfill cwAgreementTypeId by name-match so existing rows get their CW
-  // mapping after this migration even if they were created before the field existed.
+  // Canonical 3 packages (Essentials/SafeSecure/SafeSecure Plus) are the source
+  // of truth in shared/src/constants.ts (sourced from ntm-sales-kb-upload-only/).
+  // Seed UPDATES on every deploy so prices/features/term stay in sync with the
+  // canonical source. Admin UI can add NEW packages, but edits to the canonical
+  // 3 are overwritten by deploy. To change the canonical 3, edit constants.ts
+  // and push.
   for (let i = 0; i < defaultPackages.length; i++) {
     const pkg = defaultPackages[i];
+    const fields = {
+      name: pkg.name,
+      pricePerUser: pkg.pricePerUser,
+      pricePerLocation: pkg.pricePerLocation,
+      frequency: pkg.frequency,
+      features: pkg.features,
+      isBestValue: pkg.isBestValue ?? false,
+      sortOrder: i,
+      cwAgreementTypeId: pkg.cwAgreementTypeId ?? null,
+      agreementMonths: pkg.agreementMonths ?? 0,
+    };
     await prisma.package.upsert({
       where: { id: pkg.id },
-      update: {},
-      create: {
-        id: pkg.id,
-        name: pkg.name,
-        pricePerUser: pkg.pricePerUser,
-        pricePerLocation: pkg.pricePerLocation,
-        frequency: pkg.frequency,
-        features: pkg.features,
-        isBestValue: pkg.isBestValue ?? false,
-        sortOrder: i,
-        cwAgreementTypeId: pkg.cwAgreementTypeId ?? null,
-      },
+      update: fields,
+      create: { id: pkg.id, ...fields },
     });
   }
-  // Backfill cwAgreementTypeId on existing rows that lack it. Match on name.
-  for (const pkg of defaultPackages) {
-    if (pkg.cwAgreementTypeId == null) continue;
-    await prisma.package.updateMany({
-      where: { name: pkg.name, cwAgreementTypeId: null },
-      data: { cwAgreementTypeId: pkg.cwAgreementTypeId },
-    });
-  }
-  console.log(`  ✓ ${defaultPackages.length} packages (with CW agreement-type mapping)`);
+  console.log(`  ✓ ${defaultPackages.length} packages (canonical, source: constants.ts)`);
 
   // ── Addons ──
+  // Same model as packages — canonical addons live in constants.ts and are
+  // overwritten on each deploy. Legacy placeholder addons (id 'addon-1' through
+  // 'addon-10') are deactivated here so they stop showing in the wizard. Their
+  // rows stay in DB so any historical quote snapshots remain consistent.
+  const LEGACY_PLACEHOLDER_IDS = [
+    'addon-1','addon-2','addon-3','addon-4','addon-5',
+    'addon-6','addon-7','addon-8','addon-9','addon-10',
+  ];
+  await prisma.addon.updateMany({
+    where: { id: { in: LEGACY_PLACEHOLDER_IDS } },
+    data: { active: false },
+  });
+
   for (let i = 0; i < defaultAddons.length; i++) {
     const addon = defaultAddons[i];
+    const fields = {
+      name: addon.name,
+      description: addon.description,
+      price: addon.price,
+      frequency: addon.frequency,
+      active: addon.active,
+      recurringPrice: addon.recurringPrice ?? null,
+      recurringFrequency: addon.recurringFrequency ?? null,
+      setupPrice: addon.setupPrice ?? null,
+      pricingType: addon.pricingType,
+      sortOrder: i,
+    };
     await prisma.addon.upsert({
       where: { id: addon.id },
-      update: {},
-      create: {
-        id: addon.id,
-        name: addon.name,
-        description: addon.description,
-        price: addon.price,
-        frequency: addon.frequency,
-        active: addon.active,
-        recurringPrice: addon.recurringPrice ?? null,
-        recurringFrequency: addon.recurringFrequency ?? null,
-        setupPrice: addon.setupPrice ?? null,
-        pricingType: addon.pricingType,
-        sortOrder: i,
-      },
+      update: fields,
+      create: { id: addon.id, ...fields },
     });
   }
-  console.log(`  ✓ ${defaultAddons.length} addons`);
+  console.log(`  ✓ ${defaultAddons.length} addons (canonical, source: constants.ts)`);
 
   // ── Promo Codes ──
   for (const promo of defaultPromoCodes) {

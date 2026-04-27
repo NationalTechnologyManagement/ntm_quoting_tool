@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuote } from "@/contexts/QuoteContext";
+import { useQuote, computeOnboardingFee } from "@/contexts/QuoteContext";
 import { quoteApi } from "@/services/api";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -77,10 +77,20 @@ const Summary = () => {
             totalRecurringCost: addon.recurringPrice ? addon.recurringPrice * addon.quantity : 0,
             totalSetupCost: addon.setupPrice ? addon.setupPrice * addon.quantity : 0,
           })),
-          onboarding: { userCount: customerInfo.userCount, costPerUser: 200, totalCost: customerInfo.userCount * 200, discount: 0, finalCost: customerInfo.userCount * 200 },
+          onboarding: (() => {
+            const r = computeOnboardingFee(selectedPackage as any, customerInfo.userCount, customerInfo.locationCount);
+            return {
+              userCount: customerInfo.userCount,
+              costPerUser: customerInfo.userCount > 0 ? r.base / customerInfo.userCount : 0,
+              totalCost: r.base,
+              discount: r.waived ? r.base : 0,
+              finalCost: r.final,
+            };
+          })(),
           appliedPromoCodes: [],
           totals: {
-            onboardingCost: customerInfo.userCount * 200, oneTimeCosts: 0,
+            onboardingCost: computeOnboardingFee(selectedPackage as any, customerInfo.userCount, customerInfo.locationCount).final,
+            oneTimeCosts: 0,
             recurringCosts: selectedPackage.pricePerUser * customerInfo.userCount + selectedPackage.pricePerLocation * customerInfo.locationCount,
             discount: 0, grandTotal: 0, recurringFrequency: selectedPackage.frequency,
           },
@@ -145,8 +155,13 @@ const Summary = () => {
       selectedPackage.pricePerLocation * customerInfo.locationCount
     : 0;
 
-  // Calculate standard onboarding cost: $200 per user
-  const onboardingCost = customerInfo.userCount * 200;
+  // Onboarding fee: 2x monthly recurring (per-user × users + per-location × locations).
+  // Auto-waived for 36-month plans signed online (per ntm onboarding-fee policy).
+  const onboardingResult = selectedPackage
+    ? computeOnboardingFee(selectedPackage as any, customerInfo.userCount, customerInfo.locationCount)
+    : { base: 0, waived: false, final: 0 };
+  const onboardingCost = onboardingResult.final;
+  const onboardingWaived = onboardingResult.waived;
 
   // Calculate one-time costs: setup fees from addons
   const addonSetupCosts = selectedAddons
@@ -257,9 +272,9 @@ const Summary = () => {
       })),
       onboarding: {
         userCount: customerInfo.userCount,
-        costPerUser: 200,
-        totalCost: onboardingCost,
-        discount: onboardingDiscount,
+        costPerUser: customerInfo.userCount > 0 ? onboardingResult.base / customerInfo.userCount : 0,
+        totalCost: onboardingResult.base,
+        discount: onboardingResult.waived ? onboardingResult.base : onboardingDiscount,
         finalCost: finalOnboardingCost,
       },
       appliedPromoCodes: appliedPromoCodes.map((promo) => ({
@@ -693,11 +708,25 @@ const Summary = () => {
                 {/* Onboarding Cost */}
                 <div className="p-4 rounded-lg bg-accent/10 border border-accent/20">
                   <div className="flex items-center justify-between mb-1">
-                    <p className="text-sm text-muted-foreground">Standard Onboarding</p>
-                    <p className="text-sm text-muted-foreground">${onboardingCost.toFixed(2)}</p>
+                    <p className="text-sm text-muted-foreground">Onboarding Fee</p>
+                    <p className={`text-sm ${onboardingWaived ? 'line-through text-muted-foreground' : 'text-muted-foreground'}`}>
+                      ${onboardingResult.base.toFixed(2)}
+                    </p>
                   </div>
-                  <p className="text-xs text-muted-foreground">{customerInfo.userCount} users × $200/user</p>
-                  {onboardingDiscount > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    2× monthly recurring (${(onboardingResult.base / 2).toFixed(2)}/mo × 2)
+                  </p>
+                  {onboardingWaived && (
+                    <div className="mt-2 pt-2 border-t border-green-200">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-semibold text-green-700 dark:text-green-400">
+                          ✓ Waived (36-month online signup)
+                        </p>
+                        <p className="text-lg font-bold text-green-700 dark:text-green-400">$0.00</p>
+                      </div>
+                    </div>
+                  )}
+                  {!onboardingWaived && onboardingDiscount > 0 && (
                     <div className="mt-2 pt-2 border-t border-accent/20">
                       <div className="flex items-center justify-between">
                         <p className="text-xs text-green-600 dark:text-green-400">Discount Applied</p>
@@ -711,7 +740,7 @@ const Summary = () => {
                       </div>
                     </div>
                   )}
-                  {onboardingDiscount === 0 && (
+                  {!onboardingWaived && onboardingDiscount === 0 && (
                     <p className="text-lg font-bold text-accent mt-1">${onboardingCost.toFixed(2)}</p>
                   )}
                 </div>
