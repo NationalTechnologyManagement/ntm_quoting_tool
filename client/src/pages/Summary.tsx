@@ -722,7 +722,7 @@ const Summary = () => {
                     <div className="mt-2 pt-2 border-t border-green-200">
                       <div className="flex items-center justify-between">
                         <p className="text-sm font-semibold text-green-700 dark:text-green-400">
-                          ✓ Waived (36-month online signup)
+                          ✓ Waived (online portal signup)
                         </p>
                         <p className="text-lg font-bold text-green-700 dark:text-green-400">$0.00</p>
                       </div>

@@ -28,11 +28,11 @@ export interface Addon {
   cwProductId?: number | null;
 }
 
-// Onboarding fee = 2x monthly recurring; auto-waived for 36-month plans signed
-// online. Mirrors shared/src/constants.ts computeOnboardingFee — duplicated here
-// because the client doesn't import @ntm/shared.
+// Onboarding fee = 2x monthly recurring. Always waived for portal quotes —
+// matches shared/src/constants.ts (duplicated because the client doesn't
+// import @ntm/shared).
 export const ONBOARDING_FEE_MULTIPLIER = 2;
-export const ONBOARDING_WAIVER_TERM_MONTHS = 36;
+export const ONBOARDING_WAIVED_FOR_PORTAL = true;
 export function computeOnboardingFee(
   pkg: Pick<Package, 'pricePerUser' | 'pricePerLocation' | 'agreementMonths'>,
   userCount: number,
@@ -40,7 +40,7 @@ export function computeOnboardingFee(
 ): { base: number; waived: boolean; final: number } {
   const monthly = pkg.pricePerUser * userCount + pkg.pricePerLocation * locationCount;
   const base = monthly * ONBOARDING_FEE_MULTIPLIER;
-  const waived = (pkg.agreementMonths ?? 0) >= ONBOARDING_WAIVER_TERM_MONTHS;
+  const waived = ONBOARDING_WAIVED_FOR_PORTAL;
   return { base, waived, final: waived ? 0 : base };
 }
 

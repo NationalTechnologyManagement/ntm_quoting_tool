@@ -1,11 +1,13 @@
 import type { Package, Addon, PromoCode, TermsContent } from './types.js';
 
-// NTM onboarding pricing rule (per ntm-sales-kb-upload-only/onboarding-fee.docx):
+// NTM onboarding pricing rule:
 // Onboarding fee = 2 × calculated monthly service total (per-user × users +
-// per-location × locations). Auto-waived when the customer signs a 36-month
-// agreement through the online portal (this app). Month-to-month plans pay it.
+// per-location × locations). Always waived when bought through this portal —
+// the entire purpose of online self-signup is to skip the onboarding fee.
+// (Originally limited to 36-month agreements per the docs; broadened by NTM
+// to all online quotes regardless of term.)
 export const ONBOARDING_FEE_MULTIPLIER = 2;
-export const ONBOARDING_WAIVER_TERM_MONTHS = 36;
+export const ONBOARDING_WAIVED_FOR_PORTAL = true;
 
 // Legacy: kept for backwards compatibility with old quotes that snapshotted a
 // flat per-user onboarding cost. New quotes use computeOnboardingFee().
@@ -22,7 +24,10 @@ export function computeOnboardingFee(
   const monthly =
     pkg.pricePerUser * userCount + pkg.pricePerLocation * locationCount;
   const base = monthly * ONBOARDING_FEE_MULTIPLIER;
-  const waived = (pkg.agreementMonths ?? 0) >= ONBOARDING_WAIVER_TERM_MONTHS;
+  // All online portal quotes get the waiver. agreementMonths is still tracked
+  // on the Package for CW reporting and for any future case where ops creates
+  // an offline quote and chooses to charge the fee.
+  const waived = ONBOARDING_WAIVED_FOR_PORTAL;
   return { base, waived, final: waived ? 0 : base };
 }
 
