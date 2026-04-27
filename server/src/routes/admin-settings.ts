@@ -1,6 +1,15 @@
 import { Router } from 'express';
+import { z } from 'zod';
 import { requireAuth } from '../middleware/auth.js';
+import { validate } from '../middleware/validate.js';
 import { env } from '../config/env.js';
+import {
+  getCwConfigRaw,
+  setCwConfig,
+  isCwConfigKey,
+  REQUIRED_KEYS_FOR_PROVISIONING,
+  CW_CONFIG_KEYS,
+} from '../services/cw-config.service.js';
 
 const router = Router();
 
@@ -161,5 +170,38 @@ router.post('/api/admin/settings/integrations/ap/test', requireAuth, async (_req
     res.json({ success: false, error: error.message });
   }
 });
+
+// ── CW reference config ─────────────────────────────────────────────
+// Editable key/value store backing the CW orchestration. See docs/cw-reference-ids.md.
+
+router.get('/api/admin/settings/cw-config', requireAuth, async (_req, res) => {
+  const rows = await getCwConfigRaw();
+  res.json({
+    keys: CW_CONFIG_KEYS,
+    requiredForProvisioning: REQUIRED_KEYS_FOR_PROVISIONING,
+    rows,
+  });
+});
+
+const cwConfigUpdateSchema = z.object({
+  key: z.string().min(1),
+  value: z.string(),
+  notes: z.string().nullable().optional(),
+});
+
+router.put(
+  '/api/admin/settings/cw-config',
+  requireAuth,
+  validate(cwConfigUpdateSchema),
+  async (req, res) => {
+    const { key, value, notes } = req.body as z.infer<typeof cwConfigUpdateSchema>;
+    if (!isCwConfigKey(key)) {
+      res.status(400).json({ error: `Unknown CW config key: ${key}` });
+      return;
+    }
+    await setCwConfig(key, value, notes ?? null);
+    res.json({ success: true });
+  },
+);
 
 export default router;

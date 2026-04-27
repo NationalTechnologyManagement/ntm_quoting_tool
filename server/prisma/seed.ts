@@ -6,6 +6,7 @@ import {
   defaultPromoCodes,
   defaultTermsContent,
 } from '@ntm/shared';
+import { CW_CONFIG_KEYS, DEFAULTS as CW_DEFAULTS } from '../src/services/cw-config.service.js';
 
 const prisma = new PrismaClient();
 
@@ -13,6 +14,9 @@ async function main() {
   console.log('Seeding database...');
 
   // ── Packages ──
+  // Idempotent: existing rows are not overwritten (so live pricing edits survive),
+  // but we backfill cwAgreementTypeId by name-match so existing rows get their CW
+  // mapping after this migration even if they were created before the field existed.
   for (let i = 0; i < defaultPackages.length; i++) {
     const pkg = defaultPackages[i];
     await prisma.package.upsert({
@@ -27,10 +31,19 @@ async function main() {
         features: pkg.features,
         isBestValue: pkg.isBestValue ?? false,
         sortOrder: i,
+        cwAgreementTypeId: pkg.cwAgreementTypeId ?? null,
       },
     });
   }
-  console.log(`  ✓ ${defaultPackages.length} packages`);
+  // Backfill cwAgreementTypeId on existing rows that lack it. Match on name.
+  for (const pkg of defaultPackages) {
+    if (pkg.cwAgreementTypeId == null) continue;
+    await prisma.package.updateMany({
+      where: { name: pkg.name, cwAgreementTypeId: null },
+      data: { cwAgreementTypeId: pkg.cwAgreementTypeId },
+    });
+  }
+  console.log(`  ✓ ${defaultPackages.length} packages (with CW agreement-type mapping)`);
 
   // ── Addons ──
   for (let i = 0; i < defaultAddons.length; i++) {
@@ -103,6 +116,18 @@ async function main() {
     },
   });
   console.log(`  ✓ Admin user: ${email}`);
+
+  // ── CW Config ──
+  // Idempotent upsert of every documented key with its default value.
+  // Real values come from docs/cw-reference-ids.md after the audit pass.
+  for (const key of CW_CONFIG_KEYS) {
+    await prisma.cwConfig.upsert({
+      where: { key },
+      update: {}, // never overwrite values an admin has set
+      create: { key, value: CW_DEFAULTS[key] ?? 'null' },
+    });
+  }
+  console.log(`  ✓ ${CW_CONFIG_KEYS.length} CW config keys seeded`);
 
   console.log('Seed complete.');
 }

@@ -59,6 +59,12 @@ const AdminNav = () => {
               >
                 Integrations
               </Button>
+              <Button
+                variant={currentPath === '/admin/cw-reference-ids' ? 'default' : 'ghost'}
+                onClick={() => navigate('/admin/cw-reference-ids')}
+              >
+                CW IDs
+              </Button>
             </div>
             <div className="flex gap-2 border-l pl-4">
               <Button variant="outline" onClick={() => navigate('/')}>

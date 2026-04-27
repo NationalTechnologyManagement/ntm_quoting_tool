@@ -4,6 +4,7 @@ import express from 'express';
 import { env } from './config/env.js';
 import { prisma } from './config/prisma.js';
 import { createApp } from './app.js';
+import { startCwRetryWorker } from './services/cw-retry.worker.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -22,6 +23,8 @@ async function main() {
   app.listen(env.PORT, () => {
     console.log(`Server running on port ${env.PORT} (${env.NODE_ENV})`);
   });
+
+  startCwRetryWorker();
 }
 
 main().catch((err) => {

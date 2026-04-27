@@ -17,6 +17,7 @@ const addonSchema = z.object({
   setupPrice: z.number().nullable().optional(),
   pricingType: z.enum(['recurring-only', 'one-time-only', 'both']),
   sortOrder: z.number().optional(),
+  cwProductId: z.number().int().nullable().optional(),
 });
 
 router.get('/api/addons', requireAuth, async (_req, res) => {

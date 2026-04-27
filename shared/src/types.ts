@@ -8,6 +8,9 @@ export interface Package {
   frequency: 'monthly' | 'annually' | 'one-time';
   features: string[];
   isBestValue?: boolean;
+  // CW agreement type id this package maps to. Required for `createAgreement`
+  // to work; nullable so the schema doesn't break legacy rows during migration.
+  cwAgreementTypeId?: number | null;
 }
 
 export interface Addon {
@@ -21,6 +24,8 @@ export interface Addon {
   recurringFrequency?: 'monthly' | 'annually';
   setupPrice?: number;
   pricingType: 'recurring-only' | 'one-time-only' | 'both';
+  // CW catalog product id; required by Addition.product on POST.
+  cwProductId?: number | null;
 }
 
 export interface SelectedAddon extends Addon {

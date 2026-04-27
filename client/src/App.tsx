@@ -19,6 +19,7 @@ import PromoCodeManagement from "./pages/admin/PromoCodeManagement";
 import TermsManagement from "./pages/admin/TermsManagement";
 import QuoteManagement from "./pages/admin/QuoteManagement";
 import IntegrationSettings from "./pages/admin/IntegrationSettings";
+import CwReferenceData from "./pages/admin/CwReferenceData";
 import QuoteLookup from "./pages/QuoteLookup";
 import NotFound from "./pages/NotFound";
 
@@ -44,6 +45,7 @@ const App = () => (
               <Route path="/admin/login" element={<Login />} />
               <Route path="/admin/quotes" element={<QuoteManagement />} />
               <Route path="/admin/integrations" element={<IntegrationSettings />} />
+              <Route path="/admin/cw-reference-ids" element={<CwReferenceData />} />
               <Route path="/admin/packages" element={<PackageManagement />} />
               <Route path="/admin/addons" element={<AddonManagement />} />
               <Route path="/admin/promo-codes" element={<PromoCodeManagement />} />

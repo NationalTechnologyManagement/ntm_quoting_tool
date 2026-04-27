@@ -178,6 +178,24 @@ export const adminApi = {
   },
   getQuote: (id: string) => apiRequest<any>(`/api/admin/quotes/${id}`),
   getQuoteStats: () => apiRequest<any>('/api/admin/quotes/stats/summary'),
+  getQuoteProvisioning: (id: string) =>
+    apiRequest<{
+      quoteNumber: string;
+      provisioningStatus: string;
+      steps: Array<{
+        step: string;
+        status: string;
+        cwId: number | null;
+        attempts: number;
+        lastError: string | null;
+        updatedAt: string;
+      }>;
+    }>(`/api/admin/quotes/${id}/provisioning`),
+  retryProvisioning: (id: string) =>
+    apiRequest<{ success: boolean; error?: string }>(
+      `/api/admin/quotes/${id}/retry-provisioning`,
+      { method: 'POST' },
+    ),
 
   // Integrations
   getIntegrations: () => apiRequest<any>('/api/admin/settings/integrations'),
@@ -185,6 +203,19 @@ export const adminApi = {
   testGHL: () => apiRequest<any>('/api/admin/settings/integrations/ghl/test', { method: 'POST' }),
   testCW: () => apiRequest<any>('/api/admin/settings/integrations/cw/test', { method: 'POST' }),
   testEmail: () => apiRequest<any>('/api/admin/settings/integrations/email/test', { method: 'POST' }),
+
+  // CW reference config
+  getCwConfig: () =>
+    apiRequest<{
+      keys: string[];
+      requiredForProvisioning: string[];
+      rows: Array<{ key: string; value: string; notes: string | null }>;
+    }>('/api/admin/settings/cw-config'),
+  setCwConfig: (key: string, value: string, notes?: string | null) =>
+    apiRequest<{ success: true }>('/api/admin/settings/cw-config', {
+      method: 'PUT',
+      body: JSON.stringify({ key, value, notes: notes ?? null }),
+    }),
 };
 
 // ── Quote Lookup (public) ──────────────────────────────────────────

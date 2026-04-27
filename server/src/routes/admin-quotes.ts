@@ -1,6 +1,8 @@
 import { Router } from 'express';
 import { prisma } from '../config/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
+import { replayProvisioning } from '../services/connectwise.service.js';
+import { getAllSteps } from '../services/cw-state.service.js';
 
 const router = Router();
 
@@ -46,6 +48,7 @@ router.get('/api/admin/quotes', requireAuth, async (req, res) => {
         cwCompanyId: true,
         cwOpportunityId: true,
         ghlContactId: true,
+        provisioningStatus: true,
         expiresAt: true,
         createdAt: true,
         updatedAt: true,
@@ -71,7 +74,7 @@ router.get('/api/admin/quotes/:id', requireAuth, async (req, res) => {
   const id = req.params.id as string;
   const quote = await prisma.quote.findFirst({
     where: { OR: [{ id }, { quoteNumber: id }] },
-    include: { contracts: true },
+    include: { contracts: true, provisioningSteps: { orderBy: { updatedAt: 'asc' } } },
   });
 
   if (!quote) {
@@ -80,6 +83,45 @@ router.get('/api/admin/quotes/:id', requireAuth, async (req, res) => {
   }
 
   res.json(quote);
+});
+
+// CW provisioning step state for a quote (used by admin UI's retry view)
+router.get('/api/admin/quotes/:id/provisioning', requireAuth, async (req, res) => {
+  const id = req.params.id as string;
+  const quote = await prisma.quote.findFirst({
+    where: { OR: [{ id }, { quoteNumber: id }] },
+    select: { id: true, quoteNumber: true, provisioningStatus: true },
+  });
+  if (!quote) {
+    res.status(404).json({ error: 'Quote not found' });
+    return;
+  }
+  const steps = await getAllSteps(quote.id);
+  res.json({
+    quoteNumber: quote.quoteNumber,
+    provisioningStatus: quote.provisioningStatus,
+    steps,
+  });
+});
+
+// Manual replay of CW provisioning. Resets failed steps to pending and re-runs
+// the pipeline. Successful steps short-circuit via the resume logic.
+router.post('/api/admin/quotes/:id/retry-provisioning', requireAuth, async (req, res) => {
+  const id = req.params.id as string;
+  const quote = await prisma.quote.findFirst({
+    where: { OR: [{ id }, { quoteNumber: id }] },
+    select: { quoteNumber: true },
+  });
+  if (!quote) {
+    res.status(404).json({ error: 'Quote not found' });
+    return;
+  }
+  try {
+    await replayProvisioning(quote.quoteNumber);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message ?? String(err) });
+  }
 });
 
 // Get quote status counts for dashboard

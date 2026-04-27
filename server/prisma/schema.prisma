@@ -10,17 +10,18 @@ datasource db {
 // ── Packages ─────────────────────────────────────────────────────────
 
 model Package {
-  id               String   @id @default(cuid())
-  name             String
-  pricePerUser     Float
-  pricePerLocation Float
-  frequency        String   @default("monthly") // monthly | annually | one-time
-  features         Json     @default("[]")       // string[]
-  isBestValue      Boolean  @default(false)
-  sortOrder        Int      @default(0)
-  active           Boolean  @default(true)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                  String   @id @default(cuid())
+  name                String
+  pricePerUser        Float
+  pricePerLocation    Float
+  frequency           String   @default("monthly") // monthly | annually | one-time
+  features            Json     @default("[]")       // string[]
+  isBestValue         Boolean  @default(false)
+  sortOrder           Int      @default(0)
+  active              Boolean  @default(true)
+  cwAgreementTypeId   Int?     // CW agreement type to use when this package is sold
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   @@map("packages")
 }
@@ -39,6 +40,7 @@ model Addon {
   setupPrice         Float?
   pricingType        String   @default("recurring-only") // recurring-only | one-time-only | both
   sortOrder          Int      @default(0)
+  cwProductId        Int?     // CW catalog product id, required by Addition.product on POST
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -108,14 +110,45 @@ model Quote {
   ghlContactId       String?
   ghlOpportunityId   String?
 
+  // Provisioning state (populated by the CW step machine).
+  // pending = nothing started; provisioned = all required steps ok;
+  // partial = some non-critical step failed and was logged for retry;
+  // failed = a hard-fail step (company creation) threw and webhook returned 500.
+  provisioningStatus String  @default("pending")
+
   expiresAt          DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
   contracts          Contract[]
+  provisioningSteps  CwProvisioningStep[]
 
   @@index([status])
   @@index([createdAt])
+  @@index([provisioningStatus])
   @@map("quotes")
+}
+
+// ── CW Provisioning Steps ────────────────────────────────────────────
+// One row per (quoteId, step). Used by the step machine in connectwise.service.ts
+// to make orchestration idempotent and resumable. The @@unique constraint is
+// the load-bearing part: concurrent retries upsert against the same row instead
+// of creating duplicates.
+
+model CwProvisioningStep {
+  id        String   @id @default(cuid())
+  quoteId   String
+  quote     Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  step      String   // company | site | contact | billingContact | opportunity | agreement | additions | activate | project | crossref | handoff
+  status    String   // pending | success | failed | skipped
+  cwId      Int?     // CW-side id this step produced (company id, contact id, etc.)
+  attempts  Int      @default(0)
+  lastError String?
+  startedAt DateTime?
+  updatedAt DateTime @updatedAt
+
+  @@unique([quoteId, step])
+  @@index([status])
+  @@map("cw_provisioning_steps")
 }
 
 // ── Contracts ────────────────────────────────────────────────────────
@@ -142,6 +175,20 @@ model AdminUser {
   updatedAt    DateTime @updatedAt
 
   @@map("admin_users")
+}
+
+// ── ConnectWise Reference Config ─────────────────────────────────────
+// Key/value store for CW reference IDs (agreement-type defaults, project type/board/template,
+// member ids, tax codes, custom field ids, etc.). Lookups are documented in docs/cw-reference-ids.md.
+// Loaded into in-memory cache by cw-config.service.ts.
+
+model CwConfig {
+  key       String   @id
+  value     String   // stored as string, numeric values parsed by the loader
+  notes     String?  // optional human note ("Project board for Onboarding")
+  updatedAt DateTime @updatedAt
+
+  @@map("cw_config")
 }
 
 // ── Audit Logs ───────────────────────────────────────────────────────

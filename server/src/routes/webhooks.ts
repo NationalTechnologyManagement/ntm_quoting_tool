@@ -6,7 +6,9 @@ import * as quoteService from '../services/quote.service.js';
 import * as contractService from '../services/contract.service.js';
 import * as pdfService from '../services/pdf.service.js';
 import * as cwService from '../services/connectwise.service.js';
+import { CwHardFailError } from '../services/connectwise.service.js';
 import * as ghlService from '../services/crm.service.js';
+import * as notify from '../services/notify.service.js';
 
 const router = Router();
 
@@ -43,14 +45,31 @@ router.post('/api/webhooks/ap', async (req, res) => {
             console.error('[AP Webhook] Contract/email generation failed:', e);
           }
 
-          // Fire-and-forget: CW post-payment actions
-          cwService.onPaymentCompleted(quoteData).then(async (cwIds) => {
+          // CW post-payment provisioning. Hard-fail surfaces here so AP can retry.
+          // Soft fails are recorded in CwProvisioningStep and surfaced via the
+          // admin Quote Management page; the retry worker will pick them up later.
+          try {
+            const cwIds = await cwService.onPaymentCompleted(quoteData);
             if (cwIds.cwProjectId || cwIds.cwAgreementId) {
               await quoteService.updateQuoteCWIds(quoteData.quoteNumber, cwIds);
             }
-          }).catch((err) => console.error('[CW] onPaymentCompleted error:', err));
+          } catch (err) {
+            if (err instanceof CwHardFailError) {
+              console.error('[AP Webhook] CW hard fail:', err);
+              await notify.notifyProvisioningFailed({
+                quoteNumber: quoteData.quoteNumber,
+                businessName: quoteData.customer.businessName,
+                step: 'company',
+                error: err.message,
+              });
+              // Return 5xx so AP retries delivery; do not auto-refund.
+              res.status(500).json({ error: 'CW provisioning hard-failed', details: err.message });
+              return;
+            }
+            console.error('[CW] onPaymentCompleted error:', err);
+          }
 
-          // Fire-and-forget: GHL mark won
+          // Fire-and-forget: GHL mark won (CRM, not billing-critical)
           ghlService.onPaymentCompleted(quoteData)
             .catch((err) => console.error('[GHL] onPaymentCompleted error:', err));
         }

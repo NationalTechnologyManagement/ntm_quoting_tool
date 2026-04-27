@@ -3,19 +3,23 @@ import type { Package, Addon, PromoCode, TermsContent } from './types.js';
 export const ONBOARDING_COST_PER_USER = 200;
 export const QUOTE_VALIDITY_DAYS = 30;
 
+// Package names + cwAgreementTypeId mapping decided 2026-04-27:
+// reuse legacy CW agreement types (00791/00792/00793) — confirmed against NTM CW.
+// Pricing is placeholder; ops should adjust via the admin UI.
 export const defaultPackages: Package[] = [
   {
     id: 'package-1',
-    name: 'Starter Package',
+    name: 'Essentials',
     pricePerUser: 29,
     pricePerLocation: 50,
     frequency: 'monthly',
     features: ['Up to 10 users', '5GB storage', 'Email support', 'Basic analytics'],
     isBestValue: false,
+    cwAgreementTypeId: 36, // CW: "00791 Essentials Package"
   },
   {
     id: 'package-2',
-    name: 'Professional Package',
+    name: 'SafeSecure',
     pricePerUser: 49,
     pricePerLocation: 99,
     frequency: 'monthly',
@@ -28,10 +32,11 @@ export const defaultPackages: Package[] = [
       'Custom integrations',
     ],
     isBestValue: true,
+    cwAgreementTypeId: 37, // CW: "00792 SafeSecure Package"
   },
   {
     id: 'package-3',
-    name: 'Enterprise Package',
+    name: 'SafeSecure Plus',
     pricePerUser: 79,
     pricePerLocation: 149,
     frequency: 'monthly',
@@ -47,6 +52,7 @@ export const defaultPackages: Package[] = [
       'White-label options',
     ],
     isBestValue: false,
+    cwAgreementTypeId: 38, // CW: "00793 SafeSecure Plus Package"
   },
 ];
 

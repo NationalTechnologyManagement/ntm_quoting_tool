@@ -44,6 +44,7 @@ interface QuoteSummary {
   cwCompanyId: number | null;
   cwOpportunityId: number | null;
   ghlContactId: string | null;
+  provisioningStatus: 'pending' | 'partial' | 'provisioned' | 'failed';
   expiresAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -267,6 +268,33 @@ const QuoteManagement = () => {
                           {q.cwCompanyId && (
                             <Badge variant="outline" className="text-xs">CW</Badge>
                           )}
+                          {q.provisioningStatus === 'partial' && (
+                            <Badge
+                              variant="secondary"
+                              className="text-xs bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-200"
+                              title="Some CW provisioning steps failed — retry from the row action"
+                            >
+                              partial
+                            </Badge>
+                          )}
+                          {q.provisioningStatus === 'failed' && (
+                            <Badge
+                              variant="secondary"
+                              className="text-xs bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-200"
+                              title="CW provisioning hard-failed"
+                            >
+                              cw failed
+                            </Badge>
+                          )}
+                          {q.provisioningStatus === 'provisioned' && (
+                            <Badge
+                              variant="secondary"
+                              className="text-xs bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-200"
+                              title="All CW objects created"
+                            >
+                              cw ✓
+                            </Badge>
+                          )}
                           {q.ghlContactId && (
                             <Badge variant="outline" className="text-xs">GHL</Badge>
                           )}
@@ -281,13 +309,38 @@ const QuoteManagement = () => {
                         </span>
                       </td>
                       <td className="p-3 text-center">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => window.open(`/quote-review?id=${q.quoteNumber}`, '_blank')}
-                        >
-                          <ExternalLink className="w-4 h-4" />
-                        </Button>
+                        <div className="flex items-center justify-center gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => window.open(`/quote-review?id=${q.quoteNumber}`, '_blank')}
+                            title="View quote"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                          </Button>
+                          {(q.provisioningStatus === 'partial' || q.provisioningStatus === 'failed') && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              title="Retry CW provisioning"
+                              onClick={async () => {
+                                try {
+                                  const r = await adminApi.retryProvisioning(q.quoteNumber);
+                                  if (r.success) {
+                                    toast.success(`Retried ${q.quoteNumber}`);
+                                    fetchQuotes();
+                                  } else {
+                                    toast.error(r.error || 'Retry failed');
+                                  }
+                                } catch {
+                                  toast.error('Retry request failed');
+                                }
+                              }}
+                            >
+                              <RefreshCw className="w-4 h-4" />
+                            </Button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}

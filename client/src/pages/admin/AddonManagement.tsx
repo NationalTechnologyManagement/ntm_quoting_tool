@@ -195,6 +195,26 @@ const AddonManagement = () => {
                     </p>
                   </div>
                 )}
+
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor={`cw-product-${index}`}>CW Catalog Product ID</Label>
+                  <Input
+                    id={`cw-product-${index}`}
+                    type="number"
+                    value={addon.cwProductId ?? ''}
+                    onChange={(e) =>
+                      updateAddon(
+                        index,
+                        'cwProductId',
+                        e.target.value === '' ? null : parseInt(e.target.value, 10),
+                      )
+                    }
+                    placeholder="e.g. 12345"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Required by CW. Look up the product in CW's procurement catalog and paste its ID. Without this, recurring agreements won't include this addon as a line item.
+                  </p>
+                </div>
               </div>
             </Card>
           ))}

@@ -15,6 +15,7 @@ const packageSchema = z.object({
   features: z.array(z.string()),
   isBestValue: z.boolean().optional(),
   sortOrder: z.number().optional(),
+  cwAgreementTypeId: z.number().int().nullable().optional(),
 });
 
 // List all packages (including inactive)

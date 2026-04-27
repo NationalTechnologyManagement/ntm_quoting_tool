@@ -215,6 +215,28 @@ const PackageManagement = () => {
                 </div>
 
                 <div className="space-y-2">
+                  <Label htmlFor={`cw-agreement-type-${packageIndex}`}>
+                    CW Agreement Type ID
+                  </Label>
+                  <Input
+                    id={`cw-agreement-type-${packageIndex}`}
+                    type="number"
+                    value={pkg.cwAgreementTypeId ?? ''}
+                    onChange={(e) =>
+                      updatePackage(
+                        packageIndex,
+                        'cwAgreementTypeId',
+                        e.target.value === '' ? null : parseInt(e.target.value, 10),
+                      )
+                    }
+                    placeholder="e.g. 36"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Maps this package to a CW agreement type. NTM defaults: Essentials=36, SafeSecure=37, SafeSecure Plus=38.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
                   <Label>Features</Label>
                   <div className="space-y-2">
                     {pkg.features.map((feature, featureIndex) => (
