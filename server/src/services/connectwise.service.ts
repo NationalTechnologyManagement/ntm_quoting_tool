@@ -911,3 +911,56 @@ export async function replayProvisioning(quoteNumber: string): Promise<void> {
   const quoteData = await getQuote(quoteNumber);
   await onPaymentCompleted(quoteData);
 }
+
+/** Reset every CW-side state on a quote and re-run the entire orchestration
+ *  from scratch (onQuoteCreated then onPaymentCompleted). Used to recover
+ *  quotes whose initial run happened in CW_DRY_RUN mode and now need real
+ *  CW objects, or to clean up after an aborted test. Also marks the quote
+ *  as paid in the local DB without consulting AP.
+ */
+export async function reprovisionFromScratch(quoteNumber: string): Promise<{
+  cwQuoteCreated: CwQuoteCreatedResult;
+  cwPaymentCompleted: CwPaymentCompletedResult;
+}> {
+  const quote = await prisma.quote.findUnique({ where: { quoteNumber } });
+  if (!quote) throw new Error(`Quote ${quoteNumber} not found`);
+
+  // Wipe every CW-side stamp on the quote + delete the per-step state so
+  // runStep starts from scratch instead of resuming with sentinel ids.
+  await prisma.$transaction([
+    prisma.cwProvisioningStep.deleteMany({ where: { quoteId: quote.id } }),
+    prisma.quote.update({
+      where: { id: quote.id },
+      data: {
+        cwCompanyId: null,
+        cwContactId: null,
+        cwOpportunityId: null,
+        cwAgreementId: null,
+        cwProjectId: null,
+        provisioningStatus: 'pending',
+      },
+    }),
+  ]);
+
+  const { getQuote } = await import('./quote.service.js');
+
+  // Re-run onQuoteCreated. Persist the returned ids on the quote so
+  // onPaymentCompleted's cwCompanyId guard sees them.
+  let quoteData = await getQuote(quoteNumber);
+  const cwQuoteCreated = await onQuoteCreated(quoteData);
+  if (cwQuoteCreated.cwCompanyId || cwQuoteCreated.cwContactId || cwQuoteCreated.cwOpportunityId) {
+    await prisma.quote.update({
+      where: { id: quote.id },
+      data: {
+        cwCompanyId: cwQuoteCreated.cwCompanyId ?? null,
+        cwContactId: cwQuoteCreated.cwContactId ?? null,
+        cwOpportunityId: cwQuoteCreated.cwOpportunityId ?? null,
+      },
+    });
+  }
+
+  // Re-fetch quote so the orchestrator sees the freshly persisted ids.
+  quoteData = await getQuote(quoteNumber);
+  const cwPaymentCompleted = await onPaymentCompleted(quoteData);
+  return { cwQuoteCreated, cwPaymentCompleted };
+}

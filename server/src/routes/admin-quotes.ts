@@ -3,8 +3,12 @@ import { z } from 'zod';
 import { prisma } from '../config/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
-import { replayProvisioning } from '../services/connectwise.service.js';
+import { replayProvisioning, reprovisionFromScratch } from '../services/connectwise.service.js';
 import { getAllSteps } from '../services/cw-state.service.js';
+import * as quoteService from '../services/quote.service.js';
+import * as contractService from '../services/contract.service.js';
+import * as pdfService from '../services/pdf.service.js';
+import * as emailService from '../services/email.service.js';
 
 const router = Router();
 
@@ -219,6 +223,93 @@ router.delete('/api/admin/quotes/:id', requireAuth, async (req, res) => {
   ]);
   res.json({ success: true, deletedQuoteNumber: quote.quoteNumber });
 });
+
+// Admin-only: pretend the quote was paid via AP without actually charging
+// anyone. Runs the full post-payment flow: marks quote paid + mints order
+// number, regenerates the contract PDF and emails it, then runs the CW
+// provisioning orchestration end-to-end. If the quote already has dry-run
+// sentinel CW ids on it, you can pass `reprovision: true` in the body to
+// wipe the sentinels first and re-run the entire CW orchestration from
+// scratch (use this when flipping CW_DRY_RUN false on a previously
+// dry-run-tested quote).
+const simulatePaymentSchema = z.object({
+  reprovision: z.boolean().optional(),
+});
+
+router.post(
+  '/api/admin/quotes/:id/simulate-payment',
+  requireAuth,
+  validate(simulatePaymentSchema),
+  async (req, res) => {
+    const id = req.params.id as string;
+    const { reprovision } = req.body as z.infer<typeof simulatePaymentSchema>;
+
+    const dbQuote = await prisma.quote.findFirst({
+      where: { OR: [{ id }, { quoteNumber: id }] },
+    });
+    if (!dbQuote) {
+      res.status(404).json({ error: 'Quote not found' });
+      return;
+    }
+
+    // Mint an order number if missing and flip status to paid in DB. Doesn't
+    // touch AP — purely local state. Mirrors what apService.handleInvoicePaid
+    // does on a real webhook.
+    if (!dbQuote.orderNumber) {
+      const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      const suffix = Math.floor(1000 + Math.random() * 9000);
+      await prisma.quote.update({
+        where: { id: dbQuote.id },
+        data: { orderNumber: `OR-${dateStr}-${suffix}`, status: 'paid' },
+      });
+    } else {
+      await prisma.quote.update({
+        where: { id: dbQuote.id },
+        data: { status: 'paid' },
+      });
+    }
+
+    // Generate contract PDF + email (best-effort; non-fatal if they fail)
+    let contractEmailed = false;
+    try {
+      const quoteData = await quoteService.getQuote(dbQuote.quoteNumber);
+      const html = contractService.buildContractHtml(quoteData);
+      const pdfBuffer = await pdfService.generatePdf(html);
+      await prisma.contract.create({
+        data: {
+          quoteId: dbQuote.id,
+          pdfData: new Uint8Array(pdfBuffer),
+          emailedAt: new Date(),
+        },
+      });
+      await emailService.sendContractEmail(quoteData, pdfBuffer);
+      await emailService.sendPaymentConfirmationEmail(quoteData);
+      contractEmailed = true;
+    } catch (err) {
+      console.error('[simulate-payment] contract/email step failed:', err);
+    }
+
+    // CW provisioning. Either resume from current step state or scrap and
+    // start over from onQuoteCreated.
+    let cwResult: any;
+    try {
+      if (reprovision) {
+        cwResult = await reprovisionFromScratch(dbQuote.quoteNumber);
+      } else {
+        await replayProvisioning(dbQuote.quoteNumber);
+        cwResult = { replayed: true };
+      }
+    } catch (err: any) {
+      cwResult = { error: err?.message ?? String(err) };
+    }
+
+    res.json({
+      quoteNumber: dbQuote.quoteNumber,
+      contractEmailed,
+      cw: cwResult,
+    });
+  },
+);
 
 // Manual replay of CW provisioning. Resets failed steps to pending and re-runs
 // the pipeline. Successful steps short-circuit via the resume logic.
