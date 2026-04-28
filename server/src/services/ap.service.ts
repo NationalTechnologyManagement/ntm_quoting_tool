@@ -106,7 +106,17 @@ export async function createCheckout(quote: QuoteData): Promise<{
 }> {
   const customerId = await createCustomer(quote);
   const { invoiceId, paymentLink } = await createInvoice(quote, customerId);
-  const checkoutToken = await getCheckoutToken(customerId, invoiceId);
+
+  // The checkout token is only used by AP's inline Web SDK. The frontend
+  // uses the hosted payment link redirect, so failures here shouldn't block
+  // checkout. The /v1/checkout-auth/init endpoint has been observed
+  // returning 404 in some AP environments; treat it as best-effort.
+  let checkoutToken = '';
+  try {
+    checkoutToken = await getCheckoutToken(customerId, invoiceId);
+  } catch (err) {
+    console.warn('[AP] checkout token unavailable, continuing with payment link only:', err);
+  }
 
   // Persist AP session on the quote
   await quoteService.updateQuoteAPSession(
