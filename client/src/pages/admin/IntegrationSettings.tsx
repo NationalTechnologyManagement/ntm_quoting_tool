@@ -374,7 +374,6 @@ const SECTION_BY_PREFIX: Record<string, string> = {
   RESEND_: 'Email (Resend)',
   FROM_: 'Email (Resend)',
   NOTIFY_: 'Notifications',
-  REWST_: 'Rewst',
 };
 
 function sectionFor(key: string): string {

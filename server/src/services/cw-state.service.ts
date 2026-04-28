@@ -13,7 +13,7 @@ export const CW_STEPS = [
   'activate',         // PATCH /finance/agreements/{id} status=Active
   'project',          // POST /project/projects (uses templateId)
   'crossref',         // PATCH custom fields on company/agreement/project
-  'handoff',          // notify + Rewst + status flip
+  'handoff',          // notify + status flip
 ] as const;
 
 export type CwStep = (typeof CW_STEPS)[number];

@@ -29,10 +29,8 @@ export const INTEGRATION_CREDENTIAL_KEYS = [
   // Email
   'RESEND_API_KEY',
   'FROM_EMAIL',
-  // Notify + Rewst
+  // Notify
   'NOTIFY_WEBHOOK_URL',
-  'REWST_TRIGGER_URL',
-  'REWST_AUTH_TOKEN',
 ] as const;
 
 export type IntegrationCredentialKey = (typeof INTEGRATION_CREDENTIAL_KEYS)[number];
@@ -45,7 +43,6 @@ const SECRET_KEYS: ReadonlySet<string> = new Set([
   'AP_WEBHOOK_SECRET',
   'GHL_API_KEY',
   'RESEND_API_KEY',
-  'REWST_AUTH_TOKEN',
 ]);
 
 const cache = new Map<string, string>();

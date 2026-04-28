@@ -14,7 +14,6 @@ import {
   type CwStep,
 } from './cw-state.service.js';
 import * as notify from './notify.service.js';
-import * as rewst from './rewst.service.js';
 import type { QuoteData } from '@ntm/shared';
 
 // ── Error types ───────────────────────────────────────────────────────
@@ -832,19 +831,13 @@ export async function onPaymentCompleted(quote: QuoteData): Promise<CwPaymentCom
     console.error('[CW] crossref step failed:', e);
   }
 
-  // Handoff (notify + Rewst + status flip)
+  // Handoff (notify + status flip)
   try {
     await runStep(quoteId, 'handoff', async () => {
       await notify.notifyProvisioned({
         quoteNumber: quote.quoteNumber,
         businessName: quote.customer.businessName,
         packageName: quote.selectedPackage.name,
-        cwCompanyId: companyId,
-        cwAgreementId: agreementId,
-        cwProjectId: projectId,
-      });
-      await rewst.triggerOnboarding({
-        quoteNumber: quote.quoteNumber,
         cwCompanyId: companyId,
         cwAgreementId: agreementId,
         cwProjectId: projectId,

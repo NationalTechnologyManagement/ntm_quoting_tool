@@ -117,8 +117,6 @@ vi.mock('../../config/env.js', () => ({
     CW_CLIENT_ID: 'client',
     CW_BASE_URL: 'https://test.cw',
     NOTIFY_WEBHOOK_URL: undefined,
-    REWST_TRIGGER_URL: undefined,
-    REWST_AUTH_TOKEN: undefined,
   },
 }));
 
@@ -155,12 +153,11 @@ vi.mock('../cw-config.service.js', () => ({
   }),
 }));
 
-// Notify and Rewst are no-ops in tests.
+// Notify is a no-op in tests.
 vi.mock('../notify.service.js', () => ({
   notifyProvisioned: vi.fn(async () => {}),
   notifyProvisioningFailed: vi.fn(async () => {}),
 }));
-vi.mock('../rewst.service.js', () => ({ triggerOnboarding: vi.fn(async () => {}) }));
 
 // ── Test fixtures ────────────────────────────────────────────────────
 

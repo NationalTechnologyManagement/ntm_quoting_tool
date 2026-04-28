@@ -62,9 +62,8 @@ Set via Railway dashboard or GraphQL. Categories:
 - `GHL_API_KEY`, `GHL_LOCATION_ID` — leave blank to skip GHL contact/opportunity creation.
 - `RESEND_API_KEY` — leave blank to skip email sending (quote save still works, just no email).
 
-### Notifications + Rewst (optional)
+### Notifications (optional)
 - `NOTIFY_WEBHOOK_URL` — Slack/Teams webhook for provisioning lifecycle pings.
-- `REWST_TRIGGER_URL`, `REWST_AUTH_TOKEN` — kicks off Rewst onboarding workflow at handoff step.
 
 ---
 
