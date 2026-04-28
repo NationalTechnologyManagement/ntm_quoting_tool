@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { SiteHeader } from "@/components/SiteHeader";
+import { formatAmount } from "@/lib/utils";
 
 interface QuoteData {
   quoteNumber: string;
@@ -351,16 +352,16 @@ export default function QuoteReview() {
                 <h3 className="font-semibold text-lg">{quoteData.selectedPackage.name}</h3>
                 <div className="text-sm text-muted-foreground space-y-1 mt-2">
                   <p>
-                    ${quoteData.selectedPackage.pricePerUser.toFixed(2)}/user × {quoteData.customer.userCount} users = $
-                    {(quoteData.selectedPackage.pricePerUser * quoteData.customer.userCount).toFixed(2)}
+                    ${formatAmount(quoteData.selectedPackage.pricePerUser)}/user × {quoteData.customer.userCount} users = $
+                    {formatAmount(quoteData.selectedPackage.pricePerUser * quoteData.customer.userCount)}
                   </p>
                   <p>
-                    ${quoteData.selectedPackage.pricePerLocation.toFixed(2)}/location ×{" "}
+                    ${formatAmount(quoteData.selectedPackage.pricePerLocation)}/location ×{" "}
                     {quoteData.customer.locationCount} locations = $
-                    {(quoteData.selectedPackage.pricePerLocation * quoteData.customer.locationCount).toFixed(2)}
+                    {formatAmount(quoteData.selectedPackage.pricePerLocation * quoteData.customer.locationCount)}
                   </p>
                   <p className="font-semibold text-primary pt-1">
-                    Package Total: ${quoteData.selectedPackage.calculatedPrice.toFixed(2)}/
+                    Package Total: ${formatAmount(quoteData.selectedPackage.calculatedPrice)}/
                     {quoteData.selectedPackage.frequency}
                   </p>
                 </div>
@@ -415,19 +416,19 @@ export default function QuoteReview() {
                       {addon.pricingType === 'both' ? (
                         <>
                           <p className="text-sm font-semibold text-primary">
-                            ${addon.totalRecurringCost?.toFixed(2)}/{addon.recurringFrequency}
+                            ${formatAmount(addon.totalRecurringCost)}/{addon.recurringFrequency}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            + ${addon.totalSetupCost?.toFixed(2)} setup
+                            + ${formatAmount(addon.totalSetupCost)} setup
                           </p>
                         </>
                       ) : addon.pricingType === 'recurring-only' ? (
                         <p className="text-sm font-semibold text-primary">
-                          ${addon.totalRecurringCost?.toFixed(2)}/{addon.recurringFrequency}
+                          ${formatAmount(addon.totalRecurringCost)}/{addon.recurringFrequency}
                         </p>
                       ) : (
                         <p className="text-sm font-semibold text-primary">
-                          ${addon.totalSetupCost?.toFixed(2)} one-time
+                          ${formatAmount(addon.totalSetupCost)} one-time
                         </p>
                       )}
                     </div>
@@ -477,7 +478,7 @@ export default function QuoteReview() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-green-700 dark:text-green-400">
-                      -{promo.discountType === "percentage" ? `${promo.discount}%` : `$${promo.discount.toFixed(2)}`}
+                      -{promo.discountType === "percentage" ? `${promo.discount}%` : `$${formatAmount(promo.discount)}`}
                     </span>
                     <Button
                       variant="ghost"
@@ -517,13 +518,13 @@ export default function QuoteReview() {
                   </p>
                   {quoteData.onboarding.discount > 0 && (
                     <p className="text-sm text-green-600 dark:text-green-400 mt-1">
-                      Discount applied: ${quoteData.onboarding.discount.toFixed(2)}
+                      Discount applied: ${formatAmount(quoteData.onboarding.discount)}
                     </p>
                   )}
                 </div>
               </div>
               <div className="text-3xl font-bold text-purple-900 dark:text-purple-100 mt-4">
-                ${quoteData.onboarding.finalCost.toFixed(2)}
+                ${formatAmount(quoteData.onboarding.finalCost)}
               </div>
             </Card>
 
@@ -542,13 +543,13 @@ export default function QuoteReview() {
                       <p className="text-sm text-orange-700 dark:text-orange-300 mt-1">One-time charges</p>
                       {oneTimeDiscount > 0.01 && (
                         <p className="text-sm text-green-600 dark:text-green-400 mt-1">
-                          Discount applied: ${oneTimeDiscount.toFixed(2)}
+                          Discount applied: ${formatAmount(oneTimeDiscount)}
                         </p>
                       )}
                     </div>
                   </div>
                   <div className="text-3xl font-bold text-orange-900 dark:text-orange-100 mt-4">
-                    ${quoteData.totals.oneTimeCosts.toFixed(2)}
+                    ${formatAmount(quoteData.totals.oneTimeCosts)}
                   </div>
                 </Card>
               );
@@ -573,13 +574,13 @@ export default function QuoteReview() {
                       <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">{quoteData.selectedPackage.name}</p>
                       {recurringDiscount > 0.01 && (
                         <p className="text-sm text-green-600 dark:text-green-400 mt-1">
-                          Discount applied: ${recurringDiscount.toFixed(2)}/mo
+                          Discount applied: ${formatAmount(recurringDiscount)}/mo
                         </p>
                       )}
                     </div>
                   </div>
                   <div className="text-3xl font-bold text-blue-900 dark:text-blue-100 mt-4">
-                    ${quoteData.totals.recurringCosts.toFixed(2)}
+                    ${formatAmount(quoteData.totals.recurringCosts)}
                     <span className="text-base font-normal text-blue-700 dark:text-blue-300">
                       {" "}
                       per {quoteData.totals.recurringFrequency}
@@ -598,15 +599,15 @@ export default function QuoteReview() {
               </p>
               <h3 className="text-2xl font-semibold text-green-900 dark:text-green-100 mb-2">Pay Today</h3>
               <div className="text-5xl font-bold text-green-900 dark:text-green-100 mb-3">
-                ${(quoteData.totals.onboardingCost + quoteData.totals.oneTimeCosts + quoteData.totals.recurringCosts).toFixed(2)}
+                ${formatAmount(quoteData.totals.onboardingCost + quoteData.totals.oneTimeCosts + quoteData.totals.recurringCosts)}
               </div>
               <p className="text-sm text-green-700 dark:text-green-300">
-                {quoteData.totals.onboardingCost > 0 && `Onboarding ($${quoteData.totals.onboardingCost.toFixed(2)}) + `}
-                {quoteData.totals.oneTimeCosts > 0 && `One-time ($${quoteData.totals.oneTimeCosts.toFixed(2)}) + `}
-                {`First month ($${quoteData.totals.recurringCosts.toFixed(2)})`}
+                {quoteData.totals.onboardingCost > 0 && `Onboarding ($${formatAmount(quoteData.totals.onboardingCost)}) + `}
+                {quoteData.totals.oneTimeCosts > 0 && `One-time ($${formatAmount(quoteData.totals.oneTimeCosts)}) + `}
+                {`First month ($${formatAmount(quoteData.totals.recurringCosts)})`}
               </p>
               <p className="text-xs text-green-700 dark:text-green-300 mt-2">
-                {`Then $${quoteData.totals.recurringCosts.toFixed(2)}/month starting next billing cycle.`}
+                {`Then $${formatAmount(quoteData.totals.recurringCosts)}/month starting next billing cycle.`}
               </p>
               <p className="text-xs text-green-800 dark:text-green-200 mt-3 italic">
                 Services activate once payment is captured.
@@ -671,11 +672,11 @@ export default function QuoteReview() {
               ) : (
                 <>
                   Pay $
-                  {(
+                  {formatAmount(
                     quoteData.totals.onboardingCost +
-                    quoteData.totals.oneTimeCosts +
-                    quoteData.totals.recurringCosts
-                  ).toFixed(2)}{' '}
+                      quoteData.totals.oneTimeCosts +
+                      quoteData.totals.recurringCosts,
+                  )}{' '}
                   &amp; Start Services <CreditCard className="ml-2" />
                 </>
               )}

@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Mail, CreditCard, ChevronDown, ChevronUp, ArrowLeft, AlertCircle, X } from "lucide-react";
 import { toast } from "sonner";
 import { SiteHeader } from "@/components/SiteHeader";
+import { formatAmount } from "@/lib/utils";
 
 const generateQuoteNumber = (type: "quote" | "order") => {
   const prefix = type === "quote" ? "QT" : "OR";
@@ -499,14 +500,14 @@ const Summary = () => {
                     <div className="text-sm text-muted-foreground space-y-1 mt-1">
                       <p>
                         ${selectedPackage.pricePerUser}/user × {customerInfo.userCount} users = $
-                        {(selectedPackage.pricePerUser * customerInfo.userCount).toFixed(2)}
+                        {formatAmount(selectedPackage.pricePerUser * customerInfo.userCount)}
                       </p>
                       <p>
                         ${selectedPackage.pricePerLocation}/location × {customerInfo.locationCount} locations = $
-                        {(selectedPackage.pricePerLocation * customerInfo.locationCount).toFixed(2)}
+                        {formatAmount(selectedPackage.pricePerLocation * customerInfo.locationCount)}
                       </p>
                       <p className="font-semibold text-primary">
-                        Package Total: ${packageCost.toFixed(2)}/{selectedPackage.frequency}
+                        Package Total: ${formatAmount(packageCost)}/{selectedPackage.frequency}
                       </p>
                     </div>
                   </div>
@@ -550,19 +551,19 @@ const Summary = () => {
                         {addon.pricingType === 'both' ? (
                           <>
                             <p className="font-medium text-primary">
-                              ${((addon.recurringPrice || 0) * addon.quantity).toFixed(2)}/{addon.recurringFrequency || 'monthly'}
+                              ${formatAmount((addon.recurringPrice || 0) * addon.quantity)}/{addon.recurringFrequency || 'monthly'}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              + ${((addon.setupPrice || 0) * addon.quantity).toFixed(2)} one-time setup
+                              + ${formatAmount((addon.setupPrice || 0) * addon.quantity)} one-time setup
                             </p>
                           </>
                         ) : addon.pricingType === 'recurring-only' ? (
                           <p className="font-medium text-primary">
-                            ${((addon.recurringPrice || 0) * addon.quantity).toFixed(2)}/{addon.recurringFrequency || 'monthly'}
+                            ${formatAmount((addon.recurringPrice || 0) * addon.quantity)}/{addon.recurringFrequency || 'monthly'}
                           </p>
                         ) : (
                           <p className="font-medium text-primary">
-                            ${((addon.setupPrice || 0) * addon.quantity).toFixed(2)} one-time
+                            ${formatAmount((addon.setupPrice || 0) * addon.quantity)} one-time
                           </p>
                         )}
                       </div>
@@ -712,11 +713,11 @@ const Summary = () => {
                   <div className="flex items-center justify-between mb-1">
                     <p className="text-sm text-muted-foreground">Onboarding Fee</p>
                     <p className={`text-sm ${onboardingWaived ? 'line-through text-muted-foreground' : 'text-muted-foreground'}`}>
-                      ${onboardingResult.base.toFixed(2)}
+                      ${formatAmount(onboardingResult.base)}
                     </p>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    2× monthly recurring (${(onboardingResult.base / 2).toFixed(2)}/mo × 2)
+                    2× monthly recurring (${formatAmount(onboardingResult.base / 2)}/mo × 2)
                   </p>
                   {onboardingWaived && (
                     <div className="mt-2 pt-2 border-t border-green-200">
@@ -733,30 +734,30 @@ const Summary = () => {
                       <div className="flex items-center justify-between">
                         <p className="text-xs text-green-600 dark:text-green-400">Discount Applied</p>
                         <p className="text-xs font-semibold text-green-600 dark:text-green-400">
-                          -${onboardingDiscount.toFixed(2)}
+                          -${formatAmount(onboardingDiscount)}
                         </p>
                       </div>
                       <div className="flex items-center justify-between mt-1">
                         <p className="text-sm font-semibold text-accent">Final Onboarding Cost</p>
-                        <p className="text-lg font-bold text-accent">${finalOnboardingCost.toFixed(2)}</p>
+                        <p className="text-lg font-bold text-accent">${formatAmount(finalOnboardingCost)}</p>
                       </div>
                     </div>
                   )}
                   {!onboardingWaived && onboardingDiscount === 0 && (
-                    <p className="text-lg font-bold text-accent mt-1">${onboardingCost.toFixed(2)}</p>
+                    <p className="text-lg font-bold text-accent mt-1">${formatAmount(onboardingCost)}</p>
                   )}
                 </div>
 
                 <div className="p-4 rounded-lg bg-secondary/10 border border-secondary/20">
                   <div className="flex items-center justify-between mb-1">
                     <p className="text-sm text-muted-foreground">One-Time Add-ons</p>
-                    <p className="text-sm text-muted-foreground">${oneTimeCosts.toFixed(2)}</p>
+                    <p className="text-sm text-muted-foreground">${formatAmount(oneTimeCosts)}</p>
                   </div>
                   {selectedAddons.filter(a => a.pricingType === 'one-time-only' || a.pricingType === 'both').length > 0 && (
                     <div className="text-xs text-muted-foreground mb-1">
                       {selectedAddons
                         .filter(a => a.pricingType === 'one-time-only' || a.pricingType === 'both')
-                        .map(a => `${a.name}: $${((a.setupPrice || 0) * a.quantity).toFixed(2)}`)
+                        .map(a => `${a.name}: $${formatAmount((a.setupPrice || 0) * a.quantity)}`)
                         .join(', ')}
                     </div>
                   )}
@@ -765,41 +766,41 @@ const Summary = () => {
                       <div className="flex items-center justify-between">
                         <p className="text-xs text-green-600 dark:text-green-400">Discount Applied</p>
                         <p className="text-xs font-semibold text-green-600 dark:text-green-400">
-                          -${oneTimeDiscount.toFixed(2)}
+                          -${formatAmount(oneTimeDiscount)}
                         </p>
                       </div>
                       <div className="flex items-center justify-between mt-1">
                         <p className="text-sm font-semibold text-secondary">Final One-Time Cost</p>
-                        <p className="text-lg font-bold text-secondary">${finalOneTimeCosts.toFixed(2)}</p>
+                        <p className="text-lg font-bold text-secondary">${formatAmount(finalOneTimeCosts)}</p>
                       </div>
                     </div>
                   )}
                   {oneTimeDiscount === 0 && (
-                    <p className="text-lg font-bold text-secondary mt-1">${oneTimeCosts.toFixed(2)}</p>
+                    <p className="text-lg font-bold text-secondary mt-1">${formatAmount(oneTimeCosts)}</p>
                   )}
                 </div>
 
                 <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
                   <div className="flex items-center justify-between mb-1">
                     <p className="text-sm text-muted-foreground">Monthly Recurring</p>
-                    <p className="text-sm text-muted-foreground">${recurringCosts.toFixed(2)}/month</p>
+                    <p className="text-sm text-muted-foreground">${formatAmount(recurringCosts)}/month</p>
                   </div>
                   {recurringDiscount > 0 && (
                     <div className="mt-2 pt-2 border-t border-primary/20">
                       <div className="flex items-center justify-between">
                         <p className="text-xs text-green-600 dark:text-green-400">Discount Applied</p>
                         <p className="text-xs font-semibold text-green-600 dark:text-green-400">
-                          -${recurringDiscount.toFixed(2)}
+                          -${formatAmount(recurringDiscount)}
                         </p>
                       </div>
                       <div className="flex items-center justify-between mt-1">
                         <p className="text-sm font-semibold text-primary">Final Cost</p>
-                        <p className="text-lg font-bold text-primary">${finalRecurringCosts.toFixed(2)}/month</p>
+                        <p className="text-lg font-bold text-primary">${formatAmount(finalRecurringCosts)}/month</p>
                       </div>
                     </div>
                   )}
                   {recurringDiscount === 0 && (
-                    <p className="text-lg font-bold text-primary mt-1">${recurringCosts.toFixed(2)}/month</p>
+                    <p className="text-lg font-bold text-primary mt-1">${formatAmount(recurringCosts)}/month</p>
                   )}
                 </div>
 
@@ -810,24 +811,24 @@ const Summary = () => {
                       {onboardingDiscount > 0 && (
                         <div className="flex justify-between text-sm">
                           <span className="text-green-700 dark:text-green-400">Onboarding savings</span>
-                          <span className="font-semibold text-green-700 dark:text-green-400">-${onboardingDiscount.toFixed(2)}</span>
+                          <span className="font-semibold text-green-700 dark:text-green-400">-${formatAmount(onboardingDiscount)}</span>
                         </div>
                       )}
                       {oneTimeDiscount > 0 && (
                         <div className="flex justify-between text-sm">
                           <span className="text-green-700 dark:text-green-400">One-time savings</span>
-                          <span className="font-semibold text-green-700 dark:text-green-400">-${oneTimeDiscount.toFixed(2)}</span>
+                          <span className="font-semibold text-green-700 dark:text-green-400">-${formatAmount(oneTimeDiscount)}</span>
                         </div>
                       )}
                       {recurringDiscount > 0 && (
                         <div className="flex justify-between text-sm">
                           <span className="text-green-700 dark:text-green-400">Monthly savings (ongoing)</span>
-                          <span className="font-semibold text-green-700 dark:text-green-400">-${recurringDiscount.toFixed(2)}/mo</span>
+                          <span className="font-semibold text-green-700 dark:text-green-400">-${formatAmount(recurringDiscount)}/mo</span>
                         </div>
                       )}
                       <div className="pt-1.5 border-t border-green-200 dark:border-green-800 flex justify-between">
                         <span className="text-sm font-medium text-green-800 dark:text-green-300">Total</span>
-                        <span className="text-lg font-bold text-green-600 dark:text-green-400">-${totalDiscount.toFixed(2)}</span>
+                        <span className="text-lg font-bold text-green-600 dark:text-green-400">-${formatAmount(totalDiscount)}</span>
                       </div>
                     </div>
                   </div>
@@ -838,15 +839,15 @@ const Summary = () => {
                 <div className="p-4 rounded-lg bg-gradient-card border border-border">
                   <p className="text-sm text-muted-foreground mb-1">Due Today</p>
                   <p className="text-3xl font-bold text-foreground">
-                    ${(finalOnboardingCost + finalOneTimeCosts + finalRecurringCosts).toFixed(2)}
+                    ${formatAmount(finalOnboardingCost + finalOneTimeCosts + finalRecurringCosts)}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {finalOnboardingCost > 0 && `$${finalOnboardingCost.toFixed(2)} onboarding + `}
-                    {finalOneTimeCosts > 0 && `$${finalOneTimeCosts.toFixed(2)} one-time + `}
-                    {`$${finalRecurringCosts.toFixed(2)} first month`}
+                    {finalOnboardingCost > 0 && `$${formatAmount(finalOnboardingCost)} onboarding + `}
+                    {finalOneTimeCosts > 0 && `$${formatAmount(finalOneTimeCosts)} one-time + `}
+                    {`$${formatAmount(finalRecurringCosts)} first month`}
                   </p>
                   <p className="text-xs text-muted-foreground mt-1">
-                    {`Then $${finalRecurringCosts.toFixed(2)}/month from month 2 onward.`}
+                    {`Then $${formatAmount(finalRecurringCosts)}/month from month 2 onward.`}
                   </p>
                 </div>
               </div>
