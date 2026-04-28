@@ -246,6 +246,8 @@ const IntegrationSettings = () => {
           )}
         </div>
 
+        <ApWebhookTools />
+
         <CredentialsEditor />
 
         <Card className="p-6 mt-6 bg-muted/50">
@@ -261,6 +263,81 @@ const IntegrationSettings = () => {
     </div>
   );
 };
+
+// ── AP webhook tools ─────────────────────────────────────────────────
+
+function ApWebhookTools() {
+  const [working, setWorking] = useState(false);
+  const [output, setOutput] = useState<any>(null);
+  const [mode, setMode] = useState<'discover' | 'register' | null>(null);
+
+  const discover = async () => {
+    setWorking(true);
+    setMode('discover');
+    setOutput(null);
+    try {
+      const r = await adminApi.apDiscoverWebhooks();
+      setOutput(r);
+      if (r.matched) {
+        toast.success(`Matched AP path: ${r.matched.path}`);
+      } else {
+        toast.error('No AP webhook endpoint matched a known path');
+      }
+    } catch (e: any) {
+      toast.error(e?.message || 'Discover failed');
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const register = async () => {
+    setWorking(true);
+    setMode('register');
+    setOutput(null);
+    try {
+      const r = await adminApi.apRegisterWebhook();
+      setOutput(r);
+      if (r.status >= 200 && r.status < 300) {
+        toast.success('AP returned a webhook record — check the body for the secret');
+      } else {
+        toast.error(`AP returned ${r.status}`);
+      }
+    } catch (e: any) {
+      toast.error(e?.message || 'Register failed');
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  return (
+    <Card className="p-6 mt-6">
+      <h3 className="text-lg font-semibold mb-2">Alternative Payments — webhook tools</h3>
+      <p className="text-sm text-muted-foreground mb-4">
+        Uses the AP_CLIENT_ID / AP_CLIENT_SECRET above to talk to AP's API and
+        either list existing webhook endpoints or register a new one. Webhook URL
+        defaults to this app's <code className="font-mono">/api/webhooks/ap</code>.
+        Look for a <code className="font-mono">secret</code> /{' '}
+        <code className="font-mono">signing_secret</code> field in the response —
+        that's what goes in <code className="font-mono">AP_WEBHOOK_SECRET</code>.
+      </p>
+      <div className="flex gap-2 mb-4">
+        <Button onClick={discover} disabled={working} variant="outline" size="sm">
+          {working && mode === 'discover' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+          List existing webhooks
+        </Button>
+        <Button onClick={register} disabled={working} size="sm">
+          {working && mode === 'register' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+          Register webhook on AP
+        </Button>
+      </div>
+      {output && (
+        <pre className="text-xs bg-secondary/40 border border-border rounded p-3 overflow-x-auto max-h-96">
+          {JSON.stringify(output, null, 2)}
+        </pre>
+      )}
+    </Card>
+  );
+}
 
 // ── Credentials editor ───────────────────────────────────────────────
 

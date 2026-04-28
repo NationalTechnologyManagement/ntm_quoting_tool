@@ -190,6 +190,112 @@ router.post('/api/admin/settings/integrations/email/test', requireAuth, async (_
   }
 });
 
+// Discover AP webhooks: try the common API paths and return the first that
+// answers with a 2xx so the admin UI can show what's already registered and
+// what's available. AP's docs name the resource a couple of different things
+// across their API versions, so we probe in order. Body of the matched
+// response often includes the signing secret on the matching webhook entry.
+router.post('/api/admin/integrations/ap/webhooks/discover', requireAuth, async (_req, res) => {
+  const apClientId = cred('AP_CLIENT_ID');
+  const apClientSecret = cred('AP_CLIENT_SECRET');
+  if (!apClientId || !apClientSecret) {
+    res.status(400).json({ error: 'AP_CLIENT_ID / AP_CLIENT_SECRET not set' });
+    return;
+  }
+
+  const probePaths = [
+    '/v1/webhooks',
+    '/v1/webhook-endpoints',
+    '/v1/notifications/webhooks',
+    '/webhooks',
+    '/webhook-endpoints',
+    '/notifications/webhooks',
+  ];
+
+  // Get an OAuth token first
+  const tokenCreds = Buffer.from(`${apClientId}:${apClientSecret}`).toString('base64');
+  const tokenRes = await fetch('https://public-api.alternativepayments.io/oauth/token', {
+    method: 'POST',
+    headers: {
+      Authorization: `Basic ${tokenCreds}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: 'grant_type=client_credentials',
+  });
+  if (!tokenRes.ok) {
+    res.status(502).json({ error: `OAuth failed (${tokenRes.status})`, body: await tokenRes.text() });
+    return;
+  }
+  const tokenData = await tokenRes.json();
+  const token = tokenData.access_token;
+
+  const attempts: Array<{ path: string; status: number; body: unknown }> = [];
+  let matched: { path: string; body: unknown } | null = null;
+
+  for (const path of probePaths) {
+    try {
+      const r = await fetch(`https://public-api.alternativepayments.io${path}`, {
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+      });
+      const text = await r.text();
+      let body: unknown = text;
+      try { body = JSON.parse(text); } catch { /* keep raw */ }
+      attempts.push({ path, status: r.status, body });
+      if (r.ok && !matched) matched = { path, body };
+    } catch (err: any) {
+      attempts.push({ path, status: 0, body: err?.message ?? String(err) });
+    }
+  }
+
+  res.json({ matched, attempts });
+});
+
+// Register a webhook with AP using our credentials. AP returns a signing
+// secret on creation; we surface it back to the admin UI so they can copy it
+// into AP_WEBHOOK_SECRET (or click "save to credentials" once we know the
+// exact field name in AP's response).
+router.post('/api/admin/integrations/ap/webhooks/register', requireAuth, async (req, res) => {
+  const apClientId = cred('AP_CLIENT_ID');
+  const apClientSecret = cred('AP_CLIENT_SECRET');
+  if (!apClientId || !apClientSecret) {
+    res.status(400).json({ error: 'AP_CLIENT_ID / AP_CLIENT_SECRET not set' });
+    return;
+  }
+  const targetUrl =
+    (req.body?.url as string | undefined) ||
+    `${env.FRONTEND_URL.replace(/\/$/, '')}/api/webhooks/ap`;
+  const events = (req.body?.events as string[] | undefined) || ['invoice_paid', 'payment_failed'];
+  const path = (req.body?.path as string | undefined) || '/v1/webhooks';
+
+  const tokenCreds = Buffer.from(`${apClientId}:${apClientSecret}`).toString('base64');
+  const tokenRes = await fetch('https://public-api.alternativepayments.io/oauth/token', {
+    method: 'POST',
+    headers: {
+      Authorization: `Basic ${tokenCreds}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: 'grant_type=client_credentials',
+  });
+  if (!tokenRes.ok) {
+    res.status(502).json({ error: `OAuth failed (${tokenRes.status})`, body: await tokenRes.text() });
+    return;
+  }
+  const tokenData = await tokenRes.json();
+
+  const r = await fetch(`https://public-api.alternativepayments.io${path}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${tokenData.access_token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ url: targetUrl, events }),
+  });
+  const text = await r.text();
+  let body: unknown = text;
+  try { body = JSON.parse(text); } catch { /* keep raw */ }
+  res.status(r.ok ? 200 : r.status).json({ status: r.status, body });
+});
+
 // Test AP connection
 router.post('/api/admin/settings/integrations/ap/test', requireAuth, async (_req, res) => {
   const apClientId = cred('AP_CLIENT_ID');
