@@ -248,9 +248,18 @@ router.post('/api/admin/integrations/ap/webhooks/discover', requireAuth, async (
 // /admin/integrations otherwise).
 router.post('/api/admin/integrations/ap/webhooks/register', requireAuth, async (req, res) => {
   try {
-    const targetUrl =
-      (req.body?.url as string | undefined) ||
-      `${(env.FRONTEND_URL || '').replace(/\/$/, '')}/api/webhooks/ap`;
+    // Build a fully-qualified webhook URL. Railway exposes FRONTEND_URL as
+    // just the hostname (no scheme); AP rejects URLs without https://, so
+    // normalize defensively.
+    function ensureHttps(raw: string): string {
+      const stripped = raw.replace(/\/$/, '').trim();
+      if (/^https?:\/\//i.test(stripped)) return stripped;
+      return `https://${stripped}`;
+    }
+    const baseUrl = req.body?.url
+      ? String(req.body.url)
+      : `${env.FRONTEND_URL || ''}/api/webhooks/ap`;
+    const targetUrl = ensureHttps(baseUrl);
     const topics = (req.body?.events as string[] | undefined) || DEFAULT_AP_TOPICS;
 
     let secret = cred('AP_WEBHOOK_SECRET');
