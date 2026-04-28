@@ -217,6 +217,28 @@ async function patchSiteTaxCode(
   });
 }
 
+async function findContactByCompanyAndName(
+  companyId: number,
+  firstName: string,
+  lastName: string,
+): Promise<number | null> {
+  // CW supports `company/id` + name conditions on /company/contacts.
+  // Quote-escape any embedded apostrophes in names ("O'Brien" etc.).
+  const safeFirst = firstName.replace(/'/g, "''");
+  const safeLast = lastName.replace(/'/g, "''");
+  const conditions = encodeURIComponent(
+    `company/id=${companyId} and firstName='${safeFirst}' and lastName='${safeLast}'`,
+  );
+  try {
+    const list = await cwJson<any[]>(
+      `/company/contacts?conditions=${conditions}&pageSize=1`,
+    );
+    return list[0]?.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function createContact(
   customer: QuoteData['customer'],
   companyId: number,
@@ -229,7 +251,15 @@ async function createContact(
   const emailTypeId = intCfg(cfg, 'comm.emailTypeId') ?? 1;
   const phoneTypeId = intCfg(cfg, 'comm.phoneTypeId') ?? 2;
 
-  const contact = await cwJson<any>('/company/contacts', {
+  // CW rejects duplicate contacts (same name + email under same company) with
+  // code=ContactApi. Look up the existing contact first instead of failing.
+  const existing = await findContactByCompanyAndName(companyId, firstName, lastName);
+  if (existing) {
+    console.log(`[CW] reusing existing contact ${existing} for company ${companyId}`);
+    return existing;
+  }
+
+  const r = await cwFetch('/company/contacts', {
     method: 'POST',
     body: JSON.stringify({
       firstName,
@@ -252,6 +282,18 @@ async function createContact(
       ],
     }),
   });
+  if (!r.ok) {
+    const text = await r.text();
+    // Fall-through dedupe in case the lookup missed (e.g., different name on
+    // the existing contact but same email): if CW says "duplicate", look up
+    // again and accept any match.
+    if (/duplicate contact/i.test(text)) {
+      const recovered = await findContactByCompanyAndName(companyId, firstName, lastName);
+      if (recovered) return recovered;
+    }
+    throw new Error(`CW POST /company/contacts failed (${r.status}): ${text}`);
+  }
+  const contact = await r.json();
   return contact.id;
 }
 
@@ -364,7 +406,8 @@ async function createAgreement(
       billAmount: quote.totals.recurringCosts,
       billStartDate: billStart,
       agreementStatus: 'Inactive',
-      ...(billTermsId ? { billTermsId } : {}),
+      // CW Manage's Agreement schema uses billingTerms reference, not billTermsId.
+      ...(billTermsId ? { billingTerms: { id: billTermsId } } : {}),
       ...(locationId ? { location: { id: locationId } } : {}),
       ...(departmentId ? { department: { id: departmentId } } : {}),
       ...(currencyId ? { currency: { id: currencyId } } : {}),
