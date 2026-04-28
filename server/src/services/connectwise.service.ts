@@ -1020,5 +1020,18 @@ export async function reprovisionFromScratch(quoteNumber: string): Promise<{
   // Re-fetch quote so the orchestrator sees the freshly persisted ids.
   quoteData = await getQuote(quoteNumber);
   const cwPaymentCompleted = await onPaymentCompleted(quoteData);
+
+  // Persist agreement/project ids onto the Quote row for the admin UI to
+  // surface without having to drill into cw_provisioning_steps.
+  if (cwPaymentCompleted.cwAgreementId || cwPaymentCompleted.cwProjectId) {
+    await prisma.quote.update({
+      where: { id: quote.id },
+      data: {
+        cwAgreementId: cwPaymentCompleted.cwAgreementId ?? null,
+        cwProjectId: cwPaymentCompleted.cwProjectId ?? null,
+      },
+    });
+  }
+
   return { cwQuoteCreated, cwPaymentCompleted };
 }
