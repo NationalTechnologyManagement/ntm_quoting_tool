@@ -278,10 +278,11 @@ function ApWebhookTools() {
     try {
       const r = await adminApi.apDiscoverWebhooks();
       setOutput(r);
-      if (r.matched) {
-        toast.success(`Matched AP path: ${r.matched.path}`);
+      if (r.status >= 200 && r.status < 300) {
+        const count = Array.isArray(r.body?.data) ? r.body.data.length : 'unknown';
+        toast.success(`AP returned ${count} webhook(s)`);
       } else {
-        toast.error('No AP webhook endpoint matched a known path');
+        toast.error(`AP returned ${r.status}`);
       }
     } catch (e: any) {
       toast.error(e?.message || 'Discover failed');
@@ -297,10 +298,13 @@ function ApWebhookTools() {
     try {
       const r = await adminApi.apRegisterWebhook();
       setOutput(r);
-      if (r.status >= 200 && r.status < 300) {
-        toast.success('AP returned a webhook record — check the body for the secret');
+      const allOk = r.results.every((x) => x.status >= 200 && x.status < 300);
+      if (allOk && r.secretGenerated) {
+        toast.success('Generated a fresh AP_WEBHOOK_SECRET and registered every topic');
+      } else if (allOk) {
+        toast.success('Registered webhooks with the existing AP_WEBHOOK_SECRET');
       } else {
-        toast.error(`AP returned ${r.status}`);
+        toast.error('At least one topic failed — see the output');
       }
     } catch (e: any) {
       toast.error(e?.message || 'Register failed');
@@ -313,12 +317,14 @@ function ApWebhookTools() {
     <Card className="p-6 mt-6">
       <h3 className="text-lg font-semibold mb-2">Alternative Payments — webhook tools</h3>
       <p className="text-sm text-muted-foreground mb-4">
-        Uses the AP_CLIENT_ID / AP_CLIENT_SECRET above to talk to AP's API and
-        either list existing webhook endpoints or register a new one. Webhook URL
-        defaults to this app's <code className="font-mono">/api/webhooks/ap</code>.
-        Look for a <code className="font-mono">secret</code> /{' '}
-        <code className="font-mono">signing_secret</code> field in the response —
-        that's what goes in <code className="font-mono">AP_WEBHOOK_SECRET</code>.
+        Uses your AP_CLIENT_ID / AP_CLIENT_SECRET to talk to AP. Per their docs,{' '}
+        <strong>NTM supplies the webhook secret</strong> — AP just signs each delivery's
+        Authorization header with whatever you give it. <strong>Register</strong>{' '}
+        below will reuse <code className="font-mono">AP_WEBHOOK_SECRET</code> if it's
+        already set, or mint a fresh strong one and save it for you, then subscribe
+        AP to <code className="font-mono">invoice_paid</code> +{' '}
+        <code className="font-mono">payment_failed</code> against{' '}
+        <code className="font-mono">/api/webhooks/ap</code>.
       </p>
       <div className="flex gap-2 mb-4">
         <Button onClick={discover} disabled={working} variant="outline" size="sm">
@@ -327,9 +333,21 @@ function ApWebhookTools() {
         </Button>
         <Button onClick={register} disabled={working} size="sm">
           {working && mode === 'register' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-          Register webhook on AP
+          Register webhooks on AP
         </Button>
       </div>
+      {output?.secret && (
+        <div className="mb-3 p-3 rounded bg-orange-100 dark:bg-orange-950/30 border border-orange-300 dark:border-orange-800">
+          <p className="text-sm font-semibold text-orange-900 dark:text-orange-200 mb-1">
+            New AP_WEBHOOK_SECRET generated and saved
+          </p>
+          <p className="text-xs text-orange-800 dark:text-orange-300">
+            Already in the credentials editor below. The value is also embedded in
+            this response in case you need it for AP-side tooling — but it's
+            unrecoverable later (AP only stores the last 4 digits).
+          </p>
+        </div>
+      )}
       {output && (
         <pre className="text-xs bg-secondary/40 border border-border rounded p-3 overflow-x-auto max-h-96">
           {JSON.stringify(output, null, 2)}

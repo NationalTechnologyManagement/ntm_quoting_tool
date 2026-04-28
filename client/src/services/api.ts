@@ -226,15 +226,20 @@ export const adminApi = {
   getIntegrations: () => apiRequest<any>('/api/admin/settings/integrations'),
   testAP: () => apiRequest<any>('/api/admin/settings/integrations/ap/test', { method: 'POST' }),
   apDiscoverWebhooks: () =>
-    apiRequest<{
-      matched: { path: string; body: unknown } | null;
-      attempts: Array<{ path: string; status: number; body: unknown }>;
-    }>('/api/admin/integrations/ap/webhooks/discover', { method: 'POST' }),
-  apRegisterWebhook: (opts?: { url?: string; events?: string[]; path?: string }) =>
     apiRequest<{ status: number; body: any }>(
-      '/api/admin/integrations/ap/webhooks/register',
-      { method: 'POST', body: JSON.stringify(opts ?? {}) },
+      '/api/admin/integrations/ap/webhooks/discover',
+      { method: 'POST' },
     ),
+  apRegisterWebhook: (opts?: { url?: string; events?: string[] }) =>
+    apiRequest<{
+      endpoint_url: string;
+      secretGenerated: boolean;
+      secret: string | null;
+      results: Array<{ topic: string; status: number; body: any }>;
+    }>('/api/admin/integrations/ap/webhooks/register', {
+      method: 'POST',
+      body: JSON.stringify(opts ?? {}),
+    }),
   testGHL: () => apiRequest<any>('/api/admin/settings/integrations/ghl/test', { method: 'POST' }),
   testCW: () => apiRequest<any>('/api/admin/settings/integrations/cw/test', { method: 'POST' }),
   testEmail: () => apiRequest<any>('/api/admin/settings/integrations/email/test', { method: 'POST' }),
