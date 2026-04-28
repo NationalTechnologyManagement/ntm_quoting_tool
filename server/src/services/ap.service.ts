@@ -233,14 +233,19 @@ export async function handlePaymentFailed(invoiceId: string) {
 // ── Line Item Builder ───────────────────────────────────────────────
 
 function buildLineItems(quote: QuoteData) {
+  // AP's invoice API takes line-item `amount` in dollars (decimal), not cents.
+  // Earlier code multiplied by 100 thinking AP was Stripe-style cents — that
+  // was wrong and caused invoices to render at 100× the intended amount.
+  // Round to 2dp to avoid float drift.
+  const dollars = (n: number) => Math.round(n * 100) / 100;
   const items: Array<{ description: string; amount: number; quantity: number }> = [];
 
   // 1. Onboarding & Setup (one-time). Skipped when waived — finalCost = 0
-  //    for 36-month plans signed online (per NTM policy).
+  //    for portal quotes (per NTM policy).
   if (quote.onboarding.finalCost > 0) {
     items.push({
       description: `Onboarding & Setup (${quote.onboarding.userCount} users)`,
-      amount: Math.round(quote.onboarding.finalCost * 100),
+      amount: dollars(quote.onboarding.finalCost),
       quantity: 1,
     });
   }
@@ -252,7 +257,7 @@ function buildLineItems(quote: QuoteData) {
       if (amount && amount > 0) {
         items.push({
           description: addon.name,
-          amount: Math.round(amount * 100),
+          amount: dollars(amount),
           quantity: addon.quantity,
         });
       }
@@ -262,7 +267,7 @@ function buildLineItems(quote: QuoteData) {
     if (addon.pricingType === 'both' && addon.setupPrice && addon.setupPrice > 0) {
       items.push({
         description: `${addon.name} - Setup Fee`,
-        amount: Math.round(addon.setupPrice * 100),
+        amount: dollars(addon.setupPrice),
         quantity: addon.quantity,
       });
     }
@@ -274,7 +279,7 @@ function buildLineItems(quote: QuoteData) {
   if (quote.totals.recurringCosts > 0) {
     items.push({
       description: `First month — ${quote.selectedPackage.name}`,
-      amount: Math.round(quote.totals.recurringCosts * 100),
+      amount: dollars(quote.totals.recurringCosts),
       quantity: 1,
     });
   }
