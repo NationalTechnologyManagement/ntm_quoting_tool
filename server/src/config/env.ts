@@ -26,11 +26,19 @@ const envSchema = z.object({
   NOTIFY_WEBHOOK_URL: z.string().optional(),
   // Test mode: log CW writes instead of executing them (read-only audit calls still go through).
   // Use during local UI walkthroughs so the wizard runs end-to-end without touching production CW.
-  CW_DRY_RUN: z.coerce.boolean().default(false),
+  // NB: do NOT use z.coerce.boolean() — it treats the literal string "false" as truthy.
+  // Strict text comparison so CW_DRY_RUN="false" actually means false.
+  CW_DRY_RUN: z
+    .string()
+    .optional()
+    .transform((v) => v?.toLowerCase() === 'true'),
   // Retry worker (Phase 5)
   CW_RETRY_INTERVAL_MS: z.coerce.number().default(60_000),
   CW_RETRY_MAX_ATTEMPTS: z.coerce.number().default(5),
-  CW_RETRY_DISABLED: z.coerce.boolean().default(false),
+  CW_RETRY_DISABLED: z
+    .string()
+    .optional()
+    .transform((v) => v?.toLowerCase() === 'true'),
   INITIAL_ADMIN_EMAIL: z.string().optional(),
   INITIAL_ADMIN_PASSWORD: z.string().optional(),
   PUPPETEER_EXECUTABLE_PATH: z.string().optional(),
