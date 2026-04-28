@@ -198,6 +198,28 @@ function sumCustomOneTime(items: any[]): number {
   return items.reduce((sum, i) => sum + (Number(i.oneTimePrice) || 0) * (Number(i.quantity) || 1), 0);
 }
 
+// Hard-delete a quote. Cascades through contracts and CW provisioning step
+// rows in a transaction. Records that already exist in CW (companies,
+// opportunities, agreements, projects) are NOT touched — those would need to
+// be archived/cancelled in CW separately.
+router.delete('/api/admin/quotes/:id', requireAuth, async (req, res) => {
+  const id = req.params.id as string;
+  const quote = await prisma.quote.findFirst({
+    where: { OR: [{ id }, { quoteNumber: id }] },
+    select: { id: true, quoteNumber: true },
+  });
+  if (!quote) {
+    res.status(404).json({ error: 'Quote not found' });
+    return;
+  }
+  await prisma.$transaction([
+    prisma.contract.deleteMany({ where: { quoteId: quote.id } }),
+    prisma.cwProvisioningStep.deleteMany({ where: { quoteId: quote.id } }),
+    prisma.quote.delete({ where: { id: quote.id } }),
+  ]);
+  res.json({ success: true, deletedQuoteNumber: quote.quoteNumber });
+});
+
 // Manual replay of CW provisioning. Resets failed steps to pending and re-runs
 // the pipeline. Successful steps short-circuit via the resume logic.
 router.post('/api/admin/quotes/:id/retry-provisioning', requireAuth, async (req, res) => {

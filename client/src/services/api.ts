@@ -178,6 +178,11 @@ export const adminApi = {
   },
   getQuote: (id: string) => apiRequest<any>(`/api/admin/quotes/${id}`),
   getQuoteStats: () => apiRequest<any>('/api/admin/quotes/stats/summary'),
+  deleteQuote: (id: string) =>
+    apiRequest<{ success: true; deletedQuoteNumber: string }>(
+      `/api/admin/quotes/${encodeURIComponent(id)}`,
+      { method: 'DELETE' },
+    ),
   addCustomItem: (
     id: string,
     item: {

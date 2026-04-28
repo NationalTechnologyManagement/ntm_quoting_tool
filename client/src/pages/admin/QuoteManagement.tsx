@@ -14,6 +14,7 @@ import {
   FileText,
   ExternalLink,
   RefreshCw,
+  Trash2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { adminApi } from '@/services/api';
@@ -348,6 +349,35 @@ const QuoteManagement = () => {
                               <RefreshCw className="w-4 h-4" />
                             </Button>
                           )}
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            title="Delete quote (cascades contracts + CW step rows; existing CW objects unaffected)"
+                            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            onClick={async () => {
+                              if (
+                                !confirm(
+                                  `Delete quote ${q.quoteNumber}?\n\n` +
+                                    'This removes the quote row, its generated contracts, and any CW provisioning ' +
+                                    'state from this DB. Companies / agreements / projects already created in CW ' +
+                                    'will NOT be touched — clean those up in CW separately if needed.\n\n' +
+                                    'This cannot be undone.',
+                                )
+                              ) {
+                                return;
+                              }
+                              try {
+                                await adminApi.deleteQuote(q.quoteNumber);
+                                toast.success(`Deleted ${q.quoteNumber}`);
+                                fetchQuotes();
+                                fetchStats();
+                              } catch (err: any) {
+                                toast.error(err?.message || 'Delete failed');
+                              }
+                            }}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
                         </div>
                       </td>
                     </tr>

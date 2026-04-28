@@ -15,6 +15,7 @@ import {
   ExternalLink,
   FileText,
   RefreshCw,
+  AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { adminApi } from '@/services/api';
@@ -245,6 +246,32 @@ const QuoteDetail = () => {
                 <RefreshCw className="w-4 h-4 mr-2" /> Retry CW
               </Button>
             )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="ml-auto text-destructive border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+              onClick={async () => {
+                if (
+                  !confirm(
+                    `Delete quote ${quote.quoteNumber}?\n\n` +
+                      'This removes the quote row, its generated contracts, and any CW provisioning ' +
+                      'state from this DB. Companies / agreements / projects already created in CW ' +
+                      'will NOT be touched — clean those up in CW separately if needed.\n\n' +
+                      'This cannot be undone.',
+                  )
+                )
+                  return;
+                try {
+                  await adminApi.deleteQuote(quote.quoteNumber);
+                  toast.success(`Deleted ${quote.quoteNumber}`);
+                  navigate('/admin/quotes');
+                } catch (err: any) {
+                  toast.error(err?.message || 'Delete failed');
+                }
+              }}
+            >
+              <AlertTriangle className="w-4 h-4 mr-2" /> Delete Quote
+            </Button>
           </div>
         </Card>
 
