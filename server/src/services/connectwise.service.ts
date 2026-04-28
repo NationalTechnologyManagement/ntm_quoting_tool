@@ -343,7 +343,6 @@ async function createAgreement(
   // billStartDate is first of next month: AP already captured month 1 as the
   // "First month" line on the upfront invoice, so CW starts billing from month 2.
   const billStart = firstOfNextMonthISO();
-  const billCycleId = intCfg(cfg, 'agreement.billCycleId');
   const billTermsId = intCfg(cfg, 'agreement.billTermsId');
   const locationId = intCfg(cfg, 'agreement.locationId');
   const departmentId = intCfg(cfg, 'agreement.departmentId');
@@ -351,6 +350,8 @@ async function createAgreement(
 
   // Inactive on create; a separate 'activate' step PATCHes to Active after additions
   // exist. This is the spec's "don't ship a live agreement with no line items" guard.
+  // Note: `billCycleId` is NOT a top-level field on CW Manage's Agreement; the
+  // billing cycle comes from the agreement type's defaults. Don't send it.
   const agreement = await cwJson<any>('/finance/agreements', {
     method: 'POST',
     body: JSON.stringify({
@@ -363,7 +364,6 @@ async function createAgreement(
       billAmount: quote.totals.recurringCosts,
       billStartDate: billStart,
       agreementStatus: 'Inactive',
-      ...(billCycleId ? { billCycleId } : {}),
       ...(billTermsId ? { billTermsId } : {}),
       ...(locationId ? { location: { id: locationId } } : {}),
       ...(departmentId ? { department: { id: departmentId } } : {}),
@@ -580,12 +580,14 @@ async function markOppWon(opportunityId: number, cfg: Awaited<ReturnType<typeof 
   if (!wonStatusId || !wonStageId) {
     throw new Error('CW config: opportunity.statusWonId / opportunity.stageWonId not set');
   }
+  // CW rejects date-only `closedDate` values with code "UnsupportedFormat".
+  // The schema is date-time, so use the full ISO string.
   await cwJson(`/sales/opportunities/${opportunityId}`, {
     method: 'PATCH',
     body: JSON.stringify([
       { op: 'replace', path: '/status', value: { id: wonStatusId } },
       { op: 'replace', path: '/stage', value: { id: wonStageId } },
-      { op: 'replace', path: '/closedDate', value: todayISO() },
+      { op: 'replace', path: '/closedDate', value: new Date().toISOString() },
     ]),
   });
 }
@@ -598,12 +600,25 @@ async function updateCompanyToCustomer(
   if (!customerTypeId) {
     throw new Error('CW config: company.typeCustomerId not set');
   }
-  await cwJson(`/company/companies/${companyId}`, {
-    method: 'PATCH',
-    body: JSON.stringify([
-      { op: 'replace', path: '/types', value: [{ id: customerTypeId }] },
-    ]),
+  // CW rejects PATCH of /types on an existing company:
+  //   "typeIds can only be used when creating a new company."
+  // The supported flow is to add the type via /company/companyTypeAssociations.
+  // POST a new association with the customer type. CW idempotency: if the
+  // association already exists, the call returns 400 — treat as no-op.
+  const r = await cwFetch('/company/companyTypeAssociations', {
+    method: 'POST',
+    body: JSON.stringify({
+      company: { id: companyId },
+      type: { id: customerTypeId },
+    }),
   });
+  if (!r.ok) {
+    const text = await r.text().catch(() => '');
+    if (/already exists|duplicate/i.test(text)) {
+      return; // already a Customer; success
+    }
+    throw new Error(`CW POST /company/companyTypeAssociations failed (${r.status}): ${text}`);
+  }
 }
 
 async function addOpportunityNote(opportunityId: number, text: string) {

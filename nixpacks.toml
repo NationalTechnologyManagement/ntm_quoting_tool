@@ -1,11 +1,52 @@
 [phases.setup]
-aptPkgs = ["chromium"]
+# Puppeteer's bundled Chrome needs a long list of shared libraries. Apt-installing
+# `chromium` alone pulls most but not all of them on the Ubuntu image Railway uses,
+# and the chromium binary path varies, so we install the deps explicitly and let
+# Puppeteer use its bundled Chrome at /root/.cache/puppeteer.
+aptPkgs = [
+  "ca-certificates",
+  "fonts-liberation",
+  "libasound2t64",
+  "libatk-bridge2.0-0",
+  "libatk1.0-0",
+  "libc6",
+  "libcairo2",
+  "libcups2",
+  "libdbus-1-3",
+  "libexpat1",
+  "libfontconfig1",
+  "libgbm1",
+  "libglib2.0-0",
+  "libgtk-3-0",
+  "libnspr4",
+  "libnss3",
+  "libpango-1.0-0",
+  "libpangocairo-1.0-0",
+  "libx11-6",
+  "libx11-xcb1",
+  "libxcb1",
+  "libxcomposite1",
+  "libxcursor1",
+  "libxdamage1",
+  "libxext6",
+  "libxfixes3",
+  "libxi6",
+  "libxkbcommon0",
+  "libxrandr2",
+  "libxrender1",
+  "libxss1",
+  "libxtst6",
+  "lsb-release",
+  "wget",
+  "xdg-utils",
+]
 
 [phases.install]
 # `npm install` instead of `npm ci` — the lockfile may lag the package.json
 # whenever a dev-only dep is added (e.g., vitest) without local node access.
-# Tradeoff: slightly slower install + lockfile mutation at build time. Acceptable
-# until we have a CI step that updates package-lock.json on every PR.
+# Tradeoff: slightly slower install + lockfile mutation at build time.
+# Puppeteer's postinstall downloads its bundled Chrome here too (we removed the
+# SKIP_CHROMIUM_DOWNLOAD flag).
 cmds = ["npm install --include=dev"]
 
 [phases.build]
@@ -18,7 +59,3 @@ cmds = [
 
 [start]
 cmd = "cd server && npx prisma migrate deploy && npx tsx prisma/seed.ts && cd .. && npm start"
-
-[variables]
-PUPPETEER_EXECUTABLE_PATH = "/usr/bin/chromium"
-PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"
