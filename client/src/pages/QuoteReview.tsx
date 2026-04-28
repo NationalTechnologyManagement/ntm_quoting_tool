@@ -593,7 +593,10 @@ export default function QuoteReview() {
           {/* Due Today - Full Width */}
           <Card className="p-8 bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-950/30 dark:to-emerald-900/30 border-green-200 dark:border-green-800">
             <div className="text-center">
-              <h3 className="text-2xl font-semibold text-green-900 dark:text-green-100 mb-2">Due Today</h3>
+              <p className="text-xs font-semibold text-green-700 dark:text-green-300 uppercase tracking-wider mb-2">
+                To Start Services
+              </p>
+              <h3 className="text-2xl font-semibold text-green-900 dark:text-green-100 mb-2">Pay Today</h3>
               <div className="text-5xl font-bold text-green-900 dark:text-green-100 mb-3">
                 ${(quoteData.totals.onboardingCost + quoteData.totals.oneTimeCosts + quoteData.totals.recurringCosts).toFixed(2)}
               </div>
@@ -604,6 +607,9 @@ export default function QuoteReview() {
               </p>
               <p className="text-xs text-green-700 dark:text-green-300 mt-2">
                 {`Then $${quoteData.totals.recurringCosts.toFixed(2)}/month starting next billing cycle.`}
+              </p>
+              <p className="text-xs text-green-800 dark:text-green-200 mt-3 italic">
+                Services activate once payment is captured.
               </p>
             </div>
           </Card>
@@ -664,10 +670,19 @@ export default function QuoteReview() {
                 </>
               ) : (
                 <>
-                  Accept & Proceed to Payment <CreditCard className="ml-2" />
+                  Pay $
+                  {(
+                    quoteData.totals.onboardingCost +
+                    quoteData.totals.oneTimeCosts +
+                    quoteData.totals.recurringCosts
+                  ).toFixed(2)}{' '}
+                  &amp; Start Services <CreditCard className="ml-2" />
                 </>
               )}
             </Button>
+            <p className="text-xs text-muted-foreground text-center -mt-2">
+              You'll be redirected to Alternative Payments' secure checkout to complete payment.
+            </p>
           </div>
         </Card>
       </div>

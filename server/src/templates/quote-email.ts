@@ -25,7 +25,16 @@ function formatDateTime(iso: string): string {
 }
 
 export function buildQuoteEmailHtml(quote: QuoteData, quoteUrl: string): string {
-  const dueToday = quote.totals.onboardingCost + quote.totals.oneTimeCosts;
+  // What the customer actually pays at checkout — matches the AP invoice
+  // composition built in ap.service.ts buildLineItems(): onboarding (or $0 if
+  // waived) + one-time addons (typically $0 in current catalog) + first month.
+  // The email used to show only the first two, which left "Due Today" looking
+  // like $0 for SafeSecure quotes (waived onboarding + no setup-fee addons).
+  const onboardingCost = quote.totals.onboardingCost || 0;
+  const oneTimeCosts = quote.totals.oneTimeCosts || 0;
+  const firstMonth = quote.totals.recurringCosts || 0;
+  const dueToday = onboardingCost + oneTimeCosts + firstMonth;
+
   const formattedDate = formatDate(quote.timestamp);
   const formattedDateTime = formatDateTime(quote.timestamp);
 
@@ -85,26 +94,32 @@ export function buildQuoteEmailHtml(quote: QuoteData, quoteUrl: string): string 
         </div>
       </div>
       <div class="section">
-        <div class="section-title">Monthly Recurring</div>
+        <div class="section-title">Monthly Service</div>
         <div class="cost-card recurring">
           <div class="cost-label">${quote.selectedPackage.name}</div>
           <div class="cost-detail">${quote.customer.userCount} users &times; ${formatCurrency(quote.selectedPackage.pricePerUser)}/user</div>
           <div class="cost-detail">${quote.customer.locationCount} locations &times; ${formatCurrency(quote.selectedPackage.pricePerLocation)}/location</div>
-          <div class="cost-amount">${formatCurrency(quote.totals.recurringCosts)}<span style="font-size:16px;opacity:0.8;">/${quote.totals.recurringFrequency}</span></div>
+          <div class="cost-amount">${formatCurrency(firstMonth)}<span style="font-size:16px;opacity:0.8;">/${quote.totals.recurringFrequency}</span></div>
         </div>
       </div>
+
       <div class="section">
         <div class="cost-card total">
-          <div class="cost-label">Due Today</div>
+          <div class="cost-label">Due Today to Start Services</div>
           <div class="cost-amount">${formatCurrency(dueToday)}</div>
-          <div style="opacity:0.9;font-size:14px;">Onboarding Costs &amp; One Time Costs</div>
+          <div style="opacity:0.95;font-size:14px;line-height:1.6;">
+            ${onboardingCost > 0 ? `${formatCurrency(onboardingCost)} onboarding + ` : ''}${oneTimeCosts > 0 ? `${formatCurrency(oneTimeCosts)} one-time + ` : ''}${formatCurrency(firstMonth)} first month
+          </div>
+          <div style="opacity:0.85;font-size:13px;margin-top:12px;">Then ${formatCurrency(firstMonth)}/${quote.totals.recurringFrequency} starting next billing cycle</div>
         </div>
       </div>
+
       <div class="validity">
-        <p><strong>This quote is valid for 30 days</strong> from ${formattedDate}</p>
+        <p><strong>To start your services, complete payment for the amount above.</strong> Services activate once payment is captured. This quote is valid for 30 days from ${formattedDate}.</p>
       </div>
-      <a href="${quoteUrl}" class="cta-button">Review &amp; Accept Quote &rarr;</a>
-      <p style="text-align:center;color:#6b7280;font-size:13px;margin-top:24px;">Click the button above to review the full details, digitally sign, and proceed to secure payment.</p>
+
+      <a href="${quoteUrl}" class="cta-button">Review &amp; Pay ${formatCurrency(dueToday)} &rarr;</a>
+      <p style="text-align:center;color:#6b7280;font-size:13px;margin-top:24px;">Click the button above to review the full details, digitally sign, and complete secure payment to start your services.</p>
       <p style="text-align:center;color:#9ca3af;font-size:12px;margin-top:16px;">Quote Link: <a href="${quoteUrl}" style="color:#667eea;">${quoteUrl}</a></p>
     </div>
     <div class="footer">
