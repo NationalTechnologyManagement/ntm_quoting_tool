@@ -6,6 +6,17 @@ import type { QuoteData } from '@ntm/shared';
 
 const AP_BASE_URL = 'https://public-api.alternativepayments.io';
 
+/** AP returns URLs without a scheme on the branded `pay.trustntm.com` checkout
+ *  domain. If we hand a scheme-less URL to window.location.href the browser
+ *  treats it as a relative path and prepends our origin (breaking the
+ *  redirect). Normalize defensively. */
+function ensureHttpsUrl(raw: string): string {
+  const trimmed = (raw || '').trim();
+  if (!trimmed) return '';
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed.replace(/^\/+/, '')}`;
+}
+
 // ── Customer Management ─────────────────────────────────────────────
 
 /** Find an existing AP customer by our external_id (== quoteNumber). Returns
@@ -102,11 +113,14 @@ export async function createInvoice(
 
   const invoice = await res.json();
 
-  // Get the hosted payment link
+  // Get the hosted payment link. AP serves these on a branded subdomain
+  // (e.g. pay.trustntm.com/<token>) and returns the URL without a scheme,
+  // so normalize to a fully-qualified https:// URL before handing it to
+  // the frontend.
   const linkRes = await apFetch(`/invoices/${invoice.id}/payment-link`);
   const linkData = linkRes.ok ? await linkRes.json() : { url: '' };
 
-  return { invoiceId: invoice.id, paymentLink: linkData.url || '' };
+  return { invoiceId: invoice.id, paymentLink: ensureHttpsUrl(linkData.url) };
 }
 
 // ── Checkout Token ──────────────────────────────────────────────────
@@ -187,7 +201,7 @@ export async function getOrCreatePaymentLink(quote: QuoteData): Promise<{
       return {
         checkoutToken,
         invoiceId: quote.apInvoiceId,
-        paymentLink: linkData.url || quote.apPaymentLink || '',
+        paymentLink: ensureHttpsUrl(linkData.url || quote.apPaymentLink || ''),
       };
     } catch {
       // Token expired or invoice invalid, create new checkout
