@@ -8,8 +8,40 @@ const AP_BASE_URL = 'https://public-api.alternativepayments.io';
 
 // ── Customer Management ─────────────────────────────────────────────
 
+/** Find an existing AP customer by our external_id (== quoteNumber). Returns
+ *  the AP customer id if one is already on file, or null. Used to recover
+ *  from a previous half-failed checkout attempt that already minted the
+ *  customer record but errored out before the quote got updated. */
+async function findCustomerByExternalId(externalId: string): Promise<string | null> {
+  // AP's customers list supports a search filter; try a couple of common
+  // shapes since their docs vary between query params.
+  const tries = [
+    `/customers?external_id=${encodeURIComponent(externalId)}`,
+    `/customers?filter[external_id]=${encodeURIComponent(externalId)}`,
+    `/customers?search=${encodeURIComponent(externalId)}`,
+  ];
+  for (const path of tries) {
+    try {
+      const r = await apFetch(path);
+      if (!r.ok) continue;
+      const body = await r.json();
+      const list = Array.isArray(body) ? body : Array.isArray(body?.data) ? body.data : [];
+      const match = list.find((c: any) => c?.external_id === externalId || c?.externalId === externalId);
+      if (match?.id) return match.id;
+    } catch {
+      /* try next shape */
+    }
+  }
+  return null;
+}
+
 export async function createCustomer(quote: QuoteData): Promise<string> {
   if (!isAPConfigured()) throw new AppError(503, 'Alternative Payments not configured');
+
+  // If the quote already has an apCustomerId persisted, just reuse it. Skips
+  // the whole find-or-create dance for the returning-checkout case (e.g.
+  // customer abandoned the AP page and clicked Purchase Now again).
+  if (quote.apCustomerId) return quote.apCustomerId;
 
   const res = await apFetch('/customers', {
     method: 'POST',
@@ -20,13 +52,23 @@ export async function createCustomer(quote: QuoteData): Promise<string> {
     }),
   });
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new AppError(502, `AP customer creation failed (${res.status}): ${text}`);
+  if (res.ok) {
+    const data = await res.json();
+    return data.id;
   }
 
-  const data = await res.json();
-  return data.id;
+  // AP returns 400 with code=bad_request / message="This external id is
+  // already used" if a previous attempt half-completed. Recover by looking
+  // up the existing customer and reusing it.
+  const text = await res.text();
+  if (res.status === 400 && /external id is already used/i.test(text)) {
+    const existing = await findCustomerByExternalId(quote.quoteNumber);
+    if (existing) {
+      console.log(`[AP] recovered existing customer ${existing} for ${quote.quoteNumber}`);
+      return existing;
+    }
+  }
+  throw new AppError(502, `AP customer creation failed (${res.status}): ${text}`);
 }
 
 // ── Invoice Management ──────────────────────────────────────────────
