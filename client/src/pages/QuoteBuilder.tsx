@@ -49,8 +49,16 @@ const QuoteBuilder = () => {
           </p>
         </div>
 
-        {/* Packages — 3D feel + hover lift + selection ring */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-slide-up">
+        {/* Packages — 3D feel + hover lift + selection ring. Grid auto-fits
+            to the package count: 2 packages stay centered (lite mode hides
+            Essentials), 3+ packages flow into the third column. */}
+        <div
+          className={
+            packages.length <= 2
+              ? 'grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto animate-slide-up'
+              : 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-slide-up'
+          }
+        >
           {packages.map((pkg, index) => {
             const isSelected = selectedPackage?.id === pkg.id;
             return (
