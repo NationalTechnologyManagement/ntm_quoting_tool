@@ -590,9 +590,7 @@ const Summary = () => {
               )}
             </Card>
 
-            {/* Legal Disclaimer — full quote flow only. The lite flow has no
-                36-month commitment because we're not signing a contract. */}
-            {!IS_LEAD_GEN_MODE && (
+            {/* Legal Disclaimer */}
             <Card
               className="p-6 shadow-card animate-slide-up bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900"
               style={{ animationDelay: "0.25s" }}
@@ -620,7 +618,6 @@ const Summary = () => {
                 </div>
               </div>
             </Card>
-            )}
 
             {/* Agreement Section — full quote flow only; lite mode has no
                 contract to sign. */}

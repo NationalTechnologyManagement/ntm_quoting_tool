@@ -13,15 +13,19 @@ router.get('/api/config', async (_req, res) => {
     prisma.terms.findFirst({ where: { active: true }, orderBy: { createdAt: 'desc' } }),
   ]);
 
-  const packages: PackageType[] = dbPackages.map((p) => ({
-    id: p.id,
-    name: p.name,
-    pricePerUser: p.pricePerUser,
-    pricePerLocation: p.pricePerLocation,
-    frequency: p.frequency as PackageType['frequency'],
-    features: p.features as string[],
-    isBestValue: p.isBestValue,
-  }));
+  const packages: PackageType[] = dbPackages
+    // Lite quoting tool intentionally hides Essentials — it's the entry-level
+    // package and not what we want lead-gen visitors anchored on.
+    .filter((p) => !env.LEAD_GEN_MODE || p.name.toLowerCase() !== 'essentials')
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      pricePerUser: p.pricePerUser,
+      pricePerLocation: p.pricePerLocation,
+      frequency: p.frequency as PackageType['frequency'],
+      features: p.features as string[],
+      isBestValue: p.isBestValue,
+    }));
 
   const addons: AddonType[] = dbAddons.map((a) => ({
     id: a.id,

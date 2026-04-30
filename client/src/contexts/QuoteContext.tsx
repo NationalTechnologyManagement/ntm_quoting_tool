@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { configApi } from '@/services/api';
+import { IS_LEAD_GEN_MODE } from '@/lib/lead-gen';
 
 export interface Package {
   id: string;
@@ -303,7 +304,13 @@ export const QuoteProvider = ({ children }: { children: ReactNode }) => {
   });
   const [selectedPackage, setSelectedPackage] = useState<Package | null>(null);
   const [selectedAddons, setSelectedAddons] = useState<SelectedAddon[]>([]);
-  const [packages, setPackages] = useState<Package[]>(defaultPackages);
+  // Lite quoting tool hides Essentials so the lead-gen visitor never sees it
+  // even on the brief offline-fallback render before /api/config returns.
+  const [packages, setPackages] = useState<Package[]>(
+    IS_LEAD_GEN_MODE
+      ? defaultPackages.filter((p) => p.name.toLowerCase() !== 'essentials')
+      : defaultPackages,
+  );
   const [addons, setAddons] = useState<Addon[]>(defaultAddons);
   const [promoCodes, setPromoCodes] = useState<PromoCode[]>(defaultPromoCodes);
   const [appliedPromoCodes, setAppliedPromoCodes] = useState<PromoCode[]>([]);

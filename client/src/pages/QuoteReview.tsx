@@ -290,11 +290,7 @@ export default function QuoteReview() {
         {/* Header Section */}
         <div className="text-center mb-8 animate-fade-in">
           <h1 className="text-4xl font-bold mb-2">Quote Review & Acceptance</h1>
-          <p className="text-muted-foreground mt-2">
-            {IS_LEAD_GEN_MODE
-              ? "Review your starting quote and request a follow-up from a sales rep"
-              : "Review your quote and proceed to payment"}
-          </p>
+          <p className="text-muted-foreground mt-2">Review your quote and proceed to payment</p>
 
           <div className="flex items-center justify-center gap-4 mt-4 flex-wrap">
             <div className="text-sm">
@@ -616,15 +612,13 @@ export default function QuoteReview() {
             })()}
           </div>
 
-          {/* Starting Estimate - Full Width */}
+          {/* Due Today - Full Width */}
           <Card className="p-8 bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-950/30 dark:to-emerald-900/30 border-green-200 dark:border-green-800">
             <div className="text-center">
               <p className="text-xs font-semibold text-green-700 dark:text-green-300 uppercase tracking-wider mb-2">
-                {IS_LEAD_GEN_MODE ? "Starting Estimate" : "To Start Services"}
+                To Start Services
               </p>
-              <h3 className="text-2xl font-semibold text-green-900 dark:text-green-100 mb-2">
-                {IS_LEAD_GEN_MODE ? "Estimated First Month" : "Pay Today"}
-              </h3>
+              <h3 className="text-2xl font-semibold text-green-900 dark:text-green-100 mb-2">Pay Today</h3>
               <div className="text-5xl font-bold text-green-900 dark:text-green-100 mb-3">
                 ${formatAmount(quoteData.totals.onboardingCost + quoteData.totals.oneTimeCosts + quoteData.totals.recurringCosts)}
               </div>
@@ -637,9 +631,7 @@ export default function QuoteReview() {
                 {`Then $${formatAmount(quoteData.totals.recurringCosts)}/month starting next billing cycle.`}
               </p>
               <p className="text-xs text-green-800 dark:text-green-200 mt-3 italic">
-                {IS_LEAD_GEN_MODE
-                  ? "Final pricing will be confirmed by a sales rep."
-                  : "Services activate once payment is captured."}
+                Services activate once payment is captured.
               </p>
             </div>
           </Card>
@@ -647,12 +639,10 @@ export default function QuoteReview() {
 
         {/* Acceptance Section */}
         <Card className="p-8 mb-8 animate-fade-in">
+          <h3 className="text-xl font-semibold mb-6">Accept Quote & Proceed</h3>
+
           {IS_LEAD_GEN_MODE ? (
-            <>
-              <h3 className="text-xl font-semibold mb-2">Ready to move forward?</h3>
-              <p className="text-sm text-muted-foreground mb-6">
-                A sales rep will reach out to confirm pricing and finalize the agreement. Click below to grab a time on their calendar.
-              </p>
+            <div className="space-y-4">
               <Button
                 onClick={handleRequestFollowup}
                 disabled={submitting}
@@ -668,10 +658,12 @@ export default function QuoteReview() {
                   </>
                 )}
               </Button>
-            </>
+              <p className="text-xs text-muted-foreground text-center">
+                A sales rep will reach out to finalize pricing. You'll be redirected to pick a time on their calendar.
+              </p>
+            </div>
           ) : (
           <>
-          <h3 className="text-xl font-semibold mb-6">Accept Quote & Proceed</h3>
 
           <div className="space-y-6">
             {/* E-Signature */}
