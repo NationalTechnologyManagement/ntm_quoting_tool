@@ -34,14 +34,17 @@ export interface Addon {
 // import @ntm/shared).
 export const ONBOARDING_FEE_MULTIPLIER = 2;
 export const ONBOARDING_WAIVED_FOR_PORTAL = true;
+// Lite quoting tool charges the full onboarding fee — no portal waiver. Pass
+// { waive: false } from lead-gen contexts to bypass the default waiver.
 export function computeOnboardingFee(
   pkg: Pick<Package, 'pricePerUser' | 'pricePerLocation' | 'agreementMonths'>,
   userCount: number,
   locationCount: number,
+  options?: { waive?: boolean },
 ): { base: number; waived: boolean; final: number } {
   const monthly = pkg.pricePerUser * userCount + pkg.pricePerLocation * locationCount;
   const base = monthly * ONBOARDING_FEE_MULTIPLIER;
-  const waived = ONBOARDING_WAIVED_FOR_PORTAL;
+  const waived = options?.waive ?? ONBOARDING_WAIVED_FOR_PORTAL;
   return { base, waived, final: waived ? 0 : base };
 }
 

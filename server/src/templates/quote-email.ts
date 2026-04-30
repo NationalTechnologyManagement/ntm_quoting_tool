@@ -24,7 +24,18 @@ function formatDateTime(iso: string): string {
   });
 }
 
-export function buildQuoteEmailHtml(quote: QuoteData, quoteUrl: string): string {
+export interface QuoteEmailOptions {
+  // Lite quoting tool: render as an "estimate" with a "Request Booking" CTA
+  // pointing at the GHL calendar URL instead of the payment link.
+  leadGen?: boolean;
+  bookingUrl?: string;
+}
+
+export function buildQuoteEmailHtml(
+  quote: QuoteData,
+  quoteUrl: string,
+  options?: QuoteEmailOptions,
+): string {
   // What the customer actually pays at checkout — matches the AP invoice
   // composition built in ap.service.ts buildLineItems(): onboarding (or $0 if
   // waived) + one-time addons (typically $0 in current catalog) + first month.
@@ -37,6 +48,10 @@ export function buildQuoteEmailHtml(quote: QuoteData, quoteUrl: string): string 
 
   const formattedDate = formatDate(quote.timestamp);
   const formattedDateTime = formatDateTime(quote.timestamp);
+
+  const leadGen = options?.leadGen === true;
+  const ctaUrl = leadGen ? (options?.bookingUrl || quoteUrl) : quoteUrl;
+  const docNoun = leadGen ? 'Estimate' : 'Quote';
 
   return `<!DOCTYPE html>
 <html>
@@ -75,13 +90,13 @@ export function buildQuoteEmailHtml(quote: QuoteData, quoteUrl: string): string 
 <body>
   <div class="container">
     <div class="header">
-      <h1>Your Custom Quote is Ready!</h1>
-      <div class="quote-id">Quote #${quote.quoteNumber}</div>
+      <h1>Your Custom ${docNoun} is Ready!</h1>
+      <div class="quote-id">${docNoun} #${quote.quoteNumber}</div>
     </div>
     <div class="content">
       <div class="greeting">
         <p>Hi ${quote.customer.name},</p>
-        <p>Thank you for your interest in our services! We've prepared a custom quote for <strong>${quote.customer.businessName}</strong>.</p>
+        <p>Thank you for your interest in our services! We've prepared a custom ${docNoun.toLowerCase()} for <strong>${quote.customer.businessName}</strong>.${leadGen ? ' A sales rep will follow up with you to confirm pricing and finalize the agreement.' : ''}</p>
       </div>
       <div class="section">
         <div class="section-title">Your Information</div>
@@ -105,7 +120,7 @@ export function buildQuoteEmailHtml(quote: QuoteData, quoteUrl: string): string 
 
       <div class="section">
         <div class="cost-card total">
-          <div class="cost-label">Due Today to Start Services</div>
+          <div class="cost-label">${leadGen ? 'Estimated First Month' : 'Due Today to Start Services'}</div>
           <div class="cost-amount">${formatCurrency(dueToday)}</div>
           <div style="opacity:0.95;font-size:14px;line-height:1.6;">
             ${onboardingCost > 0 ? `${formatCurrency(onboardingCost)} onboarding + ` : ''}${oneTimeCosts > 0 ? `${formatCurrency(oneTimeCosts)} one-time + ` : ''}${formatCurrency(firstMonth)} first month
@@ -115,17 +130,21 @@ export function buildQuoteEmailHtml(quote: QuoteData, quoteUrl: string): string 
       </div>
 
       <div class="validity">
-        <p><strong>To start your services, complete payment for the amount above.</strong> Services activate once payment is captured. This quote is valid for 30 days from ${formattedDate}.</p>
+        <p>${leadGen
+          ? `<strong>This is a starting estimate.</strong> A sales rep will follow up to confirm scope and finalize pricing. Estimate is valid for 30 days from ${formattedDate}.`
+          : `<strong>To start your services, complete payment for the amount above.</strong> Services activate once payment is captured. This quote is valid for 30 days from ${formattedDate}.`}</p>
       </div>
 
-      <a href="${quoteUrl}" class="cta-button">Review &amp; Pay ${formatCurrency(dueToday)} &rarr;</a>
-      <p style="text-align:center;color:#6b7280;font-size:13px;margin-top:24px;">Click the button above to review the full details, digitally sign, and complete secure payment to start your services.</p>
-      <p style="text-align:center;color:#9ca3af;font-size:12px;margin-top:16px;">Quote Link: <a href="${quoteUrl}" style="color:#667eea;">${quoteUrl}</a></p>
+      <a href="${ctaUrl}" class="cta-button">${leadGen ? 'Request Booking &rarr;' : `Review &amp; Pay ${formatCurrency(dueToday)} &rarr;`}</a>
+      <p style="text-align:center;color:#6b7280;font-size:13px;margin-top:24px;">${leadGen
+        ? 'Click the button above to schedule a time with a sales rep.'
+        : 'Click the button above to review the full details, digitally sign, and complete secure payment to start your services.'}</p>
+      <p style="text-align:center;color:#9ca3af;font-size:12px;margin-top:16px;">${leadGen ? 'Booking Link' : 'Quote Link'}: <a href="${ctaUrl}" style="color:#667eea;">${ctaUrl}</a></p>
     </div>
     <div class="footer">
       <p><strong>Need help?</strong> Reply to this email or contact our support team.</p>
-      <p style="margin-top:16px;font-size:12px;">Quote generated on ${formattedDateTime}</p>
-      <p style="font-size:11px;color:#9ca3af;margin-top:8px;">Quote ID: ${quote.quoteNumber} | Valid until ${formattedDate}</p>
+      <p style="margin-top:16px;font-size:12px;">${docNoun} generated on ${formattedDateTime}</p>
+      <p style="font-size:11px;color:#9ca3af;margin-top:8px;">${docNoun} ID: ${quote.quoteNumber} | Valid until ${formattedDate}</p>
     </div>
   </div>
 </body>

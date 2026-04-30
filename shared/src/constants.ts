@@ -15,19 +15,21 @@ export const ONBOARDING_COST_PER_USER = 200;
 
 export const QUOTE_VALIDITY_DAYS = 30;
 
-/** Compute base onboarding fee for a given package + sizing. */
+/** Compute base onboarding fee for a given package + sizing. Pass
+ *  { waive: false } from lite/lead-gen contexts to charge the full fee. */
 export function computeOnboardingFee(
   pkg: Pick<Package, 'pricePerUser' | 'pricePerLocation' | 'agreementMonths'>,
   userCount: number,
   locationCount: number,
+  options?: { waive?: boolean },
 ): { base: number; waived: boolean; final: number } {
   const monthly =
     pkg.pricePerUser * userCount + pkg.pricePerLocation * locationCount;
   const base = monthly * ONBOARDING_FEE_MULTIPLIER;
-  // All online portal quotes get the waiver. agreementMonths is still tracked
-  // on the Package for CW reporting and for any future case where ops creates
-  // an offline quote and chooses to charge the fee.
-  const waived = ONBOARDING_WAIVED_FOR_PORTAL;
+  // Default behavior: all online portal quotes get the waiver. The lite
+  // quoting tool overrides this so the customer sees the real onboarding
+  // cost in their estimate before a sales rep follows up.
+  const waived = options?.waive ?? ONBOARDING_WAIVED_FOR_PORTAL;
   return { base, waived, final: waived ? 0 : base };
 }
 

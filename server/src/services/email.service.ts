@@ -15,12 +15,17 @@ export async function sendQuoteEmail(quote: QuoteData) {
   }
 
   const quoteUrl = `${env.FRONTEND_URL}/quote-review?id=${quote.quoteNumber}`;
-  const html = buildQuoteEmailHtml(quote, quoteUrl);
+  const leadGen = env.LEAD_GEN_MODE;
+  const bookingUrl = leadGen
+    ? env.GHL_BOOKING_URL || 'https://api.leadconnectorhq.com/widget/booking/snhTg4zQQSVrJ9R3jisc'
+    : undefined;
+  const html = buildQuoteEmailHtml(quote, quoteUrl, { leadGen, bookingUrl });
 
+  const docNoun = leadGen ? 'Estimate' : 'Quote';
   const result = await resend.emails.send({
     from: fromEmail(),
     to: quote.customer.email,
-    subject: `Your Quote #${quote.quoteNumber} - ${quote.customer.businessName}`,
+    subject: `Your ${docNoun} #${quote.quoteNumber} - ${quote.customer.businessName}`,
     html,
   });
 

@@ -81,7 +81,7 @@ const Summary = () => {
             totalSetupCost: addon.setupPrice ? addon.setupPrice * addon.quantity : 0,
           })),
           onboarding: (() => {
-            const r = computeOnboardingFee(selectedPackage as any, customerInfo.userCount, customerInfo.locationCount);
+            const r = computeOnboardingFee(selectedPackage as any, customerInfo.userCount, customerInfo.locationCount, { waive: !IS_LEAD_GEN_MODE });
             return {
               userCount: customerInfo.userCount,
               costPerUser: customerInfo.userCount > 0 ? r.base / customerInfo.userCount : 0,
@@ -92,7 +92,7 @@ const Summary = () => {
           })(),
           appliedPromoCodes: [],
           totals: {
-            onboardingCost: computeOnboardingFee(selectedPackage as any, customerInfo.userCount, customerInfo.locationCount).final,
+            onboardingCost: computeOnboardingFee(selectedPackage as any, customerInfo.userCount, customerInfo.locationCount, { waive: !IS_LEAD_GEN_MODE }).final,
             oneTimeCosts: 0,
             recurringCosts: selectedPackage.pricePerUser * customerInfo.userCount + selectedPackage.pricePerLocation * customerInfo.locationCount,
             discount: 0, grandTotal: 0, recurringFrequency: selectedPackage.frequency,
@@ -161,7 +161,7 @@ const Summary = () => {
   // Onboarding fee: 2x monthly recurring (per-user × users + per-location × locations).
   // Auto-waived for 36-month plans signed online (per ntm onboarding-fee policy).
   const onboardingResult = selectedPackage
-    ? computeOnboardingFee(selectedPackage as any, customerInfo.userCount, customerInfo.locationCount)
+    ? computeOnboardingFee(selectedPackage as any, customerInfo.userCount, customerInfo.locationCount, { waive: !IS_LEAD_GEN_MODE })
     : { base: 0, waived: false, final: 0 };
   const onboardingCost = onboardingResult.final;
   const onboardingWaived = onboardingResult.waived;
