@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
+import { env } from '../config/env.js';
 import * as quoteService from '../services/quote.service.js';
 import * as emailService from '../services/email.service.js';
 import * as apService from '../services/ap.service.js';
@@ -58,14 +59,19 @@ const createQuoteSchema = z.object({
 router.post('/api/quotes', validate(createQuoteSchema), async (req, res) => {
   const quote = await quoteService.createQuote(req.body);
 
-  // Fire-and-forget: CW company + contact + opportunity
-  cwService.onQuoteCreated(quote).then(async (cwIds) => {
-    if (cwIds.cwCompanyId || cwIds.cwContactId || cwIds.cwOpportunityId) {
-      await quoteService.updateQuoteCWIds(quote.quoteNumber, cwIds);
-    }
-  }).catch((err) => console.error('[CW] onQuoteCreated error:', err));
+  // Skip CW provisioning in lead-gen mode — the lite tool only collects
+  // info and hands off via GHL. Sales reps create the CW records manually
+  // after their follow-up call confirms scope and pricing.
+  if (!env.LEAD_GEN_MODE) {
+    cwService.onQuoteCreated(quote).then(async (cwIds) => {
+      if (cwIds.cwCompanyId || cwIds.cwContactId || cwIds.cwOpportunityId) {
+        await quoteService.updateQuoteCWIds(quote.quoteNumber, cwIds);
+      }
+    }).catch((err) => console.error('[CW] onQuoteCreated error:', err));
+  }
 
-  // Fire-and-forget: GHL contact creation
+  // GHL contact creation runs in both modes — lite quotes still need a
+  // GHL contact so the tag-driven workflow (sales-rep follow-up) can fire.
   ghlService.onQuoteCreated(quote).then(async (ghlIds) => {
     if (ghlIds.ghlContactId || ghlIds.ghlOpportunityId) {
       await quoteService.updateQuoteGHLIds(quote.quoteNumber, ghlIds);
@@ -132,8 +138,39 @@ router.post('/api/quotes/:id/email', async (req, res) => {
   }
 });
 
+// Lite quoting tool: customer clicked "Request Follow-up from Sales Rep".
+// Tags the GHL contact, drops a note, and returns the booking URL the
+// frontend should open. No payment, no contract.
+router.post('/api/quotes/:id/request-followup', async (req, res) => {
+  if (!env.LEAD_GEN_MODE) {
+    res.status(404).json({ error: 'Not found' });
+    return;
+  }
+
+  const id = req.params.id as string;
+  const quote = await quoteService.getQuote(id);
+
+  ghlService
+    .markLiteLeadSubmitted(quote)
+    .catch((err) => console.error('[GHL] markLiteLeadSubmitted error:', err));
+
+  await quoteService.updateQuoteStatus(quote.quoteNumber, 'sent');
+
+  const calendarId = 'snhTg4zQQSVrJ9R3jisc';
+  const bookingUrl =
+    env.GHL_BOOKING_URL ||
+    `https://api.leadconnectorhq.com/widget/booking/${calendarId}`;
+
+  res.json({ success: true, bookingUrl });
+});
+
 // Checkout — create Alternative Payments session
 router.post('/api/quotes/:id/checkout', async (req, res) => {
+  if (env.LEAD_GEN_MODE) {
+    res.status(404).json({ error: 'Not found' });
+    return;
+  }
+
   const agreementSchema = z.object({
     agreement: z.object({
       signedBy: z.string().min(3),
@@ -164,6 +201,10 @@ router.post('/api/quotes/:id/checkout', async (req, res) => {
 
 // Get or refresh payment link
 router.get('/api/quotes/:id/payment-link', async (req, res) => {
+  if (env.LEAD_GEN_MODE) {
+    res.status(404).json({ error: 'Not found' });
+    return;
+  }
   const id = req.params.id as string;
   const quote = await quoteService.getQuote(id);
   const result = await apService.getOrCreatePaymentLink(quote);

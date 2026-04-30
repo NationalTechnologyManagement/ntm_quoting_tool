@@ -9,10 +9,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Mail, CreditCard, ChevronDown, ChevronUp, ArrowLeft, AlertCircle, X } from "lucide-react";
+import { Mail, CreditCard, CalendarCheck, ChevronDown, ChevronUp, ArrowLeft, AlertCircle, X } from "lucide-react";
 import { toast } from "sonner";
 import { SiteHeader } from "@/components/SiteHeader";
 import { formatAmount } from "@/lib/utils";
+import { IS_LEAD_GEN_MODE } from "@/lib/lead-gen";
 
 const generateQuoteNumber = (type: "quote" | "order") => {
   const prefix = type === "quote" ? "QT" : "OR";
@@ -35,7 +36,7 @@ const Summary = () => {
     termsContent,
   } = useQuote();
   const [expandedFeatures, setExpandedFeatures] = useState(false);
-  const [loading, setLoading] = useState<"email" | "purchase" | null>(null);
+  const [loading, setLoading] = useState<"email" | "purchase" | "followup" | null>(null);
   const [promoInput, setPromoInput] = useState("");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [signature, setSignature] = useState("");
@@ -320,6 +321,22 @@ const Summary = () => {
     }
   };
 
+  // Lite quoting tool: applies the quote-tool-lite-submitted GHL tag and
+  // returns a calendar booking URL. No payment, no contract, no signature.
+  const handleRequestFollowup = async () => {
+    setLoading("followup");
+    try {
+      const quote = await getOrCreateQuote();
+      const { bookingUrl } = await quoteApi.requestFollowup(quote.quoteNumber);
+      toast.success("Submitted! Pick a time with a sales rep next.");
+      window.location.href = bookingUrl;
+    } catch (error) {
+      console.error("Request follow-up error:", error);
+      toast.error("Could not submit your request. Please try again.");
+      setLoading(null);
+    }
+  };
+
   const handlePurchase = async () => {
     // Validate customer information
     if (
@@ -573,7 +590,9 @@ const Summary = () => {
               )}
             </Card>
 
-            {/* Legal Disclaimer */}
+            {/* Legal Disclaimer — full quote flow only. The lite flow has no
+                36-month commitment because we're not signing a contract. */}
+            {!IS_LEAD_GEN_MODE && (
             <Card
               className="p-6 shadow-card animate-slide-up bg-amber-50/50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900"
               style={{ animationDelay: "0.25s" }}
@@ -601,8 +620,11 @@ const Summary = () => {
                 </div>
               </div>
             </Card>
+            )}
 
-            {/* Agreement Section */}
+            {/* Agreement Section — full quote flow only; lite mode has no
+                contract to sign. */}
+            {!IS_LEAD_GEN_MODE && (
             <Card className="p-6 shadow-card animate-slide-up bg-white dark:bg-card" style={{ animationDelay: "0.3s" }}>
               <h2 className="text-xl font-semibold mb-4 text-foreground">Agreement</h2>
 
@@ -648,6 +670,7 @@ const Summary = () => {
                 </div>
               </div>
             </Card>
+            )}
           </div>
 
           {/* Right: Cost Breakdown */}
@@ -870,25 +893,50 @@ const Summary = () => {
                   )}
                 </Button>
 
-                <Button
-                  size="lg"
-                  className="w-full"
-                  onClick={handlePurchase}
-                  disabled={loading !== null || !agreedToTerms || !signature || signature.trim().length < 3}
-                >
-                  {loading === "purchase" ? (
-                    "Processing..."
-                  ) : (
-                    <>
-                      <CreditCard className="w-4 h-4 mr-2" />
-                      Purchase Now
-                    </>
-                  )}
-                </Button>
-                {(!agreedToTerms || !signature || signature.trim().length < 3) && (
-                  <p className="text-xs text-muted-foreground text-center">
-                    Please agree to terms and provide your signature to continue
-                  </p>
+                {IS_LEAD_GEN_MODE ? (
+                  <>
+                    <Button
+                      size="lg"
+                      className="w-full"
+                      onClick={handleRequestFollowup}
+                      disabled={loading !== null}
+                    >
+                      {loading === "followup" ? (
+                        "Submitting..."
+                      ) : (
+                        <>
+                          <CalendarCheck className="w-4 h-4 mr-2" />
+                          Request Follow-up from Sales Rep
+                        </>
+                      )}
+                    </Button>
+                    <p className="text-xs text-muted-foreground text-center">
+                      A sales rep will follow up. You'll be redirected to pick a time on their calendar.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      size="lg"
+                      className="w-full"
+                      onClick={handlePurchase}
+                      disabled={loading !== null || !agreedToTerms || !signature || signature.trim().length < 3}
+                    >
+                      {loading === "purchase" ? (
+                        "Processing..."
+                      ) : (
+                        <>
+                          <CreditCard className="w-4 h-4 mr-2" />
+                          Purchase Now
+                        </>
+                      )}
+                    </Button>
+                    {(!agreedToTerms || !signature || signature.trim().length < 3) && (
+                      <p className="text-xs text-muted-foreground text-center">
+                        Please agree to terms and provide your signature to continue
+                      </p>
+                    )}
+                  </>
                 )}
               </div>
             </Card>

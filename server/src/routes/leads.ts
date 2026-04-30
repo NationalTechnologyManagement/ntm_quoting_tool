@@ -31,4 +31,29 @@ router.post('/api/leads', validate(leadSchema), async (req, res) => {
   res.json({ success: true });
 });
 
+// Lite quoting tool: lazy lead capture. Fires from the customer info form
+// every time it changes (debounced client-side). Upserts a GHL contact and
+// applies the `quote-tool-lite-lead` tag. No quote is created — the customer
+// hasn't clicked anything yet.
+const captureSchema = z.object({
+  customer: z.object({
+    name: z.string().min(1),
+    email: z.string().email(),
+    phone: z.string().default(''),
+    businessName: z.string().default(''),
+    address: z.string().default(''),
+    userCount: z.number().int().min(0).default(0),
+    locationCount: z.number().int().min(0).default(0),
+    referrerCode: z.string().nullable().optional(),
+  }),
+});
+
+router.post('/api/leads/capture', validate(captureSchema), async (req, res) => {
+  // Fire-and-forget — never block keystrokes on a slow GHL call
+  crmService
+    .captureLiteLead(req.body.customer)
+    .catch((err) => console.error('[Lead] Lite capture failed:', err));
+  res.json({ success: true });
+});
+
 export default router;

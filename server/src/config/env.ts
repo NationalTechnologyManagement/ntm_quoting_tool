@@ -16,6 +16,13 @@ const envSchema = z.object({
   // GoHighLevel
   GHL_API_KEY: z.string().optional(),
   GHL_LOCATION_ID: z.string().optional(),
+  GHL_BOOKING_URL: z.string().optional(),
+  // Lead-gen mode: skips payment/contract; collects info, applies tags,
+  // returns a GHL calendar booking URL instead of running checkout.
+  LEAD_GEN_MODE: z
+    .string()
+    .optional()
+    .transform((v) => v?.toLowerCase() === 'true'),
   // ConnectWise
   CW_COMPANY_ID: z.string().optional(),
   CW_PUBLIC_KEY: z.string().optional(),

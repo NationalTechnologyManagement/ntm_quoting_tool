@@ -230,6 +230,62 @@ export async function updateOpportunityStatus(
   }
 }
 
+// ── Apply Tags to Contact ───────────────────────────────────────────
+
+export async function addTagsToContact(
+  ghlContactId: string,
+  tags: string[],
+): Promise<void> {
+  if (!isGHLConfigured() || tags.length === 0) return;
+
+  try {
+    const res = await ghlFetch(`/contacts/${ghlContactId}/tags`, {
+      method: 'POST',
+      body: JSON.stringify({ tags }),
+    });
+    if (!res.ok) {
+      console.error('[GHL] Add tags error:', res.status, await res.text());
+    }
+  } catch (error) {
+    console.error('[GHL] Add tags error:', error);
+  }
+}
+
+// ── Lazy Lead Capture (lite quoting tool) ───────────────────────────
+// Fired on every form change — upserts contact and applies the lead tag.
+// Idempotent: createOrUpdateContact dedupes by email; tags add cleanly.
+export async function captureLiteLead(
+  customer: QuoteData['customer'],
+): Promise<{ ghlContactId?: string }> {
+  if (!isGHLConfigured()) return {};
+
+  const contactId = await createOrUpdateContact(customer);
+  if (!contactId) return {};
+
+  await addTagsToContact(contactId, ['quote-tool-lite-lead']);
+  return { ghlContactId: contactId };
+}
+
+// Called when the user clicks "Request Follow-up" — applies the submitted tag
+// and a friendly note. Returns nothing; the route returns the booking URL.
+export async function markLiteLeadSubmitted(
+  quote: QuoteData,
+): Promise<void> {
+  if (!isGHLConfigured()) return;
+
+  const ghlContactId =
+    quote.ghlContactId ||
+    (await createOrUpdateContact(quote.customer)) ||
+    undefined;
+  if (!ghlContactId) return;
+
+  await addTagsToContact(ghlContactId, ['quote-tool-lite-submitted']);
+  await addContactNote(
+    ghlContactId,
+    `Lite quote ${quote.quoteNumber} submitted — ${quote.selectedPackage.name} ($${quote.totals.grandTotal.toFixed(2)} ${quote.totals.recurringFrequency}). Calendar link sent.`,
+  );
+}
+
 // ── Add Note to Contact ─────────────────────────────────────────────
 
 export async function addContactNote(

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { prisma } from '../config/prisma.js';
+import { env } from '../config/env.js';
 import * as quoteService from '../services/quote.service.js';
 import * as contractService from '../services/contract.service.js';
 import * as pdfService from '../services/pdf.service.js';
@@ -52,6 +53,10 @@ router.delete('/api/admin/contracts/:contractId', requireAuth, async (req, res) 
 
 // Generate contract PDF and email it
 router.post('/api/contracts/:quoteId/generate', async (req, res) => {
+  if (env.LEAD_GEN_MODE) {
+    res.status(404).json({ error: 'Not found' });
+    return;
+  }
   const quoteId = req.params.quoteId as string;
   const quote = await quoteService.getQuote(quoteId);
 

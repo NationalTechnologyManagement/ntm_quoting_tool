@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuote, Addon } from '@/contexts/QuoteContext';
 import { leadApi } from '@/services/api';
+import { IS_LEAD_GEN_MODE } from '@/lib/lead-gen';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -26,6 +27,58 @@ const QuoteInfo = () => {
   useEffect(() => {
     if (!selectedPackage) navigate('/quote-builder');
   }, [selectedPackage, navigate]);
+
+  // Lite quoting tool: lazy lead capture. As soon as the form has a valid
+  // email, fire-and-forget to GHL — don't make the user click submit. We
+  // debounce so we send one request per pause, not per keystroke. The
+  // server-side upsert dedupes by email, so re-firing is cheap.
+  const lastCapturedRef = useRef<string>('');
+  useEffect(() => {
+    if (!IS_LEAD_GEN_MODE) return;
+    const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email);
+    if (!validEmail) return;
+
+    const handle = setTimeout(() => {
+      const snapshot = JSON.stringify({
+        email: formData.email,
+        name: formData.name,
+        phone: formData.phone,
+        businessName: formData.businessName,
+        address: formData.address,
+        userCount: formData.userCount,
+        locationCount: formData.locationCount,
+        referrerCode: formData.referrerCode || '',
+      });
+      if (snapshot === lastCapturedRef.current) return;
+      lastCapturedRef.current = snapshot;
+
+      leadApi
+        .capture({
+          customer: {
+            name: formData.name || formData.email,
+            email: formData.email,
+            phone: formData.phone || '',
+            businessName: formData.businessName || '',
+            address: formData.address || '',
+            userCount: formData.userCount || 0,
+            locationCount: formData.locationCount || 0,
+            referrerCode: formData.referrerCode || null,
+          },
+        })
+        .catch((err) => console.error('Lazy capture failed:', err));
+    }, 700);
+
+    return () => clearTimeout(handle);
+  }, [
+    formData.email,
+    formData.name,
+    formData.phone,
+    formData.businessName,
+    formData.address,
+    formData.userCount,
+    formData.locationCount,
+    formData.referrerCode,
+  ]);
 
   const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 

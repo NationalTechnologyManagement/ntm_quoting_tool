@@ -108,6 +108,12 @@ export const quoteApi = {
     apiRequest<{ checkoutToken: string; invoiceId: string; paymentLink: string }>(
       `/api/quotes/${id}/payment-link`,
     ),
+
+  requestFollowup: (id: string) =>
+    apiRequest<{ success: boolean; bookingUrl: string }>(
+      `/api/quotes/${id}/request-followup`,
+      { method: 'POST' },
+    ),
 };
 
 // ── Leads ───────────────────────────────────────────────────────────
@@ -115,6 +121,14 @@ export const quoteApi = {
 export const leadApi = {
   create: (payload: any) =>
     apiRequest<{ success: boolean }>('/api/leads', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  // Lite quoting tool: lazy capture from the customer info form. Server
+  // upserts a GHL contact and applies the `quote-tool-lite-lead` tag.
+  capture: (payload: { customer: any }) =>
+    apiRequest<{ success: boolean }>('/api/leads/capture', {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
