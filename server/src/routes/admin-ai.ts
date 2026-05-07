@@ -96,13 +96,15 @@ router.put(
   requireAuth,
   validate(kbUpdateSchema),
   async (req, res) => {
-    const doc = await updateKbDoc(req.params.id, req.body);
+    const id = req.params.id as string;
+    const doc = await updateKbDoc(id, req.body);
     res.json({ doc });
   },
 );
 
 router.delete('/api/admin/ai-chat/kb/:id', requireAuth, async (req, res) => {
-  await deleteKbDoc(req.params.id);
+  const id = req.params.id as string;
+  await deleteKbDoc(id);
   res.json({ success: true });
 });
 
@@ -164,8 +166,9 @@ router.get('/api/admin/ai-chat/usage', requireAuth, async (_req, res) => {
 });
 
 router.get('/api/admin/ai-chat/sessions/:id', requireAuth, async (req, res) => {
+  const id = req.params.id as string;
   const session = await prisma.chatSession.findUnique({
-    where: { id: req.params.id },
+    where: { id },
     include: {
       messages: {
         orderBy: { createdAt: 'asc' },
