@@ -31,6 +31,8 @@ export const INTEGRATION_CREDENTIAL_KEYS = [
   'FROM_EMAIL',
   // Notify
   'NOTIFY_WEBHOOK_URL',
+  // AI Chat (OpenRouter)
+  'OPENROUTER_API_KEY',
 ] as const;
 
 export type IntegrationCredentialKey = (typeof INTEGRATION_CREDENTIAL_KEYS)[number];
@@ -43,6 +45,7 @@ const SECRET_KEYS: ReadonlySet<string> = new Set([
   'AP_WEBHOOK_SECRET',
   'GHL_API_KEY',
   'RESEND_API_KEY',
+  'OPENROUTER_API_KEY',
 ]);
 
 const cache = new Map<string, string>();

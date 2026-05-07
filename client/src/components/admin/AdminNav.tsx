@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { path: '/admin/terms', label: 'Terms' },
   { path: '/admin/integrations', label: 'Integrations' },
   { path: '/admin/cw-reference-ids', label: 'CW IDs' },
+  { path: '/admin/ai-chat', label: 'AI Chat' },
   {
     path: '/admin/contracts/preview',
     label: 'Contract',

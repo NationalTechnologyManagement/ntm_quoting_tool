@@ -49,6 +49,10 @@ const envSchema = z.object({
   INITIAL_ADMIN_EMAIL: z.string().optional(),
   INITIAL_ADMIN_PASSWORD: z.string().optional(),
   PUPPETEER_EXECUTABLE_PATH: z.string().optional(),
+  // AI Chat (OpenRouter). DB override via /admin/ai-chat takes priority.
+  OPENROUTER_API_KEY: z.string().optional(),
+  // Cookie-signing secret for chat sessions. If unset, falls back to JWT_SECRET.
+  AI_CHAT_COOKIE_SECRET: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);

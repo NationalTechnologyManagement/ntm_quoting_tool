@@ -315,6 +315,63 @@ export const adminApi = {
       method: 'PUT',
       body: JSON.stringify({ key, value, notes: notes ?? null }),
     }),
+
+  // ── AI Chat ─────────────────────────────────────────────────────────
+  getAiConfig: () =>
+    apiRequest<{
+      config: any;
+      defaults: { systemPrompt: string };
+      availableTools: string[];
+      apiKeyConfigured: boolean;
+    }>('/api/admin/ai-chat/config'),
+  updateAiConfig: (patch: any) =>
+    apiRequest<{ config: any }>('/api/admin/ai-chat/config', {
+      method: 'PUT',
+      body: JSON.stringify(patch),
+    }),
+  listAiKb: () =>
+    apiRequest<{
+      docs: Array<{
+        id: string;
+        title: string;
+        content: string;
+        active: boolean;
+        sortOrder: number;
+        updatedAt: string;
+      }>;
+    }>('/api/admin/ai-chat/kb'),
+  createAiKb: (data: { title: string; content: string; active?: boolean; sortOrder?: number }) =>
+    apiRequest<{ doc: any }>('/api/admin/ai-chat/kb', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateAiKb: (id: string, data: any) =>
+    apiRequest<{ doc: any }>(`/api/admin/ai-chat/kb/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  deleteAiKb: (id: string) =>
+    apiRequest<{ success: true }>(`/api/admin/ai-chat/kb/${id}`, { method: 'DELETE' }),
+  getAiUsage: () =>
+    apiRequest<{
+      today: { usdCost: number; tokensIn: number; tokensOut: number; messages: number };
+      last30: { usdCost: number; tokensIn: number; tokensOut: number; messages: number };
+      totalSessions: number;
+      recentSessions: Array<{
+        id: string;
+        status: string;
+        usdSpent: number;
+        tokensIn: number;
+        tokensOut: number;
+        usingFallback: boolean;
+        ipAddress: string | null;
+        quoteId: string | null;
+        createdAt: string;
+        endedAt: string | null;
+        lastActivityAt: string;
+        _count: { messages: number };
+      }>;
+    }>('/api/admin/ai-chat/usage'),
 };
 
 // ── Quote Lookup (public) ──────────────────────────────────────────

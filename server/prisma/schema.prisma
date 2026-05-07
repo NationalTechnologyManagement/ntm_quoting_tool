@@ -211,6 +211,96 @@ model CwConfig {
   @@map("cw_config")
 }
 
+// ── AI Chat ──────────────────────────────────────────────────────────
+// Singleton-style config (always row id="default"). Loaded into a cache by
+// ai-config.service.ts the same way integration credentials are. The admin
+// UI at /admin/ai-chat edits this row; changes apply on the next request.
+
+model AiAgentConfig {
+  id                  String   @id @default("default")
+  enabled             Boolean  @default(false)
+  primaryModel        String   @default("anthropic/claude-sonnet-4-5")
+  fallbackModel       String   @default("openai/gpt-4o-mini")
+  temperature         Float    @default(0.3)
+  maxTokens           Int      @default(1024)
+  requestTimeoutMs    Int      @default(30000)
+  systemPrompt        String   @default("")
+  greeting            String   @default("Hi! I can help you build your quote. What would you like to know?")
+  disclaimer          String   @default("AI assistant — may make mistakes. You make the final decisions.")
+  perSessionUsdCap    Float    @default(10)
+  dailyUsdCap         Float    @default(50)
+  idleTimeoutMs       Int      @default(1800000)   // 30 min
+  absoluteTimeoutMs   Int      @default(14400000)  // 4 hr
+  ratePerMin          Int      @default(20)        // messages/min/session
+  // Tool allowlist — comma-separated names. UI tools only; no DB-write tools.
+  // Defaults: highlight_field, prefill_field, navigate, suggest_addon, suggest_package.
+  allowedTools        String   @default("highlight_field,prefill_field,navigate,suggest_addon,suggest_package")
+  updatedAt           DateTime @updatedAt
+
+  @@map("ai_agent_config")
+}
+
+// Admin-curated knowledge-base documents. Plain markdown; the chat service
+// concatenates active docs (sorted) into the system prompt context.
+model AiKnowledgeBase {
+  id        String   @id @default(cuid())
+  title     String
+  content   String   // markdown
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, sortOrder])
+  @@map("ai_kb")
+}
+
+// One row per chat conversation. The cookie value is the session id (signed).
+// `usdSpent` is the running per-session cost; once it reaches the per-session
+// cap the server refuses further messages.
+model ChatSession {
+  id              String        @id @default(cuid())
+  status          String        @default("active") // active | ended | expired | capped
+  quoteId         String?       // linked once the customer creates a quote
+  ipAddress       String?
+  userAgent       String?
+  usdSpent        Float         @default(0)
+  tokensIn        Int           @default(0)
+  tokensOut       Int           @default(0)
+  usingFallback   Boolean       @default(false)
+  meta            Json          @default("{}")
+  lastActivityAt  DateTime      @default(now())
+  createdAt       DateTime      @default(now())
+  endedAt         DateTime?
+  messages        ChatMessage[]
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("chat_sessions")
+}
+
+// Messages stored AFTER PII redaction. `role` is OpenAI-style. Tool calls
+// produced by the model are stored on the assistant row that emitted them;
+// the corresponding tool result is its own row with role="tool".
+model ChatMessage {
+  id         String      @id @default(cuid())
+  sessionId  String
+  session    ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role       String      // user | assistant | system | tool
+  content    String
+  toolCalls  Json?       // assistant tool-call payload (if any)
+  toolName   String?     // for role="tool" rows
+  model      String?
+  tokensIn   Int?
+  tokensOut  Int?
+  usdCost    Float       @default(0)
+  fallback   Boolean     @default(false)
+  createdAt  DateTime    @default(now())
+
+  @@index([sessionId, createdAt])
+  @@map("chat_messages")
+}
+
 // ── Audit Logs ───────────────────────────────────────────────────────
 
 model AuditLog {

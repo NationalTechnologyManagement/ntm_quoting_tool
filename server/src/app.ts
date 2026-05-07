@@ -18,12 +18,19 @@ import quoteRoutes from './routes/quotes.js';
 import leadRoutes from './routes/leads.js';
 import webhookRoutes from './routes/webhooks.js';
 import contractRoutes from './routes/contracts.js';
+import aiChatRoutes from './routes/ai-chat.js';
+import adminAiRoutes from './routes/admin-ai.js';
 
 export function createApp() {
   const app = express();
 
+  // Trust the Railway / reverse-proxy hop so req.ip is the client, not the
+  // proxy. The AI chat IP rate-limit and ChatSession.ipAddress logging both
+  // rely on this being correct.
+  app.set('trust proxy', 1);
+
   // Standard middleware
-  app.use(cors({ origin: env.NODE_ENV === 'development' ? '*' : undefined }));
+  app.use(cors({ origin: env.NODE_ENV === 'development' ? '*' : undefined, credentials: true }));
   app.use(express.json({ limit: '10mb' }));
 
   // Routes
@@ -36,10 +43,12 @@ export function createApp() {
   app.use(adminTermsRoutes);
   app.use(adminQuoteRoutes);
   app.use(adminSettingsRoutes);
+  app.use(adminAiRoutes);
   app.use(quoteRoutes);
   app.use(leadRoutes);
   app.use(webhookRoutes);
   app.use(contractRoutes);
+  app.use(aiChatRoutes);
 
   // Error handler (must be last)
   app.use(errorHandler);

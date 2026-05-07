@@ -195,6 +195,25 @@
 
 ---
 
+## AI Chat Assistant (Customer-Facing)
+
+- [x] AiAgentConfig (singleton) + AiKnowledgeBase + ChatSession + ChatMessage Prisma models
+- [x] OpenRouter proxy with primary + fallback model, SSE streaming (`/api/ai-chat/message`)
+- [x] HMAC-signed HttpOnly+SameSite cookie session, idle (30 min) + absolute (4 hr) timeouts
+- [x] Per-session $ cap (default $10) + global daily $ cap (default $50)
+- [x] Per-session message rate limit + per-IP session-mint rate limit
+- [x] Tool surface is UI-only: highlight_field, prefill_field, navigate, suggest_package, suggest_addon (no DB-write tools)
+- [x] PII redaction before persisting messages (cards / SSN / passwords)
+- [x] Page snapshot fed into every turn so the agent never invents prices / packages / addons
+- [x] Admin page `/admin/ai-chat`: kill switch, models, prompt, $ caps, timeouts, KB CRUD, usage dashboard
+- [x] `OPENROUTER_API_KEY` editable in `/admin/integrations` (no redeploy)
+- [x] Floating chat widget mounted at App level (mobile drawer, desktop side panel), persists across navigation
+- [x] Field registry — pages register their inputs so prefill_field / highlight_field can target them safely
+- [x] Final actions (terms, e-sign, payment) are deliberately NOT tool-callable
+- [ ] Run `npm run db:migrate:dev` locally + `db:migrate` on Railway after first deploy
+- [ ] Add OPENROUTER_API_KEY to Railway env (or set via /admin/integrations)
+- [ ] Flip the kill switch on at /admin/ai-chat once KB is populated
+
 ## Future Enhancements
 
 ### AI Features

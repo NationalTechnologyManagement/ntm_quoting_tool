@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuote, computeOnboardingFee } from "@/contexts/QuoteContext";
+import { useChatField } from "@/contexts/AiChatContext";
 import { quoteApi } from "@/services/api";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -38,6 +39,10 @@ const Summary = () => {
   const [expandedFeatures, setExpandedFeatures] = useState(false);
   const [loading, setLoading] = useState<"email" | "purchase" | "followup" | null>(null);
   const [promoInput, setPromoInput] = useState("");
+  // Let the AI agent prefill the promo input (the agent does NOT auto-apply
+  // the code — the user still has to click the Apply button).
+  const setPromoFromAgent = useCallback((v: string) => setPromoInput(v.toUpperCase().trim()), []);
+  const promoHighlighted = useChatField("promo-code", "Promo code", setPromoFromAgent);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [signature, setSignature] = useState("");
   const [userIpAddress, setUserIpAddress] = useState("");
@@ -681,7 +686,7 @@ const Summary = () => {
                   <Label htmlFor="promo-code" className="text-sm">
                     Promo Code
                   </Label>
-                  <div className="flex gap-2">
+                  <div className={`flex gap-2 ${promoHighlighted ? 'rounded-md ring-2 ring-primary ring-offset-2 ring-offset-background transition-shadow' : ''}`}>
                     <Input
                       id="promo-code"
                       placeholder="Enter code"

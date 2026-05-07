@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuote, Addon } from '@/contexts/QuoteContext';
+import { useQuote, Addon, CustomerInfo } from '@/contexts/QuoteContext';
+import { useChatField } from '@/contexts/AiChatContext';
 import { leadApi } from '@/services/api';
 import { IS_LEAD_GEN_MODE } from '@/lib/lead-gen';
 import { Button } from '@/components/ui/button';
@@ -97,6 +98,30 @@ const QuoteInfo = () => {
     setFormData((prev) => ({ ...prev, [field]: processedValue }));
     if (formErrors[field]) setFormErrors((prev) => ({ ...prev, [field]: false }));
   };
+
+  // Stable setters for the AI chat field registry. The agent can call
+  // prefill_field("email", "...") and we route it to setFormData here. We
+  // intentionally only register safe, customer-typed inputs — never the
+  // continue button or the addon checkboxes (those stay user-driven).
+  const setStringField = useCallback((field: keyof CustomerInfo) => (v: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      [field]: field === 'phone' ? formatPhoneNumber(v) : v,
+    }));
+  }, []);
+  const setNumericField = useCallback((field: 'userCount' | 'locationCount') => (v: string) => {
+    const n = parseInt(v, 10);
+    setFormData((prev) => ({ ...prev, [field]: Number.isFinite(n) && n > 0 ? n : prev[field] }));
+  }, []);
+
+  const nameHighlighted = useChatField('name', 'Full name', setStringField('name'));
+  const businessHighlighted = useChatField('businessName', 'Business name', setStringField('businessName'));
+  const emailHighlighted = useChatField('email', 'Email', setStringField('email'));
+  const phoneHighlighted = useChatField('phone', 'Phone', setStringField('phone'));
+  const addressHighlighted = useChatField('address', 'Address', setStringField('address'));
+  const userCountHighlighted = useChatField('userCount', 'Number of users', setNumericField('userCount'));
+  const locationCountHighlighted = useChatField('locationCount', 'Number of locations', setNumericField('locationCount'));
+  const referrerHighlighted = useChatField('referrerCode', 'Referrer code', setStringField('referrerCode'));
 
   const isFieldValid = (field: string): boolean => {
     const value = formData[field as keyof typeof formData];
@@ -235,6 +260,7 @@ const QuoteInfo = () => {
               valid={isFieldValid('name')}
               onChange={(v) => handleInputChange('name', v)}
               placeholder="John Doe"
+              highlighted={nameHighlighted}
             />
             <FormField
               id="businessName"
@@ -243,6 +269,7 @@ const QuoteInfo = () => {
               valid={isFieldValid('businessName')}
               onChange={(v) => handleInputChange('businessName', v)}
               placeholder="Acme Corp"
+              highlighted={businessHighlighted}
             />
             <FormField
               id="email"
@@ -252,6 +279,7 @@ const QuoteInfo = () => {
               valid={isFieldValid('email')}
               onChange={(v) => handleInputChange('email', v)}
               placeholder="john@example.com"
+              highlighted={emailHighlighted}
             />
             <FormField
               id="phone"
@@ -261,6 +289,7 @@ const QuoteInfo = () => {
               valid={isFieldValid('phone')}
               onChange={(v) => handleInputChange('phone', v)}
               placeholder="(555) 555-5555"
+              highlighted={phoneHighlighted}
             />
             <div className="md:col-span-2">
               <FormField
@@ -270,9 +299,14 @@ const QuoteInfo = () => {
                 valid={isFieldValid('address')}
                 onChange={(v) => handleInputChange('address', v)}
                 placeholder="123 Main St, City, State, ZIP"
+                highlighted={addressHighlighted}
               />
             </div>
-            <div className="space-y-2 md:col-span-2">
+            <div
+              className={`space-y-2 md:col-span-2 ${
+                referrerHighlighted ? 'rounded-md ring-2 ring-primary ring-offset-2 ring-offset-background transition-shadow' : ''
+              }`}
+            >
               <Label htmlFor="referrerCode">Referrer Code (Optional)</Label>
               <Input
                 id="referrerCode"
@@ -293,7 +327,11 @@ const QuoteInfo = () => {
         >
           <h2 className="text-2xl font-semibold mb-6 text-foreground">Service Details</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
+            <div
+              className={`space-y-2 ${
+                userCountHighlighted ? 'rounded-md ring-2 ring-primary ring-offset-2 ring-offset-background transition-shadow' : ''
+              }`}
+            >
               <Label htmlFor="userCount">Number of Users *</Label>
               <div className="relative">
                 <Input
@@ -309,7 +347,11 @@ const QuoteInfo = () => {
               </div>
               <p className="text-xs text-muted-foreground">Total number of users</p>
             </div>
-            <div className="space-y-2">
+            <div
+              className={`space-y-2 ${
+                locationCountHighlighted ? 'rounded-md ring-2 ring-primary ring-offset-2 ring-offset-background transition-shadow' : ''
+              }`}
+            >
               <Label htmlFor="locationCount">Number of Locations *</Label>
               <div className="relative">
                 <Input
@@ -426,11 +468,16 @@ interface FormFieldProps {
   onChange: (v: string) => void;
   placeholder?: string;
   type?: string;
+  highlighted?: boolean;
 }
 
-function FormField({ id, label, value, valid, onChange, placeholder, type = 'text' }: FormFieldProps) {
+function FormField({ id, label, value, valid, onChange, placeholder, type = 'text', highlighted }: FormFieldProps) {
   return (
-    <div className="space-y-2">
+    <div
+      className={`space-y-2 ${
+        highlighted ? 'rounded-md ring-2 ring-primary ring-offset-2 ring-offset-background transition-shadow' : ''
+      }`}
+    >
       <Label htmlFor={id}>{label}</Label>
       <div className="relative">
         <Input id={id} type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="pr-10" />

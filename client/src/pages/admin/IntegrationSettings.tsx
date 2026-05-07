@@ -374,6 +374,7 @@ const SECTION_BY_PREFIX: Record<string, string> = {
   RESEND_: 'Email (Resend)',
   FROM_: 'Email (Resend)',
   NOTIFY_: 'Notifications',
+  OPENROUTER_: 'AI Chat (OpenRouter)',
 };
 
 function sectionFor(key: string): string {
