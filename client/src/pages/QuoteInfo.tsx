@@ -338,13 +338,17 @@ const QuoteInfo = () => {
             Tell us how many of each user type and how many sites we'll cover. At least one
             Desktop User is required.
           </p>
+          {/* Three matching columns. Label row, input row, and helper row each
+              get a fixed min-height so the (i) icon on Desktop, the missing
+              checkmark on Web, and the longer helper text on Web don't push
+              their column out of alignment with the others. */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div
               className={`space-y-2 ${
                 userCountHighlighted ? 'rounded-md ring-2 ring-primary ring-offset-2 ring-offset-background transition-shadow' : ''
               }`}
             >
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 h-6">
                 <Label htmlFor="userCount">Desktop Users *</Label>
                 <Popover>
                   <PopoverTrigger asChild>
@@ -385,22 +389,29 @@ const QuoteInfo = () => {
                 />
                 {isFieldValid('userCount') && <Check className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-primary" />}
               </div>
-              <p className="text-xs text-muted-foreground">Full Microsoft 365 — primary staff.</p>
+              <p className="text-xs text-muted-foreground min-h-[2rem]">
+                Full Microsoft 365 — primary staff.
+              </p>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="webUserCount">Web Users</Label>
-              <Input
-                id="webUserCount"
-                type="number"
-                min="0"
-                value={formData.webUserCount ?? 0}
-                onChange={(e) =>
-                  handleInputChange('webUserCount', parseInt(e.target.value) || 0)
-                }
-                placeholder="e.g., 5"
-              />
-              <p className="text-xs text-muted-foreground">
-                Web &amp; email only — frontline, kiosk, shared devices.
+              <div className="flex items-center gap-2 h-6">
+                <Label htmlFor="webUserCount">Web Users</Label>
+              </div>
+              <div className="relative">
+                <Input
+                  id="webUserCount"
+                  type="number"
+                  min="0"
+                  value={formData.webUserCount ?? 0}
+                  onChange={(e) =>
+                    handleInputChange('webUserCount', parseInt(e.target.value) || 0)
+                  }
+                  placeholder="e.g., 5"
+                  className="pr-10"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground min-h-[2rem]">
+                Web &amp; email only — frontline or kiosk users.
               </p>
             </div>
             <div
@@ -408,7 +419,9 @@ const QuoteInfo = () => {
                 locationCountHighlighted ? 'rounded-md ring-2 ring-primary ring-offset-2 ring-offset-background transition-shadow' : ''
               }`}
             >
-              <Label htmlFor="locationCount">Number of Locations *</Label>
+              <div className="flex items-center gap-2 h-6">
+                <Label htmlFor="locationCount">Number of Locations *</Label>
+              </div>
               <div className="relative">
                 <Input
                   id="locationCount"
@@ -421,7 +434,9 @@ const QuoteInfo = () => {
                 />
                 {isFieldValid('locationCount') && <Check className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-primary" />}
               </div>
-              <p className="text-xs text-muted-foreground">Total number of physical locations</p>
+              <p className="text-xs text-muted-foreground min-h-[2rem]">
+                Total number of physical locations.
+              </p>
             </div>
           </div>
 
