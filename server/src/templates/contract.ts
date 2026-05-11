@@ -66,9 +66,16 @@ export function buildContractHtml(quote: QuoteData): string {
         : agreementMonths === 60
           ? '5 years (60 months)'
           : `${agreementMonths} months`;
-  const signedBy = quote.agreement?.signedBy || quote.customer.name;
-  const signedAt = quote.agreement?.signedAt || quote.timestamp;
-  const ipAddress = quote.agreement?.ipAddress || 'N/A';
+  // The template renders the same way for an in-flight preview AND for the
+  // signed contract email. Distinguish by whether the agreement payload is
+  // actually present — DON'T fall back to customer.name / quote.timestamp,
+  // because that made the preview look already-signed even when the
+  // customer hadn't touched it. NTM (service provider) is treated as
+  // pre-signed: Kelly's name renders on the provider side in both modes.
+  const isSigned = !!quote.agreement?.signedBy;
+  const signedBy = quote.agreement?.signedBy ?? '';
+  const signedAt = quote.agreement?.signedAt ?? '';
+  const ipAddress = quote.agreement?.ipAddress ?? '';
 
   const addonsRows = (quote.selectedAddons || [])
     .map(
@@ -560,26 +567,34 @@ export function buildContractHtml(quote: QuoteData): string {
     ${termsHtml}
   </div>
 
-  <!-- Signature -->
+  <!-- Signature
+       Preview (unsigned): client side renders blank lines for the customer
+       to fill in by e-signing; service-provider side already shows Kelly's
+       cursive countersignature.
+       Final (signed): client side renders the customer's e-signature +
+       captured metadata; service-provider side identical to preview. -->
   <div class="sig-block">
     <p class="sig-intro">
-      By electronically signing below, <strong>${signedBy}</strong> on behalf of <strong>${quote.customer.businessName}</strong>
-      acknowledges having read, understood, and agreed to all terms and conditions of this ${contractTerm} Managed Services Agreement.
+      ${isSigned
+        ? `By electronically signing below, <strong>${signedBy}</strong> on behalf of <strong>${quote.customer.businessName}</strong> acknowledged having read, understood, and agreed to all terms and conditions of this ${contractTerm} Managed Services Agreement.`
+        : `By electronically signing below, an authorized representative of <strong>${quote.customer.businessName}</strong> acknowledges having read, understood, and agreed to all terms and conditions of this ${contractTerm} Managed Services Agreement.`}
     </p>
     <div class="sig-grid">
       <div class="sig-party">
         <div class="sig-label">Client Signature</div>
         <div class="sig-line">
-          ${signedBy ? `<div class="sig-name">${signedBy}</div>` : ''}
+          ${isSigned ? `<div class="sig-name">${signedBy}</div>` : ''}
         </div>
-        <div class="sig-detail"><strong>Name:</strong> ${signedBy}</div>
-        <div class="sig-detail"><strong>Email:</strong> ${quote.customer.email}</div>
-        <div class="sig-detail"><strong>Signed:</strong> ${formatDateTime(signedAt)}</div>
-        <div class="sig-detail"><strong>IP:</strong> ${ipAddress}</div>
+        <div class="sig-detail"><strong>Name:</strong> ${isSigned ? signedBy : '&nbsp;'}</div>
+        <div class="sig-detail"><strong>Email:</strong> ${isSigned ? quote.customer.email : '&nbsp;'}</div>
+        <div class="sig-detail"><strong>Signed:</strong> ${isSigned && signedAt ? formatDateTime(signedAt) : '&nbsp;'}</div>
+        <div class="sig-detail"><strong>IP:</strong> ${isSigned ? (ipAddress || 'N/A') : '&nbsp;'}</div>
       </div>
       <div class="sig-party">
-        <div class="sig-label">Service Provider</div>
-        <div class="sig-line"></div>
+        <div class="sig-label">Service Provider (Pre-Signed)</div>
+        <div class="sig-line">
+          <div class="sig-name">${SERVICE_PROVIDER.contact}</div>
+        </div>
         <div class="sig-detail"><strong>Name:</strong> ${SERVICE_PROVIDER.contact}</div>
         <div class="sig-detail"><strong>Title:</strong> Authorized Representative</div>
         <div class="sig-detail"><strong>Company:</strong> SR Partners LLC dba NTM</div>
