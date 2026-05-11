@@ -179,6 +179,43 @@ export function buildContractHtml(quote: QuoteData): string {
       margin-bottom: 12px;
     }
 
+    /* ── Part banners (QUOTE vs CONTRACT) ──
+       Two-part document. The first half is the QUOTE — what the customer
+       is buying and what it costs. The second half is the CONTRACT — the
+       legal terms + signature block. Each opens with a full-width banner
+       so a reader skimming the PDF can tell which part they're in. */
+    .part-banner {
+      margin: 28px 0 18px 0;
+      padding: 14px 18px;
+      background: #1a3a5c;
+      color: #fff;
+      page-break-after: avoid;
+      page-break-before: auto;
+    }
+    .part-banner .label {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      font-size: 9pt;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      color: rgba(255,255,255,0.7);
+    }
+    .part-banner .title {
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      font-size: 16pt;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      margin-top: 2px;
+    }
+    .part-banner .subtitle {
+      font-size: 9.5pt;
+      color: rgba(255,255,255,0.85);
+      margin-top: 3px;
+    }
+    .part-banner.contract {
+      page-break-before: always;
+    }
+
     /* ── Parties ── */
     .parties {
       display: grid;
@@ -379,37 +416,16 @@ export function buildContractHtml(quote: QuoteData): string {
     <h1 class="doc-title">Managed Services Agreement</h1>
   </div>
 
-  <!-- Parties -->
-  <div class="section">
-    <div class="section-title">Parties to this Agreement</div>
-    <div class="parties">
-      <div class="party">
-        <div class="label">Service Provider</div>
-        <div class="name">National Technology Management</div>
-        <p>SR Partners LLC</p>
-        <p>${SERVICE_PROVIDER.address}</p>
-        <p>${SERVICE_PROVIDER.phone} &nbsp;&bull;&nbsp; ${SERVICE_PROVIDER.email}</p>
-        <p>Attention: ${SERVICE_PROVIDER.contact}</p>
-      </div>
-      <div class="parties-divider"></div>
-      <div class="party">
-        <div class="label">Client</div>
-        <div class="name">${quote.customer.businessName}</div>
-        <p>${quote.customer.name}</p>
-        <p>${quote.customer.address}</p>
-        <p>${quote.customer.phone} &nbsp;&bull;&nbsp; ${quote.customer.email}</p>
-      </div>
-    </div>
-  </div>
-
-  <!-- Agreement Details -->
-  <div class="section">
-    <div class="section-title">Agreement Details</div>
-    <div class="detail-row"><span class="label">Contract Term</span><span class="value">${contractTerm}</span></div>
-    <div class="detail-row"><span class="label">Effective Date</span><span class="value">${formatDate(signedAt)}</span></div>
-    <div class="detail-row"><span class="label">Billing Cycle</span><span class="value" style="text-transform:capitalize;">${quote.totals.recurringFrequency || 'monthly'}</span></div>
-    ${quote.onboarding?.totalCost > 0 ? `
-    <div class="detail-row"><span class="label">Onboarding</span><span class="value">${quote.onboarding.userCount} users &times; ${formatCurrency(quote.onboarding.costPerUser)}/user = ${formatCurrency(quote.onboarding.finalCost)}</span></div>` : ''}
+  <!-- ──────────────────────────────────────────────────────────────────
+       PART 1 — QUOTE
+       What the customer is buying and what it costs. Pricing breakdown,
+       add-ons, financial summary, admin notes. This portion is what's
+       being agreed-to; the legal terms + signature block follow.
+       ────────────────────────────────────────────────────────────────── -->
+  <div class="part-banner">
+    <div class="label">Part 1 of 2</div>
+    <div class="title">Quote</div>
+    <div class="subtitle">Pricing, services, and add-ons for ${quote.customer.businessName}</div>
   </div>
 
   <!-- Service Package -->
@@ -489,6 +505,52 @@ export function buildContractHtml(quote: QuoteData): string {
     <div class="fin-note">
       <strong>Ongoing Billing:</strong> Beginning the next billing cycle, ${formatCurrency(quote.totals.recurringCosts)} will be charged ${quote.totals.recurringFrequency || 'monthly'} for the duration of the ${contractTerm} contract term. Invoices are issued on the <strong>1st of every month</strong> and are due within <strong>30 days</strong> (Net 30). Onboarding and implementation will be completed within 30 days of contract execution.
     </div>
+  </div>
+
+  <!-- ──────────────────────────────────────────────────────────────────
+       PART 2 — CONTRACT
+       Legal terms binding the parties to the quote above. Includes the
+       parties block, agreement details (term + billing cycle), the full
+       terms & conditions, and the signature block.
+       Forces a page break so the contract opens on a fresh page.
+       ────────────────────────────────────────────────────────────────── -->
+  <div class="part-banner contract">
+    <div class="label">Part 2 of 2</div>
+    <div class="title">Contract</div>
+    <div class="subtitle">Legal terms governing the services quoted above</div>
+  </div>
+
+  <!-- Parties -->
+  <div class="section">
+    <div class="section-title">Parties to this Agreement</div>
+    <div class="parties">
+      <div class="party">
+        <div class="label">Service Provider</div>
+        <div class="name">National Technology Management</div>
+        <p>SR Partners LLC</p>
+        <p>${SERVICE_PROVIDER.address}</p>
+        <p>${SERVICE_PROVIDER.phone} &nbsp;&bull;&nbsp; ${SERVICE_PROVIDER.email}</p>
+        <p>Attention: ${SERVICE_PROVIDER.contact}</p>
+      </div>
+      <div class="parties-divider"></div>
+      <div class="party">
+        <div class="label">Client</div>
+        <div class="name">${quote.customer.businessName}</div>
+        <p>${quote.customer.name}</p>
+        <p>${quote.customer.address}</p>
+        <p>${quote.customer.phone} &nbsp;&bull;&nbsp; ${quote.customer.email}</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Agreement Details -->
+  <div class="section">
+    <div class="section-title">Agreement Details</div>
+    <div class="detail-row"><span class="label">Contract Term</span><span class="value">${contractTerm}</span></div>
+    <div class="detail-row"><span class="label">Effective Date</span><span class="value">${formatDate(signedAt)}</span></div>
+    <div class="detail-row"><span class="label">Billing Cycle</span><span class="value" style="text-transform:capitalize;">${quote.totals.recurringFrequency || 'monthly'}</span></div>
+    ${quote.onboarding?.totalCost > 0 ? `
+    <div class="detail-row"><span class="label">Onboarding</span><span class="value">${quote.onboarding.userCount} users &times; ${formatCurrency(quote.onboarding.costPerUser)}/user = ${formatCurrency(quote.onboarding.finalCost)}</span></div>` : ''}
   </div>
 
   <!-- Terms & Conditions -->

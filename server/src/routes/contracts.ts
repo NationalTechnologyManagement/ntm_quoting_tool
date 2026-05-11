@@ -18,6 +18,26 @@ router.get('/api/admin/contracts/:quoteId/preview', requireAuth, async (req, res
   res.type('html').send(html);
 });
 
+// Customer-facing preview before checkout. The quoteId / quoteNumber acts as
+// the capability — knowing it is enough to view your own contract preview.
+// Returns the same HTML the admin preview returns; if the customer wants a
+// hard copy they can use the browser's "Save as PDF" option.
+router.get('/api/contracts/:quoteId/preview', async (req, res) => {
+  if (env.LEAD_GEN_MODE) {
+    // Lite tool doesn't have a contract at all — refuse the preview.
+    res.status(404).json({ error: 'Not found' });
+    return;
+  }
+  const quoteId = req.params.quoteId as string;
+  try {
+    const quote = await quoteService.getQuote(quoteId);
+    const html = contractService.buildContractHtml(quote);
+    res.type('html').send(html);
+  } catch (e: any) {
+    res.status(404).json({ error: e?.message ?? 'Quote not found' });
+  }
+});
+
 // Admin-only: list contracts for a quote (to expose for delete).
 router.get('/api/admin/quotes/:quoteId/contracts', requireAuth, async (req, res) => {
   const quoteId = req.params.quoteId as string;

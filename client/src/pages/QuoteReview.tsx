@@ -21,6 +21,7 @@ import {
   ChevronUp,
   ChevronDown,
   Tag,
+  FileText,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -762,6 +763,26 @@ export default function QuoteReview() {
                 and authorize this purchase.
               </Label>
             </div>
+
+            {/* Preview the full Quote + Contract before paying. Opens the
+                same template the signed PDF uses in a new tab so the
+                customer can read every clause + (if they want) use the
+                browser's "Save as PDF" to keep a copy. */}
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              onClick={() =>
+                window.open(
+                  `/api/contracts/${encodeURIComponent(quoteData.quoteNumber)}/preview`,
+                  '_blank',
+                  'noopener,noreferrer',
+                )
+              }
+            >
+              <FileText className="mr-2 w-4 h-4" />
+              Preview full Quote &amp; Contract
+            </Button>
 
             {/* Submit Button */}
             <Button
