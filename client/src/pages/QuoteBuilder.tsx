@@ -7,6 +7,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Check, Star, Search, ArrowRight, FileSearch, X } from 'lucide-react';
 import { SiteHeader } from '@/components/SiteHeader';
+import { formatContractTerm } from '@/lib/utils';
 
 const QuoteBuilder = () => {
   const navigate = useNavigate();
@@ -96,7 +97,7 @@ const QuoteBuilder = () => {
                   <div>
                     <h3 className="text-2xl font-bold text-foreground">{pkg.name}</h3>
                     <p className="text-sm text-muted-foreground mt-1">
-                      {(pkg.agreementMonths ?? 0) >= 36 ? '36-month agreement' : 'Month-to-month'}
+                      {formatContractTerm(pkg.agreementMonths)}
                     </p>
 
                     <div className="mt-5 space-y-1">

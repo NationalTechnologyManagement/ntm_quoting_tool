@@ -25,6 +25,11 @@ router.get('/api/config', async (_req, res) => {
       frequency: p.frequency as PackageType['frequency'],
       features: p.features as string[],
       isBestValue: p.isBestValue,
+      cwAgreementTypeId: p.cwAgreementTypeId,
+      cwPerUserProductId: p.cwPerUserProductId,
+      cwPerUserF3ProductId: p.cwPerUserF3ProductId,
+      cwPerLocationProductId: p.cwPerLocationProductId,
+      agreementMonths: p.agreementMonths,
     }));
 
   const addons: AddonType[] = dbAddons.map((a) => ({

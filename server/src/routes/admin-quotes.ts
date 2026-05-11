@@ -9,6 +9,8 @@ import * as quoteService from '../services/quote.service.js';
 import * as contractService from '../services/contract.service.js';
 import * as pdfService from '../services/pdf.service.js';
 import * as emailService from '../services/email.service.js';
+import * as apService from '../services/ap.service.js';
+import { QUOTE_VALIDITY_DAYS } from '@ntm/shared';
 
 const router = Router();
 
@@ -80,7 +82,14 @@ router.get('/api/admin/quotes/:id', requireAuth, async (req, res) => {
   const id = req.params.id as string;
   const quote = await prisma.quote.findFirst({
     where: { OR: [{ id }, { quoteNumber: id }] },
-    include: { contracts: true, provisioningSteps: { orderBy: { updatedAt: 'asc' } } },
+    include: {
+      contracts: true,
+      provisioningSteps: { orderBy: { updatedAt: 'asc' } },
+      amendments: {
+        select: { id: true, quoteNumber: true, status: true, totals: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+      },
+    },
   });
 
   if (!quote) {
@@ -201,6 +210,275 @@ function sumCustomRecurring(items: any[]): number {
 function sumCustomOneTime(items: any[]): number {
   return items.reduce((sum, i) => sum + (Number(i.oneTimePrice) || 0) * (Number(i.quantity) || 1), 0);
 }
+
+// ── Admin quote edits ───────────────────────────────────────────────
+// Admin can adjust the package, sizing, addons, contract term, and price
+// snapshots on an existing quote. If the quote is still in a pre-paid
+// state (draft/sent/accepted/checkout_pending) the change is applied in
+// place. If the quote has already been paid we leave it alone and create
+// a fresh amendment quote linked back via parentQuoteId, plus a new AP
+// invoice for the recurring delta + any new one-time charges.
+
+const editSelectedPackageSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  pricePerUser: z.number().min(0),
+  pricePerLocation: z.number().min(0),
+  frequency: z.string(),
+  features: z.array(z.string()),
+  agreementMonths: z.number().int().min(0).optional(),
+  calculatedPrice: z.number().min(0).optional(),
+});
+
+const editSelectedAddonSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().optional().default(''),
+  price: z.number().min(0).optional().default(0),
+  quantity: z.number().int().min(1),
+  frequency: z.string().optional().default('monthly'),
+  pricingType: z.enum(['recurring-only', 'one-time-only', 'both']),
+  recurringPrice: z.number().nullable().optional(),
+  recurringFrequency: z.string().nullable().optional(),
+  setupPrice: z.number().nullable().optional(),
+});
+
+const editQuoteSchema = z.object({
+  userCount: z.number().int().min(1).optional(),
+  locationCount: z.number().int().min(1).optional(),
+  selectedPackage: editSelectedPackageSchema.optional(),
+  selectedAddons: z.array(editSelectedAddonSchema).optional(),
+  // Admin can also flip the contract term on the snapshotted package
+  // without changing anything else. agreementMonths on selectedPackage
+  // takes precedence if both are present.
+  agreementMonths: z.number().int().min(0).optional(),
+  // When true and the quote is paid, the server creates an amendment quote.
+  // Default true so the caller doesn't need to know the quote's status.
+  amendIfPaid: z.boolean().optional().default(true),
+});
+
+function computeQuoteTotals(input: {
+  pkg: any;
+  addons: any[];
+  userCount: number;
+  locationCount: number;
+  appliedPromoCodes: any[];
+  waiveOnboarding: boolean;
+}) {
+  const { pkg, addons, userCount, locationCount, appliedPromoCodes, waiveOnboarding } = input;
+  const packageCost =
+    (Number(pkg.pricePerUser) || 0) * userCount + (Number(pkg.pricePerLocation) || 0) * locationCount;
+  const addonRecurring = addons
+    .filter((a) => a.pricingType === 'recurring-only' || a.pricingType === 'both')
+    .reduce((sum, a) => sum + (Number(a.recurringPrice) || 0) * (Number(a.quantity) || 1), 0);
+  const addonOneTime = addons
+    .filter((a) => a.pricingType === 'one-time-only' || a.pricingType === 'both')
+    .reduce((sum, a) => sum + (Number(a.setupPrice) || 0) * (Number(a.quantity) || 1), 0);
+
+  const baseRecurring = packageCost + addonRecurring;
+  const baseOneTime = addonOneTime;
+  const baseOnboarding = waiveOnboarding ? 0 : packageCost * 2; // 2x monthly per NTM policy
+
+  let onboardingDiscount = 0;
+  let oneTimeDiscount = 0;
+  let recurringDiscount = 0;
+  for (const p of appliedPromoCodes) {
+    const pct = p.discountType === 'percentage';
+    const amt = Number(p.discount) || 0;
+    if (p.applyTo === 'onboarding') {
+      onboardingDiscount += pct ? baseOnboarding * (amt / 100) : Math.min(amt, baseOnboarding - onboardingDiscount);
+    } else if (p.applyTo === 'one-time') {
+      oneTimeDiscount += pct ? baseOneTime * (amt / 100) : Math.min(amt, baseOneTime - oneTimeDiscount);
+    } else if (p.applyTo === 'monthly') {
+      recurringDiscount += pct ? baseRecurring * (amt / 100) : Math.min(amt, baseRecurring - recurringDiscount);
+    }
+  }
+
+  const finalOnboarding = Math.max(0, baseOnboarding - onboardingDiscount);
+  const finalOneTime = Math.max(0, baseOneTime - oneTimeDiscount);
+  const finalRecurring = Math.max(0, baseRecurring - recurringDiscount);
+
+  return {
+    onboarding: {
+      userCount,
+      costPerUser: userCount > 0 ? baseOnboarding / userCount : 0,
+      totalCost: baseOnboarding,
+      discount: onboardingDiscount + (waiveOnboarding ? packageCost * 2 : 0),
+      finalCost: finalOnboarding,
+    },
+    totals: {
+      onboardingCost: finalOnboarding,
+      oneTimeCosts: finalOneTime,
+      recurringCosts: finalRecurring,
+      discount: onboardingDiscount + oneTimeDiscount + recurringDiscount,
+      grandTotal: finalOnboarding + finalOneTime + finalRecurring,
+      recurringFrequency: 'monthly',
+    },
+  };
+}
+
+function genQuoteNumber(): string {
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const rand = Math.floor(1000 + Math.random() * 9000);
+  return `QT-${date}-${rand}`;
+}
+
+router.put(
+  '/api/admin/quotes/:id',
+  requireAuth,
+  validate(editQuoteSchema),
+  async (req, res) => {
+    const id = req.params.id as string;
+    const body = req.body as z.infer<typeof editQuoteSchema>;
+
+    const quote = await prisma.quote.findFirst({
+      where: { OR: [{ id }, { quoteNumber: id }] },
+    });
+    if (!quote) {
+      res.status(404).json({ error: 'Quote not found' });
+      return;
+    }
+
+    const customer = quote.customer as any;
+    const currentPkg = quote.selectedPackage as any;
+    const currentAddons = (quote.selectedAddons as any[]) ?? [];
+
+    const userCount = body.userCount ?? customer?.userCount ?? 1;
+    const locationCount = body.locationCount ?? customer?.locationCount ?? 1;
+
+    const editedPkg = body.selectedPackage
+      ? { ...body.selectedPackage }
+      : { ...currentPkg };
+    if (body.agreementMonths !== undefined && body.selectedPackage === undefined) {
+      editedPkg.agreementMonths = body.agreementMonths;
+    }
+    editedPkg.calculatedPrice =
+      Number(editedPkg.pricePerUser ?? 0) * userCount +
+      Number(editedPkg.pricePerLocation ?? 0) * locationCount;
+
+    const editedAddons = (body.selectedAddons ?? currentAddons).map((a: any) => {
+      const qty = Number(a.quantity) || 1;
+      const recurring = Number(a.recurringPrice) || 0;
+      const setup = Number(a.setupPrice) || 0;
+      return {
+        ...a,
+        quantity: qty,
+        totalPrice: (Number(a.price) || recurring || setup) * qty,
+        totalRecurringCost: recurring * qty,
+        totalSetupCost: setup * qty,
+      };
+    });
+
+    // Onboarding waiver mirrors the original quote's policy — most portal
+    // quotes have it waived. We read the waiver state off the existing
+    // snapshot rather than re-deriving so admin edits don't accidentally
+    // change the fee policy on the customer.
+    const waiveOnboarding = ((quote.onboarding as any)?.finalCost ?? 0) === 0;
+
+    const recomputed = computeQuoteTotals({
+      pkg: editedPkg,
+      addons: editedAddons,
+      userCount,
+      locationCount,
+      appliedPromoCodes: (quote.appliedPromoCodes as any[]) ?? [],
+      waiveOnboarding,
+    });
+
+    const isPaid = quote.status === 'paid';
+
+    if (isPaid && body.amendIfPaid !== false) {
+      // Amendment path: clone a new quote pointing back at the original.
+      // Carry over customer + terms snapshots; reset payment fields so a
+      // fresh AP invoice can be minted for the delta. Status starts as
+      // 'accepted' since the customer already signed the parent contract
+      // and we just need a payment from them on the difference.
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + QUOTE_VALIDITY_DAYS);
+
+      const newCustomer = { ...customer, userCount, locationCount };
+
+      const created = await prisma.quote.create({
+        data: {
+          quoteNumber: genQuoteNumber(),
+          status: 'accepted',
+          customer: newCustomer as any,
+          selectedPackage: editedPkg as any,
+          selectedAddons: editedAddons as any,
+          onboarding: recomputed.onboarding as any,
+          appliedPromoCodes: quote.appliedPromoCodes as any,
+          totals: recomputed.totals as any,
+          terms: quote.terms as any,
+          parentQuoteId: quote.id,
+          expiresAt,
+        },
+      });
+
+      // Compute the delta and stand up a fresh AP invoice on it. Recurring
+      // delta is billed as one month upfront so the customer pays the
+      // difference now — CW handles ongoing months on the agreement side.
+      const parentTotals = (quote.totals as any) ?? {};
+      const recurringDelta = Math.max(
+        0,
+        (recomputed.totals.recurringCosts ?? 0) - (parentTotals.recurringCosts ?? 0),
+      );
+      const oneTimeDelta = Math.max(
+        0,
+        (recomputed.totals.oneTimeCosts ?? 0) - (parentTotals.oneTimeCosts ?? 0),
+      );
+
+      let amendmentInvoice: { invoiceId: string; paymentLink: string } | null = null;
+      let amendmentInvoiceError: string | null = null;
+
+      if (recurringDelta > 0 || oneTimeDelta > 0) {
+        try {
+          // Build a quote-shaped object whose totals reflect *just* the delta.
+          // apService.createCheckout calls updateQuoteAPSession internally,
+          // which will persist the AP ids on the new amendment row.
+          const quoteShapeForAp = await quoteService.getQuote(created.quoteNumber);
+          const deltaQuote = {
+            ...quoteShapeForAp,
+            totals: {
+              ...quoteShapeForAp.totals,
+              onboardingCost: 0, // amendments never re-charge onboarding
+              oneTimeCosts: oneTimeDelta,
+              recurringCosts: recurringDelta,
+              grandTotal: oneTimeDelta + recurringDelta,
+            },
+            onboarding: { ...quoteShapeForAp.onboarding, finalCost: 0 },
+          };
+          const result = await apService.createCheckout(deltaQuote);
+          amendmentInvoice = { invoiceId: result.invoiceId, paymentLink: result.paymentLink };
+        } catch (err: any) {
+          amendmentInvoiceError = err?.message ?? String(err);
+          console.error('[admin-edit] amendment invoice failed:', err);
+        }
+      }
+
+      res.json({
+        mode: 'amendment',
+        amendment: created,
+        delta: { recurring: recurringDelta, oneTime: oneTimeDelta },
+        invoice: amendmentInvoice,
+        invoiceError: amendmentInvoiceError,
+      });
+      return;
+    }
+
+    // In-place update path: quote isn't paid yet, just rewrite the snapshot.
+    const updated = await prisma.quote.update({
+      where: { id: quote.id },
+      data: {
+        customer: { ...customer, userCount, locationCount } as any,
+        selectedPackage: editedPkg as any,
+        selectedAddons: editedAddons as any,
+        onboarding: recomputed.onboarding as any,
+        totals: recomputed.totals as any,
+      },
+    });
+
+    res.json({ mode: 'in_place', quote: updated });
+  },
+);
 
 // Hard-delete a quote. Cascades through contracts and CW provisioning step
 // rows in a transaction. Records that already exist in CW (companies,

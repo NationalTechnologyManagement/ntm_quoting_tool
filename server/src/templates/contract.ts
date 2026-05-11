@@ -54,7 +54,18 @@ export function buildContractHtml(quote: QuoteData): string {
   const totalMonthlyCost =
     (quote.selectedPackage?.calculatedPrice || 0) + monthlyAddonsCost;
 
-  const contractTerm = '36 months';
+  // Pull the contract length off the snapshotted package. Falls back to
+  // "month-to-month" if the field is missing (legacy quotes pre-2026 didn't
+  // snapshot it). 36 = 3-year, 60 = 5-year.
+  const agreementMonths = Number((quote.selectedPackage as any)?.agreementMonths ?? 0);
+  const contractTerm =
+    agreementMonths === 0
+      ? 'month-to-month'
+      : agreementMonths === 36
+        ? '3 years (36 months)'
+        : agreementMonths === 60
+          ? '5 years (60 months)'
+          : `${agreementMonths} months`;
   const signedBy = quote.agreement?.signedBy || quote.customer.name;
   const signedAt = quote.agreement?.signedAt || quote.timestamp;
   const ipAddress = quote.agreement?.ipAddress || 'N/A';

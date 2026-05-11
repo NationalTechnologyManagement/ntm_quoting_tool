@@ -54,11 +54,16 @@ export const defaultPackages: Package[] = [
     ],
     isBestValue: false,
     cwAgreementTypeId: 36, // CW: "00791 Essentials Package"
+    cwPerUserProductId: 1096,     // PERUSER0001-MRR Business Premium
+    cwPerUserF3ProductId: 1118,   // PERUSER0005-MRR F3 (Web & Email Only)
+    cwPerLocationProductId: 1099, // PERLOCATION0001-MRR
   },
   {
     id: 'package-2',
     name: 'SafeSecure',
-    pricePerUser: 99,
+    // Per CW catalog (PERUSER0002-MRR / PERLOCATION0002-MRR). Previous seed
+    // value of $99/user was stale and disagreed with what CW invoices.
+    pricePerUser: 119,
     pricePerLocation: 400,
     frequency: 'monthly',
     agreementMonths: 36,
@@ -72,11 +77,15 @@ export const defaultPackages: Package[] = [
     ],
     isBestValue: true,
     cwAgreementTypeId: 37, // CW: "00792 SafeSecure Package"
+    cwPerUserProductId: 1097,     // PERUSER0002-MRR Business Premium
+    cwPerUserF3ProductId: 1119,   // PERUSER0006-MRR F3 (Web & Email Only)
+    cwPerLocationProductId: 1245, // PERLOCATION0002-MRR
   },
   {
     id: 'package-3',
     name: 'SafeSecure Plus',
-    pricePerUser: 149,
+    // Per CW catalog (PERUSER0003-MRR). Previous seed was $149.
+    pricePerUser: 179,
     pricePerLocation: 500,
     frequency: 'monthly',
     agreementMonths: 36,
@@ -88,6 +97,9 @@ export const defaultPackages: Package[] = [
     ],
     isBestValue: false,
     cwAgreementTypeId: 38, // CW: "00793 SafeSecure Plus Package"
+    cwPerUserProductId: 1098,     // PERUSER0003-MRR Business Premium
+    cwPerUserF3ProductId: 1120,   // PERUSER0007-MRR F3 (Web & Email Only)
+    cwPerLocationProductId: 1246, // PERLOCATION0003-MRR
   },
 ];
 

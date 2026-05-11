@@ -16,10 +16,13 @@ import {
   FileText,
   RefreshCw,
   AlertTriangle,
+  Pencil,
+  Save,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { adminApi } from '@/services/api';
+import { adminApi, configApi } from '@/services/api';
 import AdminNav from '@/components/admin/AdminNav';
+import { CONTRACT_TERM_OPTIONS, formatContractTerm } from '@/lib/utils';
 
 interface CustomItem {
   id: string;
@@ -52,6 +55,17 @@ const QuoteDetail = () => {
   const [loading, setLoading] = useState(true);
   const [contracts, setContracts] = useState<ContractRow[]>([]);
 
+  // Edit panel state — catalog is fetched lazily the first time admin opens it.
+  const [editOpen, setEditOpen] = useState(false);
+  const [catalog, setCatalog] = useState<{ packages: any[]; addons: any[] } | null>(null);
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [editPackageId, setEditPackageId] = useState<string>('');
+  const [editAgreementMonths, setEditAgreementMonths] = useState<number>(0);
+  const [editUserCount, setEditUserCount] = useState<number>(1);
+  const [editLocationCount, setEditLocationCount] = useState<number>(1);
+  // addonId -> quantity (0 = not selected)
+  const [editAddonQty, setEditAddonQty] = useState<Record<string, number>>({});
+
   // New-item form
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -79,6 +93,101 @@ const QuoteDetail = () => {
       toast.error('Failed to load quote');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Seed the edit-panel form from the current quote snapshot when admin opens it.
+  const openEditPanel = async () => {
+    if (!quote) return;
+    if (!catalog) {
+      try {
+        const cfg = await configApi.get();
+        setCatalog({ packages: cfg.packages ?? [], addons: cfg.addons ?? [] });
+      } catch {
+        toast.error('Failed to load package catalog');
+        return;
+      }
+    }
+    setEditPackageId(quote.selectedPackage?.id ?? '');
+    setEditAgreementMonths(Number(quote.selectedPackage?.agreementMonths ?? 0));
+    setEditUserCount(Number(quote.customer?.userCount ?? 1));
+    setEditLocationCount(Number(quote.customer?.locationCount ?? 1));
+    const qty: Record<string, number> = {};
+    for (const a of (quote.selectedAddons as any[]) ?? []) {
+      qty[a.id] = Number(a.quantity) || 0;
+    }
+    setEditAddonQty(qty);
+    setEditOpen(true);
+  };
+
+  const saveEdit = async () => {
+    if (!quote || !catalog) return;
+    const pkg = catalog.packages.find((p) => p.id === editPackageId);
+    if (!pkg) {
+      toast.error('Pick a package');
+      return;
+    }
+    const selectedAddons = Object.entries(editAddonQty)
+      .filter(([, q]) => q > 0)
+      .map(([addonId, q]) => {
+        const a = catalog.addons.find((x) => x.id === addonId);
+        if (!a) return null;
+        return {
+          id: a.id,
+          name: a.name,
+          description: a.description,
+          price: a.price,
+          quantity: q,
+          frequency: a.frequency,
+          pricingType: a.pricingType,
+          recurringPrice: a.recurringPrice ?? null,
+          recurringFrequency: a.recurringFrequency ?? null,
+          setupPrice: a.setupPrice ?? null,
+        };
+      })
+      .filter(Boolean);
+
+    setSavingEdit(true);
+    try {
+      const result = await adminApi.editQuote(quote.id, {
+        userCount: editUserCount,
+        locationCount: editLocationCount,
+        selectedPackage: {
+          id: pkg.id,
+          name: pkg.name,
+          pricePerUser: pkg.pricePerUser,
+          pricePerLocation: pkg.pricePerLocation,
+          frequency: pkg.frequency,
+          features: pkg.features,
+          agreementMonths: editAgreementMonths,
+        },
+        selectedAddons: selectedAddons as any[],
+      });
+      if (result.mode === 'amendment') {
+        if (result.invoice) {
+          toast.success(
+            `Amendment ${result.amendment.quoteNumber} created. New invoice ready.`,
+          );
+        } else if (result.invoiceError) {
+          toast.warning(
+            `Amendment ${result.amendment.quoteNumber} saved, but invoice failed: ${result.invoiceError}`,
+          );
+        } else {
+          toast.success(
+            `Amendment ${result.amendment.quoteNumber} created (no new charge).`,
+          );
+        }
+        // Pivot the admin to the amendment so they can keep working with it.
+        navigate(`/admin/quotes/${result.amendment.id}`);
+      } else {
+        toast.success('Quote updated');
+        setEditOpen(false);
+        await fetchQuote();
+      }
+    } catch (e: any) {
+      toast.error(e?.message || 'Save failed');
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -229,6 +338,9 @@ const QuoteDetail = () => {
             >
               <FileText className="w-4 h-4 mr-2" /> Contract Preview
             </Button>
+            <Button variant="outline" size="sm" onClick={openEditPanel}>
+              <Pencil className="w-4 h-4 mr-2" /> Edit Quote
+            </Button>
             {(quote.provisioningStatus === 'partial' || quote.provisioningStatus === 'failed') && (
               <Button
                 variant="outline"
@@ -274,6 +386,174 @@ const QuoteDetail = () => {
             </Button>
           </div>
         </Card>
+
+        {/* Edit panel — package, term, sizing, addons. For paid quotes the
+            server creates an amendment quote + delta invoice; for any other
+            state the snapshot is rewritten in place. */}
+        {editOpen && catalog && (
+          <Card className="p-6 border-primary/40">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-lg font-semibold">Edit Quote</h3>
+                <p className="text-sm text-muted-foreground">
+                  {quote.status === 'paid' ? (
+                    <>
+                      This quote is already paid — saving will create an{' '}
+                      <strong>amendment quote</strong> linked to {quote.quoteNumber} and a fresh AP
+                      invoice for any delta.
+                    </>
+                  ) : (
+                    'Changes are applied in place. Totals recalculate on save.'
+                  )}
+                </p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setEditOpen(false)}>
+                Cancel
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-package">Package</Label>
+                <Select value={editPackageId} onValueChange={setEditPackageId}>
+                  <SelectTrigger id="edit-package">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {catalog.packages.map((p) => (
+                      <SelectItem key={p.id} value={p.id}>
+                        {p.name} — ${p.pricePerUser}/user · ${p.pricePerLocation}/location
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-term">Contract Term</Label>
+                <Select
+                  value={String(editAgreementMonths)}
+                  onValueChange={(v) => setEditAgreementMonths(parseInt(v, 10) || 0)}
+                >
+                  <SelectTrigger id="edit-term">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {CONTRACT_TERM_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.months} value={String(opt.months)}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Currently: {formatContractTerm(quote.selectedPackage?.agreementMonths)}
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-users">User count</Label>
+                <Input
+                  id="edit-users"
+                  type="number"
+                  min={1}
+                  value={editUserCount}
+                  onChange={(e) => setEditUserCount(Math.max(1, parseInt(e.target.value) || 1))}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-locations">Location count</Label>
+                <Input
+                  id="edit-locations"
+                  type="number"
+                  min={1}
+                  value={editLocationCount}
+                  onChange={(e) => setEditLocationCount(Math.max(1, parseInt(e.target.value) || 1))}
+                />
+              </div>
+            </div>
+
+            <div className="mt-6">
+              <h4 className="font-semibold mb-2">Add-ons</h4>
+              <div className="space-y-2">
+                {catalog.addons.map((a) => (
+                  <div
+                    key={a.id}
+                    className="flex items-center justify-between p-3 bg-secondary/30 border border-border rounded-md"
+                  >
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{a.name}</p>
+                      <p className="text-xs text-muted-foreground">{a.description}</p>
+                    </div>
+                    <Input
+                      type="number"
+                      min={0}
+                      className="w-24"
+                      value={editAddonQty[a.id] ?? 0}
+                      onChange={(e) =>
+                        setEditAddonQty((prev) => ({
+                          ...prev,
+                          [a.id]: Math.max(0, parseInt(e.target.value) || 0),
+                        }))
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex justify-end mt-6">
+              <Button onClick={saveEdit} disabled={savingEdit}>
+                {savingEdit ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="w-4 h-4 mr-2" />
+                )}
+                {quote.status === 'paid' ? 'Create Amendment' : 'Save Changes'}
+              </Button>
+            </div>
+          </Card>
+        )}
+
+        {/* Parent / amendment linkage. Shown only when this quote is part of
+            an amendment chain — surfaces the relationship so admins don't lose
+            track of which quote is the "live" one. */}
+        {(quote.parentQuoteId || (quote as any).amendments?.length) && (
+          <Card className="p-6 bg-amber-50/40 dark:bg-amber-950/10 border-amber-200/60 dark:border-amber-900/40">
+            <h3 className="text-lg font-semibold mb-2">Amendment Chain</h3>
+            {quote.parentQuoteId && (
+              <p className="text-sm">
+                Amendment of{' '}
+                <Button
+                  variant="link"
+                  size="sm"
+                  className="p-0 h-auto"
+                  onClick={() => navigate(`/admin/quotes/${quote.parentQuoteId}`)}
+                >
+                  parent quote
+                </Button>
+                .
+              </p>
+            )}
+            {(quote as any).amendments?.length > 0 && (
+              <div className="text-sm space-y-1 mt-2">
+                <p className="text-muted-foreground">Amendments:</p>
+                {(quote as any).amendments.map((a: any) => (
+                  <Button
+                    key={a.id}
+                    variant="link"
+                    size="sm"
+                    className="p-0 h-auto block"
+                    onClick={() => navigate(`/admin/quotes/${a.id}`)}
+                  >
+                    {a.quoteNumber}
+                  </Button>
+                ))}
+              </div>
+            )}
+          </Card>
+        )}
 
         {/* Generated contracts */}
         <Card className="p-6">

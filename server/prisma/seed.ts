@@ -31,6 +31,9 @@ async function main() {
       isBestValue: pkg.isBestValue ?? false,
       sortOrder: i,
       cwAgreementTypeId: pkg.cwAgreementTypeId ?? null,
+      cwPerUserProductId: pkg.cwPerUserProductId ?? null,
+      cwPerUserF3ProductId: pkg.cwPerUserF3ProductId ?? null,
+      cwPerLocationProductId: pkg.cwPerLocationProductId ?? null,
       agreementMonths: pkg.agreementMonths ?? 0,
     };
     await prisma.package.upsert({

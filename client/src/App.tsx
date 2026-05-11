@@ -7,8 +7,6 @@ import { QuoteProvider } from "./contexts/QuoteContext";
 import { AuthProvider } from "./contexts/AuthContext";
 import { AiChatProvider } from "./contexts/AiChatContext";
 import { AiChatWidget } from "./components/AiChatWidget";
-import { IS_LEAD_GEN_MODE } from "./lib/lead-gen";
-import Landing from "./pages/Landing";
 import QuoteBuilder from "./pages/QuoteBuilder";
 import QuoteInfo from "./pages/QuoteInfo";
 import Summary from "./pages/Summary";
@@ -43,10 +41,7 @@ const App = () => (
           <BrowserRouter>
             <AiChatProvider>
               <Routes>
-                <Route
-                  path="/"
-                  element={IS_LEAD_GEN_MODE ? <Navigate to="/quote-builder" replace /> : <Landing />}
-                />
+                <Route path="/" element={<Navigate to="/quote-builder" replace />} />
                 <Route path="/quote-builder" element={<QuoteBuilder />} />
                 <Route path="/quote-info" element={<QuoteInfo />} />
                 <Route path="/summary" element={<Summary />} />

@@ -11,8 +11,14 @@ export interface Package {
   // CW agreement type id this package maps to. Required for `createAgreement`
   // to work; nullable so the schema doesn't break legacy rows during migration.
   cwAgreementTypeId?: number | null;
-  // Term length in months. 0 = month-to-month. 36 = 3-year agreement (auto
-  // waives the onboarding fee per NTM policy when signed online).
+  // CW catalog product IDs for the package's recurring lines. postAdditions
+  // posts one Agreement Addition per filled-in product: per-user × userCount,
+  // per-user F3 × F3 count (if/when surfaced), per-location × locationCount.
+  cwPerUserProductId?: number | null;
+  cwPerUserF3ProductId?: number | null;
+  cwPerLocationProductId?: number | null;
+  // Term length in months. 0 = month-to-month, 36 = 3-year, 60 = 5-year.
+  // 36+ traditionally waives the onboarding fee per NTM policy.
   agreementMonths?: number;
 }
 
@@ -109,6 +115,10 @@ export interface QuoteSelectedPackage {
   pricePerLocation: number;
   frequency: string;
   features: string[];
+  // Snapshotted at quote-creation so historical quotes keep their term even
+  // if an admin retunes the source package later. 0 = month-to-month,
+  // 36 = 3-year, 60 = 5-year.
+  agreementMonths?: number;
   calculatedPrice: number;
 }
 

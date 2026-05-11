@@ -12,6 +12,7 @@ import { X, Plus, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { adminApi } from '@/services/api';
 import AdminNav from '@/components/admin/AdminNav';
+import { CONTRACT_TERM_OPTIONS } from '@/lib/utils';
 
 const PackageManagement = () => {
   const navigate = useNavigate();
@@ -67,6 +68,7 @@ const PackageManagement = () => {
       pricePerLocation: 0,
       frequency: 'monthly',
       features: ['Feature 1'],
+      agreementMonths: 0,
     };
     setEditablePackages([...editablePackages, newPackage]);
     toast.success('New package added');
@@ -203,6 +205,31 @@ const PackageManagement = () => {
                   </Select>
                 </div>
 
+                <div className="space-y-2">
+                  <Label htmlFor={`term-${packageIndex}`}>Contract Term</Label>
+                  <Select
+                    value={String(pkg.agreementMonths ?? 0)}
+                    onValueChange={(value) =>
+                      updatePackage(packageIndex, 'agreementMonths', parseInt(value, 10) || 0)
+                    }
+                  >
+                    <SelectTrigger id={`term-${packageIndex}`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {CONTRACT_TERM_OPTIONS.map((opt) => (
+                        <SelectItem key={opt.months} value={String(opt.months)}>
+                          {opt.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Customers see this label on the package card. Changing it here updates new
+                    quotes immediately; quotes already in flight keep the term they were signed under.
+                  </p>
+                </div>
+
                 <div className="flex items-center justify-between py-3">
                   <Label htmlFor={`best-value-${packageIndex}`} className="cursor-pointer">
                     Show as Best Value
@@ -235,6 +262,62 @@ const PackageManagement = () => {
                     Maps this package to a CW agreement type. NTM defaults: Essentials=36, SafeSecure=37, SafeSecure Plus=38.
                   </p>
                 </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="space-y-2">
+                    <Label htmlFor={`cw-user-pid-${packageIndex}`}>Per-User Product ID</Label>
+                    <Input
+                      id={`cw-user-pid-${packageIndex}`}
+                      type="number"
+                      value={pkg.cwPerUserProductId ?? ''}
+                      onChange={(e) =>
+                        updatePackage(
+                          packageIndex,
+                          'cwPerUserProductId',
+                          e.target.value === '' ? null : parseInt(e.target.value, 10),
+                        )
+                      }
+                      placeholder="e.g. 1096"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor={`cw-user-f3-pid-${packageIndex}`}>F3 Per-User Product ID</Label>
+                    <Input
+                      id={`cw-user-f3-pid-${packageIndex}`}
+                      type="number"
+                      value={pkg.cwPerUserF3ProductId ?? ''}
+                      onChange={(e) =>
+                        updatePackage(
+                          packageIndex,
+                          'cwPerUserF3ProductId',
+                          e.target.value === '' ? null : parseInt(e.target.value, 10),
+                        )
+                      }
+                      placeholder="e.g. 1118"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor={`cw-loc-pid-${packageIndex}`}>Per-Location Product ID</Label>
+                    <Input
+                      id={`cw-loc-pid-${packageIndex}`}
+                      type="number"
+                      value={pkg.cwPerLocationProductId ?? ''}
+                      onChange={(e) =>
+                        updatePackage(
+                          packageIndex,
+                          'cwPerLocationProductId',
+                          e.target.value === '' ? null : parseInt(e.target.value, 10),
+                        )
+                      }
+                      placeholder="e.g. 1099"
+                    />
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground -mt-1">
+                  CW catalog product IDs. These are posted as Agreement Additions on every paid
+                  quote so CW invoices month 2+ from the same SKUs. F3 (Web & Email Only) is
+                  optional — leave blank if you don't use a separate F3 tier.
+                </p>
 
                 <div className="space-y-2">
                   <Label>Features</Label>

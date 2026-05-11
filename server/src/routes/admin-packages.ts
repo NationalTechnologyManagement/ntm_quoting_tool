@@ -16,6 +16,13 @@ const packageSchema = z.object({
   isBestValue: z.boolean().optional(),
   sortOrder: z.number().optional(),
   cwAgreementTypeId: z.number().int().nullable().optional(),
+  cwPerUserProductId: z.number().int().nullable().optional(),
+  cwPerUserF3ProductId: z.number().int().nullable().optional(),
+  cwPerLocationProductId: z.number().int().nullable().optional(),
+  // 0 = month-to-month, 36 = 3-year, 60 = 5-year. Any non-negative int is
+  // accepted so ops can plug in odd terms (e.g. 12-month pilot) without a
+  // schema change, but the admin UI only surfaces the three standard buckets.
+  agreementMonths: z.number().int().min(0).optional(),
 });
 
 // List all packages (including inactive)

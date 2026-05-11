@@ -416,8 +416,10 @@ async function createAgreement(
   return agreement.id;
 }
 
-// Posts every recurring addon as an Addition. Addition.product is required by
-// CW Manage 2026.4 — addons without cwProductId throw so ops can fix them.
+// Posts every recurring line as an Agreement Addition: the package's own
+// per-user and per-location lines, plus every selected recurring addon.
+// Addition.product is required by CW Manage 2026.4 — anything missing a
+// productId is reported back in `missingProductIds` so ops can fix it.
 // Idempotent: GETs existing additions and skips ones whose description matches
 // an already-posted line, so a partial-failure retry doesn't duplicate.
 async function postAdditions(
@@ -429,6 +431,82 @@ async function postAdditions(
   let skipped = 0;
   const missing: string[] = [];
 
+  // Pre-fetch existing additions on this agreement for dedupe-by-description.
+  const existing = await cwJson<Array<{ id: number; description?: string }>>(
+    `/finance/agreements/${agreementId}/additions?pageSize=1000&fields=id,description`,
+  ).catch(() => [] as Array<{ id: number; description?: string }>);
+  const existingDescriptions = new Set(existing.map((a) => a.description ?? ''));
+
+  const postLine = async (
+    productId: number,
+    description: string,
+    quantity: number,
+    unitPrice: number,
+  ) => {
+    if (existingDescriptions.has(description)) {
+      skipped += 1;
+      return;
+    }
+    await cwJson(`/finance/agreements/${agreementId}/additions`, {
+      method: 'POST',
+      body: JSON.stringify({
+        product: { id: productId },
+        description,
+        quantity,
+        unitPrice,
+        effectiveDate: today,
+        billCustomer: 'Billable',
+      }),
+    });
+    posted += 1;
+  };
+
+  // ── Package lines (per-user + per-location) ──
+  // Pull the current package record so we have the latest CW product IDs.
+  // Quotes don't snapshot product IDs because they're CW-internal plumbing —
+  // ops can correct mis-mapped IDs on the package row and replay provisioning
+  // without re-issuing the customer's quote.
+  const pkg = await prisma.package.findUnique({
+    where: { id: quote.selectedPackage.id },
+    select: {
+      name: true,
+      cwPerUserProductId: true,
+      cwPerLocationProductId: true,
+    },
+  });
+
+  const userCount = quote.customer.userCount ?? 0;
+  const locationCount = quote.customer.locationCount ?? 0;
+  const pricePerUser = quote.selectedPackage.pricePerUser ?? 0;
+  const pricePerLocation = quote.selectedPackage.pricePerLocation ?? 0;
+
+  if (userCount > 0 && pricePerUser > 0) {
+    if (pkg?.cwPerUserProductId) {
+      await postLine(
+        pkg.cwPerUserProductId,
+        `${quote.selectedPackage.name} — Per User`,
+        userCount,
+        pricePerUser,
+      );
+    } else {
+      missing.push(`${quote.selectedPackage.name} per-user`);
+    }
+  }
+
+  if (locationCount > 0 && pricePerLocation > 0) {
+    if (pkg?.cwPerLocationProductId) {
+      await postLine(
+        pkg.cwPerLocationProductId,
+        `${quote.selectedPackage.name} — Per Location`,
+        locationCount,
+        pricePerLocation,
+      );
+    } else {
+      missing.push(`${quote.selectedPackage.name} per-location`);
+    }
+  }
+
+  // ── Addon lines ──
   const addonIds = quote.selectedAddons.map((a) => a.id);
   const dbAddons = addonIds.length
     ? await prisma.addon.findMany({
@@ -438,20 +516,9 @@ async function postAdditions(
     : [];
   const productIdByAddon = new Map(dbAddons.map((a) => [a.id, a.cwProductId] as const));
 
-  // Pre-fetch existing additions on this agreement for dedupe-by-description.
-  const existing = await cwJson<Array<{ id: number; description?: string }>>(
-    `/finance/agreements/${agreementId}/additions?pageSize=1000&fields=id,description`,
-  ).catch(() => [] as Array<{ id: number; description?: string }>);
-  const existingDescriptions = new Set(existing.map((a) => a.description ?? ''));
-
   for (const addon of quote.selectedAddons) {
     const isRecurring = addon.pricingType !== 'one-time-only' && (addon.recurringPrice ?? 0) > 0;
     if (!isRecurring) {
-      skipped += 1;
-      continue;
-    }
-    if (existingDescriptions.has(addon.name)) {
-      // Already posted in a previous run; skip to keep idempotency.
       skipped += 1;
       continue;
     }
@@ -461,19 +528,9 @@ async function postAdditions(
       skipped += 1;
       continue;
     }
-    await cwJson(`/finance/agreements/${agreementId}/additions`, {
-      method: 'POST',
-      body: JSON.stringify({
-        product: { id: productId },
-        description: addon.name,
-        quantity: addon.quantity,
-        unitPrice: addon.recurringPrice,
-        effectiveDate: today,
-        billCustomer: 'Billable',
-      }),
-    });
-    posted += 1;
+    await postLine(productId, addon.name, addon.quantity, addon.recurringPrice ?? 0);
   }
+
   return { posted, skipped, missingProductIds: missing };
 }
 

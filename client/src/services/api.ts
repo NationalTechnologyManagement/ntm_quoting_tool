@@ -217,6 +217,30 @@ export const adminApi = {
       `/api/admin/quotes/${encodeURIComponent(id)}/custom-items/${encodeURIComponent(itemId)}`,
       { method: 'DELETE' },
     ),
+  editQuote: (
+    id: string,
+    body: {
+      userCount?: number;
+      locationCount?: number;
+      selectedPackage?: any;
+      selectedAddons?: any[];
+      agreementMonths?: number;
+      amendIfPaid?: boolean;
+    },
+  ) =>
+    apiRequest<
+      | { mode: 'in_place'; quote: any }
+      | {
+          mode: 'amendment';
+          amendment: any;
+          delta: { recurring: number; oneTime: number };
+          invoice: { invoiceId: string; paymentLink: string } | null;
+          invoiceError: string | null;
+        }
+    >(`/api/admin/quotes/${encodeURIComponent(id)}`, {
+      method: 'PUT',
+      body: JSON.stringify(body),
+    }),
   getQuoteProvisioning: (id: string) =>
     apiRequest<{
       quoteNumber: string;

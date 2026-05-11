@@ -10,19 +10,26 @@ datasource db {
 // ── Packages ─────────────────────────────────────────────────────────
 
 model Package {
-  id                  String   @id @default(cuid())
-  name                String
-  pricePerUser        Float
-  pricePerLocation    Float
-  frequency           String   @default("monthly") // monthly | annually | one-time
-  features            Json     @default("[]")       // string[]
-  isBestValue         Boolean  @default(false)
-  sortOrder           Int      @default(0)
-  active              Boolean  @default(true)
-  cwAgreementTypeId   Int?     // CW agreement type to use when this package is sold
-  agreementMonths     Int      @default(0) // 0 = month-to-month; 36 = waives onboarding when signed online
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id                     String   @id @default(cuid())
+  name                   String
+  pricePerUser           Float
+  pricePerLocation       Float
+  frequency              String   @default("monthly") // monthly | annually | one-time
+  features               Json     @default("[]")       // string[]
+  isBestValue            Boolean  @default(false)
+  sortOrder              Int      @default(0)
+  active                 Boolean  @default(true)
+  cwAgreementTypeId      Int?     // CW agreement type to use when this package is sold
+  // CW catalog product IDs for the per-package recurring lines. postAdditions
+  // posts one Addition per row that's set: per-user × userCount on the
+  // Business Premium product, per-user F3 × userCount on the F3 product (if
+  // a separate F3 count is ever introduced), per-location × locationCount.
+  cwPerUserProductId     Int?
+  cwPerUserF3ProductId   Int?
+  cwPerLocationProductId Int?
+  agreementMonths        Int      @default(0) // 0 = month-to-month; 36 = 3-year; 60 = 5-year
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
   @@map("packages")
 }
@@ -115,6 +122,13 @@ model Quote {
   ghlContactId       String?
   ghlOpportunityId   String?
 
+  // Amendment linkage. When an admin edits an already-paid quote we leave
+  // the original alone and create a new quote with parentQuoteId pointing
+  // back at it. The amendment carries its own AP invoice for the delta.
+  parentQuoteId      String?
+  parent             Quote?   @relation("QuoteAmendments", fields: [parentQuoteId], references: [id])
+  amendments         Quote[]  @relation("QuoteAmendments")
+
   // Provisioning state (populated by the CW step machine).
   // pending = nothing started; provisioned = all required steps ok;
   // partial = some non-critical step failed and was logged for retry;
@@ -130,6 +144,7 @@ model Quote {
   @@index([status])
   @@index([createdAt])
   @@index([provisioningStatus])
+  @@index([parentQuoteId])
   @@map("quotes")
 }
 

@@ -11,7 +11,10 @@ export interface Package {
   features: string[];
   isBestValue?: boolean;
   cwAgreementTypeId?: number | null;
-  agreementMonths?: number; // 0 = month-to-month; 36 = waives onboarding when signed online
+  cwPerUserProductId?: number | null;
+  cwPerUserF3ProductId?: number | null;
+  cwPerLocationProductId?: number | null;
+  agreementMonths?: number; // 0 = MTM, 36 = 3-year, 60 = 5-year
 }
 
 export interface Addon {
@@ -128,11 +131,15 @@ const defaultPackages: Package[] = [
     ],
     isBestValue: false,
     agreementMonths: 0,
+    cwAgreementTypeId: 36,
+    cwPerUserProductId: 1096,
+    cwPerUserF3ProductId: 1118,
+    cwPerLocationProductId: 1099,
   },
   {
     id: 'package-2',
     name: 'SafeSecure',
-    pricePerUser: 99,
+    pricePerUser: 119,
     pricePerLocation: 400,
     frequency: 'monthly',
     features: [
@@ -145,11 +152,15 @@ const defaultPackages: Package[] = [
     ],
     isBestValue: true,
     agreementMonths: 36,
+    cwAgreementTypeId: 37,
+    cwPerUserProductId: 1097,
+    cwPerUserF3ProductId: 1119,
+    cwPerLocationProductId: 1245,
   },
   {
     id: 'package-3',
     name: 'SafeSecure Plus',
-    pricePerUser: 149,
+    pricePerUser: 179,
     pricePerLocation: 500,
     frequency: 'monthly',
     features: [
@@ -160,6 +171,10 @@ const defaultPackages: Package[] = [
     ],
     isBestValue: false,
     agreementMonths: 36,
+    cwAgreementTypeId: 38,
+    cwPerUserProductId: 1098,
+    cwPerUserF3ProductId: 1120,
+    cwPerLocationProductId: 1246,
   },
 ];
 

@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Mail, CreditCard, CalendarCheck, ChevronDown, ChevronUp, ArrowLeft, AlertCircle, X } from "lucide-react";
 import { toast } from "sonner";
 import { SiteHeader } from "@/components/SiteHeader";
-import { formatAmount } from "@/lib/utils";
+import { formatAmount, formatContractTerm } from "@/lib/utils";
 import { IS_LEAD_GEN_MODE } from "@/lib/lead-gen";
 
 const generateQuoteNumber = (type: "quote" | "order") => {
@@ -74,6 +74,7 @@ const Summary = () => {
             pricePerLocation: selectedPackage.pricePerLocation,
             frequency: selectedPackage.frequency,
             features: selectedPackage.features,
+            agreementMonths: selectedPackage.agreementMonths ?? 0,
             calculatedPrice: selectedPackage.pricePerUser * customerInfo.userCount + selectedPackage.pricePerLocation * customerInfo.locationCount,
           },
           selectedAddons: selectedAddons.map((addon) => ({
@@ -261,6 +262,7 @@ const Summary = () => {
         pricePerLocation: selectedPackage.pricePerLocation,
         frequency: selectedPackage.frequency,
         features: selectedPackage.features,
+        agreementMonths: selectedPackage.agreementMonths ?? 0,
         calculatedPrice: packageCost,
       },
       selectedAddons: selectedAddons.map((addon) => ({
@@ -605,7 +607,9 @@ const Summary = () => {
                 <div className="space-y-2">
                   <h3 className="font-semibold text-foreground text-sm">Important Disclaimer</h3>
                   <ul className="text-xs text-muted-foreground space-y-1.5 leading-relaxed">
-                    <li>• All orders are subject to a 36-month agreement unless otherwise specified.</li>
+                    <li>• This order is subject to {selectedPackage?.agreementMonths && selectedPackage.agreementMonths > 0
+                      ? `a ${formatContractTerm(selectedPackage.agreementMonths).toLowerCase()}`
+                      : 'a month-to-month agreement'} unless otherwise specified.</li>
                     <li>
                       • We reserve the right to cancel or modify this quote if any information provided is found to be
                       incorrect or incomplete.
@@ -649,7 +653,9 @@ const Summary = () => {
                     >
                       Terms and Conditions
                     </a>{" "}
-                    and acknowledge that this is a 36-month service agreement.
+                    {selectedPackage?.agreementMonths && selectedPackage.agreementMonths > 0
+                      ? `and acknowledge that this is a ${formatContractTerm(selectedPackage.agreementMonths).toLowerCase()}.`
+                      : 'and acknowledge this is a month-to-month service agreement.'}
                   </Label>
                 </div>
 
