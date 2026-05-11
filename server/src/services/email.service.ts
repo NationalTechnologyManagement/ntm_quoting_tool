@@ -4,6 +4,7 @@ import { env } from '../config/env.js';
 import type { QuoteData } from '@ntm/shared';
 import { buildQuoteEmailHtml } from '../templates/quote-email.js';
 import { buildPaymentConfirmationHtml } from '../templates/payment-confirmation.js';
+import { buildPaymentReceivedHtml } from '../templates/payment-received.js';
 
 const fromEmail = () => cred('FROM_EMAIL') || env.FROM_EMAIL;
 
@@ -68,12 +69,16 @@ export async function sendPaymentConfirmationEmail(quote: QuoteData) {
     return { success: true, skipped: true };
   }
 
-  const html = buildPaymentConfirmationHtml(quote);
+  // Short "payment received" body. The full recap + signed PDF go in the
+  // separate Contract email via sendContractEmail. Sharing
+  // buildPaymentConfirmationHtml here made the customer feel like they
+  // got two contract emails — fixed by giving each call its own template.
+  const html = buildPaymentReceivedHtml(quote);
 
   const result = await resend.emails.send({
     from: fromEmail(),
     to: quote.customer.email,
-    subject: `Payment Confirmed - ${quote.customer.businessName}`,
+    subject: `Payment Received — ${quote.customer.businessName}`,
     html,
   });
 

@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 
 const NAV_ITEMS = [
   { path: '/admin/quotes', label: 'Quotes', match: (p: string) => p.startsWith('/admin/quotes') },
+  { path: '/admin/logs', label: 'Logs' },
   { path: '/admin/packages', label: 'Packages' },
   { path: '/admin/addons', label: 'Add-Ons' },
   { path: '/admin/promo-codes', label: 'Promo Codes' },

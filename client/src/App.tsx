@@ -27,6 +27,7 @@ import AiChatSettings from "./pages/admin/AiChatSettings";
 import Account from "./pages/admin/Account";
 import ContractPreview from "./pages/admin/ContractPreview";
 import QuoteDetail from "./pages/admin/QuoteDetail";
+import Logs from "./pages/admin/Logs";
 import QuoteLookup from "./pages/QuoteLookup";
 import NotFound from "./pages/NotFound";
 
@@ -54,6 +55,7 @@ const App = () => (
                 <Route path="/admin/login" element={<Login />} />
                 <Route path="/admin/quotes" element={<QuoteManagement />} />
                 <Route path="/admin/quotes/:id" element={<QuoteDetail />} />
+                <Route path="/admin/logs" element={<Logs />} />
                 <Route path="/admin/integrations" element={<IntegrationSettings />} />
                 <Route path="/admin/cw-reference-ids" element={<CwReferenceData />} />
                 <Route path="/admin/ai-chat" element={<AiChatSettings />} />

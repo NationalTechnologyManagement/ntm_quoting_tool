@@ -259,7 +259,7 @@ export const adminApi = {
       `/api/admin/quotes/${id}/retry-provisioning`,
       { method: 'POST' },
     ),
-  getProvisioningErrors: (limit = 50) =>
+  getProvisioningErrors: (limit = 200) =>
     apiRequest<{
       errors: Array<{
         id: string;
@@ -279,6 +279,11 @@ export const adminApi = {
         createdAt: string;
       }>;
     }>(`/api/admin/provisioning-errors?limit=${limit}`),
+  clearProvisioningErrors: () =>
+    apiRequest<{ success: true; deleted: number }>(
+      '/api/admin/provisioning-errors',
+      { method: 'DELETE' },
+    ),
 
   // Integrations
   getIntegrations: () => apiRequest<any>('/api/admin/settings/integrations'),

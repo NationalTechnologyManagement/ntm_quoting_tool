@@ -698,10 +698,13 @@ async function createProject(
   const start = todayISO();
   const end = plusDaysISO(durationDays);
 
-  // Project name (CW's summary/title field) format: "<Package> - <Company> - <Date>"
-  // per NTM convention. Date is ISO (YYYY-MM-DD) so projects sort chronologically.
+  // Project name (CW's summary/title field). Quote # baked in so the name
+  // is globally unique — CW rejects POST with "A record with this name
+  // already exists." when two customers happen to onboard the same package
+  // on the same day, or when a retry attempts to recreate a project that
+  // exists. Format: "<Package> - <Company> - <QuoteNumber>".
   const projectName =
-    `${quote.selectedPackage.name} - ${quote.customer.businessName} - ${start}`;
+    `${quote.selectedPackage.name} - ${quote.customer.businessName} - ${quote.quoteNumber}`;
 
   // Description: everything the onboarding PM needs to scope the work — sizing,
   // pricing, addon list with quantities and unit prices, customer contact, and
@@ -734,23 +737,46 @@ async function createProject(
     `Signed: ${start}`,
   ].join('\n');
 
-  const project = await cwJson<any>('/project/projects', {
-    method: 'POST',
-    body: JSON.stringify({
-      name: projectName,
-      company: { id: companyId },
-      contact: { id: contactId },
-      board: { id: boardId },
-      billingMethod,
-      estimatedStart: `${start}T00:00:00Z`,
-      estimatedEnd: `${end}T00:00:00Z`,
-      ...(typeId ? { type: { id: typeId } } : {}),
-      ...(templateId ? { projectTemplateId: templateId } : {}),
-      ...(managerId ? { manager: { id: managerId } } : {}),
-      description,
-    }),
-  });
-  return project.id;
+  const body = {
+    name: projectName,
+    company: { id: companyId },
+    contact: { id: contactId },
+    board: { id: boardId },
+    billingMethod,
+    estimatedStart: `${start}T00:00:00Z`,
+    estimatedEnd: `${end}T00:00:00Z`,
+    ...(typeId ? { type: { id: typeId } } : {}),
+    ...(templateId ? { projectTemplateId: templateId } : {}),
+    ...(managerId ? { manager: { id: managerId } } : {}),
+    description,
+  };
+
+  const res = await cwFetch('/project/projects', { method: 'POST', body: JSON.stringify(body) });
+  if (res.ok) {
+    const project = await res.json();
+    return project.id;
+  }
+
+  // Idempotent recovery: if CW says a project with this name already
+  // exists (a retry, or a manual project created earlier with the same
+  // name) look it up by name and return its id instead of hard-failing.
+  const errText = await res.text().catch(() => '');
+  if (res.status === 400 && /ObjectExists|already exists/i.test(errText)) {
+    try {
+      const matches = await cwJson<Array<{ id: number; name: string }>>(
+        `/project/projects?conditions=name="${encodeURIComponent(projectName.replace(/"/g, ''))}"&pageSize=1`,
+      );
+      if (matches.length > 0) {
+        console.log(
+          `[CW] project "${projectName}" already exists with id ${matches[0].id} — reusing`,
+        );
+        return matches[0].id;
+      }
+    } catch (e) {
+      console.error('[CW] project lookup after ObjectExists failed:', e);
+    }
+  }
+  throw new Error(`CW POST /project/projects failed (${res.status}): ${errText}`);
 }
 
 async function patchCustomFields(

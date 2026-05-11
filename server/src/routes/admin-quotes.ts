@@ -647,6 +647,16 @@ router.get('/api/admin/quotes/stats/summary', requireAuth, async (_req, res) => 
   res.json({ statusCounts, total, last30Days: recentTotal });
 });
 
+// Clear (delete) all provisioning_step_failed AuditLog rows. Admin button
+// behind a confirmation prompt; useful after resolving a batch of issues
+// so the Logs page only shows fresh failures.
+router.delete('/api/admin/provisioning-errors', requireAuth, async (_req, res) => {
+  const deleted = await prisma.auditLog.deleteMany({
+    where: { action: 'provisioning_step_failed' },
+  });
+  res.json({ success: true, deleted: deleted.count });
+});
+
 // Recent provisioning failures across all quotes — drives the admin
 // Provisioning Errors view. Reads from AuditLog rows written by
 // logProvisioningStepFailure in notify.service.
