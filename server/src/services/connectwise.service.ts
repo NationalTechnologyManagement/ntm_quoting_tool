@@ -6,7 +6,7 @@
 import { prisma } from '../config/prisma.js';
 import { env } from '../config/env.js';
 import { cred } from './integration-credentials.service.js';
-import { getCwConfig, type CwConfigKey } from './cw-config.service.js';
+import { getCwConfig, setCwConfig, type CwConfigKey } from './cw-config.service.js';
 import {
   getStep,
   recordStep,
@@ -14,6 +14,7 @@ import {
   type CwStep,
 } from './cw-state.service.js';
 import * as notify from './notify.service.js';
+import { logProvisioningStepFailure } from './notify.service.js';
 import type { QuoteData } from '@ntm/shared';
 
 // ── Error types ───────────────────────────────────────────────────────
@@ -77,6 +78,38 @@ async function cwJson<T = any>(path: string, options: RequestInit = {}): Promise
   return res.json() as Promise<T>;
 }
 
+// ── Project template lookup ───────────────────────────────────────────
+// Used by the admin "Find template by name" helper. CW Manage's
+// projectTemplates collection supports `conditions=name LIKE "…"` via the
+// standard ?conditions= query param.
+
+export interface ProjectTemplateMatch {
+  id: number;
+  name: string;
+}
+
+export async function findProjectTemplatesByName(name: string): Promise<ProjectTemplateMatch[]> {
+  if (!isCWConfigured()) throw new Error('CW is not configured');
+  const safe = name.replace(/"/g, '');
+  // Try exact match first, then a prefix LIKE fallback for typo tolerance.
+  const tries = [
+    `/project/projectTemplates?conditions=name="${encodeURIComponent(safe)}"`,
+    `/project/projectTemplates?conditions=name LIKE "${encodeURIComponent(safe)}%"`,
+    `/project/projectTemplates?conditions=name LIKE "%${encodeURIComponent(safe)}%"`,
+  ];
+  for (const path of tries) {
+    try {
+      const rows = await cwJson<Array<{ id: number; name: string }>>(path);
+      if (Array.isArray(rows) && rows.length > 0) {
+        return rows.map((r) => ({ id: r.id, name: r.name }));
+      }
+    } catch {
+      /* fall through to next pattern */
+    }
+  }
+  return [];
+}
+
 // ── Step runner ───────────────────────────────────────────────────────
 // Wraps every CW call with state lookup → mark started → execute → record outcome.
 // If status was already 'success' on a prior run, we skip the call and return the
@@ -107,7 +140,47 @@ async function runStep<T>(
     return { skipped: false, cwId: out.cwId, result: out.result };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error ? err.stack : undefined;
     await recordStep(quoteId, step, 'failed', null, msg);
+    // Fire-and-forget: emit a detailed log + email to ops. Failure to email
+    // never blocks the step itself — we already recorded the failure above.
+    void (async () => {
+      try {
+        const q = await prisma.quote.findUnique({
+          where: { id: quoteId },
+          select: {
+            quoteNumber: true,
+            customer: true,
+            cwCompanyId: true,
+            cwContactId: true,
+            cwAgreementId: true,
+            cwProjectId: true,
+            cwOpportunityId: true,
+            provisioningStatus: true,
+          },
+        });
+        if (!q) return;
+        const customer = (q.customer as any) || {};
+        await logProvisioningStepFailure({
+          quoteNumber: q.quoteNumber,
+          businessName: customer.businessName ?? '(unknown)',
+          customerEmail: customer.email ?? undefined,
+          step,
+          error: msg,
+          stack,
+          context: {
+            cwCompanyId: q.cwCompanyId,
+            cwContactId: q.cwContactId,
+            cwAgreementId: q.cwAgreementId,
+            cwProjectId: q.cwProjectId,
+            cwOpportunityId: q.cwOpportunityId,
+            provisioningStatus: q.provisioningStatus,
+          },
+        });
+      } catch (logErr) {
+        console.error('[CW] step-failure log emit failed:', logErr);
+      }
+    })();
     throw err;
   }
 }
@@ -569,7 +642,30 @@ async function createProject(
     throw new Error('CW config: project.boardId is required (CW Project schema requires board)');
   }
   const typeId = intCfg(cfg, 'project.typeId');
-  const templateId = intCfg(cfg, 'project.templateId');
+  let templateId = intCfg(cfg, 'project.templateId');
+  // When project.templateId isn't set, fall back to looking up the
+  // configured project.templateName (e.g. "SafeSecure Pure SaaS (Project
+  // Template) v3"). Resolved id gets cached back into project.templateId
+  // so subsequent provisioning calls skip the lookup.
+  if (!templateId) {
+    const templateName = strCfg(cfg, 'project.templateName');
+    if (templateName) {
+      try {
+        const matches = await findProjectTemplatesByName(templateName);
+        if (matches.length > 0) {
+          templateId = matches[0].id;
+          await setCwConfig('project.templateId', String(templateId));
+          console.log(
+            `[CW] resolved project.templateId=${templateId} from name "${templateName}"`,
+          );
+        } else {
+          console.warn(`[CW] no project template matched "${templateName}"`);
+        }
+      } catch (e) {
+        console.error('[CW] template name lookup failed:', e);
+      }
+    }
+  }
   const managerId = intCfg(cfg, 'project.defaultManagerMemberId');
   const billingMethod = strCfg(cfg, 'project.billingMethod') ?? 'FixedFee';
   const durationDays = intCfg(cfg, 'project.defaultDurationDays') ?? 30;
@@ -829,6 +925,9 @@ export async function onQuoteCreated(quote: QuoteData): Promise<CwQuoteCreatedRe
 }
 
 export interface CwPaymentCompletedResult {
+  cwCompanyId?: number;
+  cwContactId?: number;
+  cwOpportunityId?: number;
   cwAgreementId?: number;
   cwProjectId?: number;
 }
@@ -847,16 +946,64 @@ export async function onPaymentCompleted(quote: QuoteData): Promise<CwPaymentCom
   const quoteId = await resolveQuoteRowId(quote.quoteNumber);
   const result: CwPaymentCompletedResult = {};
 
-  // Hard requirement: company id must already exist from onQuoteCreated.
-  // If it doesn't, we can't recover here — escalate.
-  if (!quote.cwCompanyId) {
+  // Recovery path: if `onQuoteCreated` didn't run (network blip, CW outage,
+  // creds-misconfig at quote-create time) we won't have a cwCompanyId. Run
+  // those steps inline here so payment-time provisioning doesn't hard-fail.
+  // findOrCreateCompany is idempotent (it dedupes by name+email) so re-running
+  // when a company already exists is safe.
+  let companyId = quote.cwCompanyId ?? 0;
+  let contactId = quote.cwContactId ?? 0;
+  if (!companyId) {
+    console.warn(
+      `[CW] onPaymentCompleted: ${quote.quoteNumber} has no cwCompanyId — recovering inline`,
+    );
+    try {
+      const created = await runStep(quoteId, 'company', async () => {
+        const r = await findOrCreateCompany(quote.customer, cfg);
+        return { cwId: r.companyId, result: r };
+      });
+      companyId = created.cwId ?? 0;
+      if (companyId) result.cwCompanyId = companyId;
+    } catch (e) {
+      console.error('[CW] recovery company step failed:', e);
+      await markProvisioningStatus(quoteId, 'failed');
+      throw new CwHardFailError(
+        `Quote ${quote.quoteNumber} could not create CW company: ${(e as Error)?.message ?? e}`,
+      );
+    }
+    // Try to create the contact too — non-fatal if it fails.
+    if (!contactId && companyId) {
+      try {
+        const step = await runStep(quoteId, 'contact', async () => {
+          const id = await createContact(quote.customer, companyId, cfg);
+          return { cwId: id, result: id };
+        });
+        contactId = step.cwId ?? 0;
+        if (contactId) result.cwContactId = contactId;
+      } catch (e) {
+        console.error('[CW] recovery contact step failed:', e);
+      }
+    }
+    // Opportunity recovery — non-fatal; just lets the Won-flip work later.
+    if (companyId && contactId && !quote.cwOpportunityId) {
+      try {
+        const step = await runStep(quoteId, 'opportunity', async () => {
+          const id = await createOpportunity(quote, companyId, contactId, cfg);
+          return { cwId: id, result: id };
+        });
+        if (step.cwId) result.cwOpportunityId = step.cwId as any;
+      } catch (e) {
+        console.error('[CW] recovery opportunity step failed:', e);
+      }
+    }
+  }
+
+  if (!companyId) {
     await markProvisioningStatus(quoteId, 'failed');
     throw new CwHardFailError(
-      `Quote ${quote.quoteNumber} has no cwCompanyId; onQuoteCreated must run first`,
+      `Quote ${quote.quoteNumber} still has no cwCompanyId after recovery attempt`,
     );
   }
-  const companyId = quote.cwCompanyId;
-  const contactId = quote.cwContactId ?? 0;
 
   // Mark opportunity won (soft-fail; opportunity is non-critical for billing)
   if (quote.cwOpportunityId) {

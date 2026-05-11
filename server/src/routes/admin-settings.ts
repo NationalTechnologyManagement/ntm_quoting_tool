@@ -10,6 +10,7 @@ import {
   REQUIRED_KEYS_FOR_PROVISIONING,
   CW_CONFIG_KEYS,
 } from '../services/cw-config.service.js';
+import { findProjectTemplatesByName } from '../services/connectwise.service.js';
 import { randomBytes } from 'crypto';
 import {
   cred,
@@ -362,6 +363,46 @@ router.put(
     }
     await setCwConfig(key, value, notes ?? null);
     res.json({ success: true });
+  },
+);
+
+// "Find project template by name" — admin helper that queries CW Manage
+// for project templates matching the configured project.templateName and
+// writes the first match back to project.templateId. Returns all matches
+// so the admin can pick a specific one if there's ambiguity.
+const findTemplateSchema = z.object({
+  name: z.string().min(1).optional(),
+  setAsDefault: z.boolean().optional(),
+});
+
+router.post(
+  '/api/admin/cw/find-project-template',
+  requireAuth,
+  validate(findTemplateSchema),
+  async (req, res) => {
+    const body = req.body as z.infer<typeof findTemplateSchema>;
+    const rawCfg = await getCwConfigRaw();
+    const configuredName = rawCfg.find((r) => r.key === 'project.templateName')?.value;
+    const name = (body.name ?? configuredName ?? '').trim();
+    if (!name) {
+      res.status(400).json({
+        error:
+          'No template name provided and project.templateName isn\'t configured. Pass a name or set the config key.',
+      });
+      return;
+    }
+    try {
+      const matches = await findProjectTemplatesByName(name);
+      let chosen: { id: number; name: string } | null = null;
+      if (matches.length > 0 && body.setAsDefault !== false) {
+        // Prefer exact-case match if multiple results came back.
+        chosen = matches.find((m) => m.name === name) ?? matches[0];
+        await setCwConfig('project.templateId', String(chosen.id));
+      }
+      res.json({ matches, chosen });
+    } catch (e: any) {
+      res.status(502).json({ error: e?.message ?? 'CW template lookup failed' });
+    }
   },
 );
 

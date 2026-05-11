@@ -111,6 +111,8 @@ const CwReferenceData = () => {
           </p>
         </div>
 
+        <ProjectTemplateFinder rows={rows} onUpdated={fetchData} />
+
         {requiredUnset.length > 0 && (
           <Card className="p-4 mb-6 border-orange-300 bg-orange-50 dark:bg-orange-950/20 dark:border-orange-800">
             <div className="flex items-start gap-3">
@@ -197,5 +199,86 @@ const CwReferenceData = () => {
     </div>
   );
 };
+
+// Stand-alone card on the CW reference page that looks up the project
+// template by name (from project.templateName), shows all matches CW
+// returns, and writes the first match back to project.templateId.
+function ProjectTemplateFinder({ rows, onUpdated }: { rows: Row[]; onUpdated: () => void | Promise<void> }) {
+  const [busy, setBusy] = useState(false);
+  const [matches, setMatches] = useState<Array<{ id: number; name: string }> | null>(null);
+  const [chosen, setChosen] = useState<{ id: number; name: string } | null>(null);
+
+  const templateName = rows.find((r) => r.key === 'project.templateName')?.value ?? '';
+  const currentTemplateId = rows.find((r) => r.key === 'project.templateId')?.value ?? '';
+
+  const find = async () => {
+    setBusy(true);
+    setMatches(null);
+    setChosen(null);
+    try {
+      const r = await adminApi.findCwProjectTemplate();
+      setMatches(r.matches);
+      setChosen(r.chosen);
+      if (r.chosen) {
+        toast.success(`Found template — id ${r.chosen.id}. project.templateId updated.`);
+        await onUpdated();
+      } else {
+        toast.error('No template matched. Confirm project.templateName is correct.');
+      }
+    } catch (e: any) {
+      toast.error(e?.message || 'Lookup failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card className="p-6 mb-6 border-primary/30">
+      <h3 className="text-lg font-semibold">Project template auto-discovery</h3>
+      <p className="text-sm text-muted-foreground mt-1">
+        Looks up the CW project template by name (from{' '}
+        <code className="font-mono">project.templateName</code>) and writes the matching id back
+        to <code className="font-mono">project.templateId</code> so new customer onboardings use
+        the right template.
+      </p>
+      <div className="mt-3 text-sm grid grid-cols-1 md:grid-cols-2 gap-2">
+        <div>
+          <span className="text-muted-foreground">Name configured:</span>{' '}
+          <code className="font-mono">{templateName || '(unset)'}</code>
+        </div>
+        <div>
+          <span className="text-muted-foreground">Current template id:</span>{' '}
+          <code className="font-mono">{currentTemplateId || '(unset)'}</code>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 mt-4">
+        <Button onClick={find} disabled={busy || !templateName}>
+          {busy ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
+          Find and set template id
+        </Button>
+      </div>
+      {matches && matches.length > 0 && (
+        <div className="mt-4 text-sm">
+          <p className="font-semibold mb-1">{matches.length} match{matches.length === 1 ? '' : 'es'}:</p>
+          <ul className="space-y-1">
+            {matches.map((m) => (
+              <li key={m.id} className="flex items-center gap-2">
+                <code className="font-mono">{m.id}</code>
+                <span>{m.name}</span>
+                {chosen?.id === m.id && <Badge variant="secondary">selected</Badge>}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {matches && matches.length === 0 && (
+        <p className="text-sm text-destructive mt-3">
+          No templates returned by CW for that name. Double-check spelling or use the CW UI to
+          confirm the template exists.
+        </p>
+      )}
+    </Card>
+  );
+}
 
 export default CwReferenceData;

@@ -647,4 +647,38 @@ router.get('/api/admin/quotes/stats/summary', requireAuth, async (_req, res) => 
   res.json({ statusCounts, total, last30Days: recentTotal });
 });
 
+// Recent provisioning failures across all quotes — drives the admin
+// Provisioning Errors view. Reads from AuditLog rows written by
+// logProvisioningStepFailure in notify.service.
+router.get('/api/admin/provisioning-errors', requireAuth, async (req, res) => {
+  const take = Math.min(200, Number(req.query.limit) || 50);
+  const rows = await prisma.auditLog.findMany({
+    where: { action: 'provisioning_step_failed' },
+    orderBy: { createdAt: 'desc' },
+    take,
+  });
+  res.json({
+    errors: rows.map((r) => {
+      const data = (r.data as any) ?? {};
+      return {
+        id: r.id,
+        quoteNumber: r.entityId,
+        businessName: data.businessName ?? null,
+        customerEmail: data.customerEmail ?? null,
+        step: data.step ?? '(unknown)',
+        error: data.error ?? null,
+        provisioningStatus: data.provisioningStatus ?? null,
+        cwIds: {
+          company: data.cwCompanyId ?? null,
+          contact: data.cwContactId ?? null,
+          agreement: data.cwAgreementId ?? null,
+          project: data.cwProjectId ?? null,
+          opportunity: data.cwOpportunityId ?? null,
+        },
+        createdAt: r.createdAt.toISOString(),
+      };
+    }),
+  });
+});
+
 export default router;

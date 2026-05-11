@@ -259,6 +259,26 @@ export const adminApi = {
       `/api/admin/quotes/${id}/retry-provisioning`,
       { method: 'POST' },
     ),
+  getProvisioningErrors: (limit = 50) =>
+    apiRequest<{
+      errors: Array<{
+        id: string;
+        quoteNumber: string;
+        businessName: string | null;
+        customerEmail: string | null;
+        step: string;
+        error: string | null;
+        provisioningStatus: string | null;
+        cwIds: {
+          company: number | null;
+          contact: number | null;
+          agreement: number | null;
+          project: number | null;
+          opportunity: number | null;
+        };
+        createdAt: string;
+      }>;
+    }>(`/api/admin/provisioning-errors?limit=${limit}`),
 
   // Integrations
   getIntegrations: () => apiRequest<any>('/api/admin/settings/integrations'),
@@ -357,6 +377,14 @@ export const adminApi = {
     apiRequest<{ success: true }>('/api/admin/settings/cw-config', {
       method: 'PUT',
       body: JSON.stringify({ key, value, notes: notes ?? null }),
+    }),
+  findCwProjectTemplate: (name?: string) =>
+    apiRequest<{
+      matches: Array<{ id: number; name: string }>;
+      chosen: { id: number; name: string } | null;
+    }>('/api/admin/cw/find-project-template', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
     }),
 
   // ── AI Chat ─────────────────────────────────────────────────────────

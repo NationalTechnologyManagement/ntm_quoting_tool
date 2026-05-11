@@ -153,6 +153,17 @@ async function main() {
   }
   console.log(`  ✓ ${CW_CONFIG_KEYS.length} CW config keys seeded`);
 
+  // One-time correction: clear the legacy hard-coded project.templateId="2"
+  // ("Client Onboarding Template"). The new name-lookup fallback in
+  // createProject will resolve the right id from project.templateName
+  // ("SafeSecure Pure SaaS (Project Template) v3") on the next provisioning
+  // run and write it back. Admin-set values (anything other than "2") are
+  // left alone.
+  await prisma.cwConfig.updateMany({
+    where: { key: 'project.templateId', value: '2' },
+    data: { value: 'null', notes: 'Cleared by seed — name lookup will repopulate.' },
+  });
+
   console.log('Seed complete.');
 }
 

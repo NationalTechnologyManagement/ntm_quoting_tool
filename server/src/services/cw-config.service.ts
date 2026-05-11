@@ -37,6 +37,11 @@ export const CW_CONFIG_KEYS = [
   // ── Project ──
   'project.typeId',
   'project.templateId',
+  // Human-readable template name. Used by the admin "discover template"
+  // helper, which searches CW Manage for projectTemplates by name and
+  // backfills project.templateId. Also surfaced as a fallback in
+  // createProject when project.templateId is unset.
+  'project.templateName',
   'project.boardId',
   'project.defaultManagerMemberId',
   'project.billingMethod',         // enum string, not int
@@ -83,7 +88,13 @@ export const DEFAULTS: Record<CwConfigKey, string> = {
 
   // Project — all five confirmed
   'project.typeId': '8',                    // "Customer Onboarding"
-  'project.templateId': '2',                // "Client Onboarding Template"
+  // Template ID is intentionally null by default — ops should run the
+  // admin "Discover template by name" helper which looks up the right id
+  // from CW Manage and writes it back. Hard-coding "2" picked the wrong
+  // template (the legacy "Client Onboarding Template" instead of
+  // "SafeSecure Pure SaaS (Project Template) v3").
+  'project.templateId': 'null',
+  'project.templateName': 'SafeSecure Pure SaaS (Project Template) v3',
   'project.boardId': '20',                  // "Projects" (only board with projectFlag=true)
   'project.defaultManagerMemberId': '165',  // Kenneth Phillips (kphillips)
   'project.billingMethod': 'FixedFee',

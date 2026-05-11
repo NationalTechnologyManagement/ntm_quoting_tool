@@ -85,6 +85,8 @@ const QuoteManagement = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [search, setSearch] = useState('');
   const [searchInput, setSearchInput] = useState('');
+  const [errors, setErrors] = useState<Awaited<ReturnType<typeof adminApi.getProvisioningErrors>>['errors']>([]);
+  const [showAllErrors, setShowAllErrors] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) navigate('/admin/login');
@@ -118,13 +120,23 @@ const QuoteManagement = () => {
     }
   }, []);
 
+  const fetchErrors = useCallback(async () => {
+    try {
+      const r = await adminApi.getProvisioningErrors(50);
+      setErrors(r.errors);
+    } catch {
+      // Errors panel is non-critical
+    }
+  }, []);
+
   useEffect(() => {
     fetchQuotes();
   }, [fetchQuotes]);
 
   useEffect(() => {
     fetchStats();
-  }, [fetchStats]);
+    fetchErrors();
+  }, [fetchStats, fetchErrors]);
 
   const handleSearch = () => {
     setPage(1);
@@ -143,10 +155,76 @@ const QuoteManagement = () => {
       <div className="max-w-7xl mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-3xl font-bold">Quotes</h2>
-          <Button variant="outline" size="sm" onClick={() => { fetchQuotes(); fetchStats(); }}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              fetchQuotes();
+              fetchStats();
+              fetchErrors();
+            }}
+          >
             <RefreshCw className="w-4 h-4 mr-2" /> Refresh
           </Button>
         </div>
+
+        {/* Recent provisioning errors. Emails go to support@trustntm.com from
+            logs@trustntm.com automatically — this panel just surfaces them
+            in-app so admins can click straight to the affected quote. */}
+        {errors.length > 0 && (
+          <Card className="p-4 mb-6 border-destructive/40 bg-destructive/5">
+            <div className="flex items-start justify-between gap-3 mb-3">
+              <div>
+                <p className="font-semibold text-destructive">
+                  {errors.length} recent provisioning {errors.length === 1 ? 'error' : 'errors'}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Each failure is emailed to support@trustntm.com and logged here. Click a row
+                  to open the affected quote and retry the failing step.
+                </p>
+              </div>
+              {errors.length > 5 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowAllErrors((v) => !v)}
+                >
+                  {showAllErrors ? 'Show 5' : `Show all ${errors.length}`}
+                </Button>
+              )}
+            </div>
+            <div className="space-y-1">
+              {(showAllErrors ? errors : errors.slice(0, 5)).map((e) => (
+                <button
+                  key={e.id}
+                  type="button"
+                  onClick={() => navigate(`/admin/quotes/${e.quoteNumber}`)}
+                  className="w-full text-left flex items-start gap-3 px-3 py-2 rounded-md hover:bg-destructive/10 transition-colors"
+                >
+                  <span className="text-xs font-mono text-muted-foreground whitespace-nowrap pt-0.5">
+                    {new Date(e.createdAt).toLocaleString()}
+                  </span>
+                  <span className="flex-1 min-w-0">
+                    <span className="flex items-center gap-2 flex-wrap">
+                      <code className="font-mono text-xs">{e.quoteNumber}</code>
+                      {e.businessName && (
+                        <span className="text-sm truncate">{e.businessName}</span>
+                      )}
+                      <Badge variant="secondary" className="text-xs">
+                        step: {e.step}
+                      </Badge>
+                    </span>
+                    {e.error && (
+                      <span className="block text-xs text-destructive/80 mt-0.5 truncate">
+                        {e.error}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              ))}
+            </div>
+          </Card>
+        )}
 
         {/* Stats Cards */}
         {stats && (
