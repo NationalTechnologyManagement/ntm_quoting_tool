@@ -499,10 +499,29 @@ async function postAdditions(
   agreementId: number,
   quote: QuoteData,
 ): Promise<{ posted: number; skipped: number; missingProductIds: string[] }> {
-  const today = todayISO();
   let posted = 0;
   let skipped = 0;
   const missing: string[] = [];
+
+  // CW rejects additions with effectiveDate < agreement.billStartDate. Pull
+  // the agreement's real billStartDate so we line up with whatever CW stored
+  // (could differ from firstOfNextMonthISO() if the agreement was created
+  // a long time ago, or if ops adjusted it manually). Fall back to
+  // tomorrow's first-of-month if the GET fails.
+  let effectiveDate = firstOfNextMonthISO();
+  try {
+    const agreement = await cwJson<{ billStartDate?: string }>(
+      `/finance/agreements/${agreementId}?fields=billStartDate`,
+    );
+    if (agreement?.billStartDate) {
+      effectiveDate = agreement.billStartDate.slice(0, 10);
+    }
+  } catch (e) {
+    console.warn(
+      `[CW] could not read billStartDate for agreement ${agreementId} — using ${effectiveDate}:`,
+      e,
+    );
+  }
 
   // Pre-fetch existing additions on this agreement for dedupe-by-description.
   const existing = await cwJson<Array<{ id: number; description?: string }>>(
@@ -527,7 +546,8 @@ async function postAdditions(
         description,
         quantity,
         unitPrice,
-        effectiveDate: today,
+        // Must be >= agreement.billStartDate per CW's API rule.
+        effectiveDate,
         billCustomer: 'Billable',
       }),
     });
