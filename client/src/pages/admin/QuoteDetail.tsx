@@ -20,7 +20,7 @@ import {
   Save,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { adminApi, configApi } from '@/services/api';
+import { adminApi } from '@/services/api';
 import AdminNav from '@/components/admin/AdminNav';
 import { CONTRACT_TERM_OPTIONS, formatContractTerm } from '@/lib/utils';
 
@@ -56,13 +56,22 @@ const QuoteDetail = () => {
   const [contracts, setContracts] = useState<ContractRow[]>([]);
 
   // Edit panel state — catalog is fetched lazily the first time admin opens it.
+  // Catalog comes from /api/packages (admin endpoint) so it includes packages
+  // hidden from customers (e.g. Essentials with customerVisible=false).
   const [editOpen, setEditOpen] = useState(false);
   const [catalog, setCatalog] = useState<{ packages: any[]; addons: any[] } | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editPackageId, setEditPackageId] = useState<string>('');
   const [editAgreementMonths, setEditAgreementMonths] = useState<number>(0);
   const [editUserCount, setEditUserCount] = useState<number>(1);
+  const [editWebUserCount, setEditWebUserCount] = useState<number>(0);
   const [editLocationCount, setEditLocationCount] = useState<number>(1);
+  // Per-quote price overrides. Default to whatever the catalog says when a
+  // package is picked, but admin can stamp arbitrary values onto the snapshot.
+  const [editPricePerUser, setEditPricePerUser] = useState<number>(0);
+  const [editPricePerUserF3, setEditPricePerUserF3] = useState<number>(0);
+  const [editPricePerLocation, setEditPricePerLocation] = useState<number>(0);
+  const [editNotes, setEditNotes] = useState<string>('');
   // addonId -> quantity (0 = not selected)
   const [editAddonQty, setEditAddonQty] = useState<Record<string, number>>({});
 
@@ -97,12 +106,17 @@ const QuoteDetail = () => {
   };
 
   // Seed the edit-panel form from the current quote snapshot when admin opens it.
+  // Pulls the catalog from /api/packages + /api/addons (admin endpoints) so
+  // hidden packages (e.g. Essentials, customerVisible=false) still appear.
   const openEditPanel = async () => {
     if (!quote) return;
     if (!catalog) {
       try {
-        const cfg = await configApi.get();
-        setCatalog({ packages: cfg.packages ?? [], addons: cfg.addons ?? [] });
+        const [packages, addons] = await Promise.all([
+          adminApi.getPackages(),
+          adminApi.getAddons(),
+        ]);
+        setCatalog({ packages, addons });
       } catch {
         toast.error('Failed to load package catalog');
         return;
@@ -111,13 +125,32 @@ const QuoteDetail = () => {
     setEditPackageId(quote.selectedPackage?.id ?? '');
     setEditAgreementMonths(Number(quote.selectedPackage?.agreementMonths ?? 0));
     setEditUserCount(Number(quote.customer?.userCount ?? 1));
+    setEditWebUserCount(Number(quote.customer?.webUserCount ?? 0));
     setEditLocationCount(Number(quote.customer?.locationCount ?? 1));
+    setEditPricePerUser(Number(quote.selectedPackage?.pricePerUser ?? 0));
+    setEditPricePerUserF3(Number(quote.selectedPackage?.pricePerUserF3 ?? 0));
+    setEditPricePerLocation(Number(quote.selectedPackage?.pricePerLocation ?? 0));
+    setEditNotes(typeof quote.notes === 'string' ? quote.notes : '');
     const qty: Record<string, number> = {};
     for (const a of (quote.selectedAddons as any[]) ?? []) {
       qty[a.id] = Number(a.quantity) || 0;
     }
     setEditAddonQty(qty);
     setEditOpen(true);
+  };
+
+  // When the admin switches packages mid-edit, snap the price-override fields
+  // to that package's catalog defaults so they have something sensible to
+  // tweak instead of carrying over the old package's numbers.
+  const pickPackage = (id: string) => {
+    setEditPackageId(id);
+    const pkg = catalog?.packages.find((p) => p.id === id);
+    if (pkg) {
+      setEditPricePerUser(Number(pkg.pricePerUser ?? 0));
+      setEditPricePerUserF3(Number(pkg.pricePerUserF3 ?? 0));
+      setEditPricePerLocation(Number(pkg.pricePerLocation ?? 0));
+      setEditAgreementMonths(Number(pkg.agreementMonths ?? 0));
+    }
   };
 
   const saveEdit = async () => {
@@ -151,17 +184,23 @@ const QuoteDetail = () => {
     try {
       const result = await adminApi.editQuote(quote.id, {
         userCount: editUserCount,
+        webUserCount: editWebUserCount,
         locationCount: editLocationCount,
         selectedPackage: {
           id: pkg.id,
           name: pkg.name,
-          pricePerUser: pkg.pricePerUser,
-          pricePerLocation: pkg.pricePerLocation,
+          // Snapshot the admin's price overrides — these can diverge from
+          // the catalog defaults so a single quote can carry custom pricing
+          // without changing the canonical package row.
+          pricePerUser: editPricePerUser,
+          pricePerUserF3: editPricePerUserF3,
+          pricePerLocation: editPricePerLocation,
           frequency: pkg.frequency,
           features: pkg.features,
           agreementMonths: editAgreementMonths,
         },
         selectedAddons: selectedAddons as any[],
+        notes: editNotes.trim() ? editNotes.trim() : null,
       });
       if (result.mode === 'amendment') {
         if (result.invoice) {
@@ -415,18 +454,24 @@ const QuoteDetail = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="edit-package">Package</Label>
-                <Select value={editPackageId} onValueChange={setEditPackageId}>
+                <Select value={editPackageId} onValueChange={pickPackage}>
                   <SelectTrigger id="edit-package">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {catalog.packages.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
-                        {p.name} — ${p.pricePerUser}/user · ${p.pricePerLocation}/location
+                        {p.name}
+                        {p.customerVisible === false ? ' (admin-only)' : ''} — $
+                        {p.pricePerUser}/user · ${p.pricePerLocation}/location
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">
+                  Admin-only packages aren't shown on the customer picker but are still usable
+                  from here.
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -452,13 +497,26 @@ const QuoteDetail = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="edit-users">User count</Label>
+                <Label htmlFor="edit-users">Desktop Users</Label>
                 <Input
                   id="edit-users"
                   type="number"
                   min={1}
                   value={editUserCount}
                   onChange={(e) => setEditUserCount(Math.max(1, parseInt(e.target.value) || 1))}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-web-users">Web Users</Label>
+                <Input
+                  id="edit-web-users"
+                  type="number"
+                  min={0}
+                  value={editWebUserCount}
+                  onChange={(e) =>
+                    setEditWebUserCount(Math.max(0, parseInt(e.target.value) || 0))
+                  }
                 />
               </div>
 
@@ -472,6 +530,74 @@ const QuoteDetail = () => {
                   onChange={(e) => setEditLocationCount(Math.max(1, parseInt(e.target.value) || 1))}
                 />
               </div>
+            </div>
+
+            {/* Per-quote price overrides. Whatever's here gets snapshotted
+                onto the quote — the canonical Package row stays untouched. */}
+            <div className="mt-6">
+              <h4 className="font-semibold mb-2">Price overrides for this quote</h4>
+              <p className="text-xs text-muted-foreground mb-3">
+                Override the package's catalog prices for just this quote — useful for one-off
+                discounts or custom scoping. Leave at the catalog defaults if there's no change.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="edit-price-user">$ / Desktop User</Label>
+                  <Input
+                    id="edit-price-user"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={editPricePerUser}
+                    onChange={(e) =>
+                      setEditPricePerUser(Math.max(0, parseFloat(e.target.value) || 0))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-price-user-f3">$ / Web User</Label>
+                  <Input
+                    id="edit-price-user-f3"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={editPricePerUserF3}
+                    onChange={(e) =>
+                      setEditPricePerUserF3(Math.max(0, parseFloat(e.target.value) || 0))
+                    }
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="edit-price-location">$ / Location</Label>
+                  <Input
+                    id="edit-price-location"
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={editPricePerLocation}
+                    onChange={(e) =>
+                      setEditPricePerLocation(Math.max(0, parseFloat(e.target.value) || 0))
+                    }
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 space-y-2">
+              <Label htmlFor="edit-notes">Notes (customer-visible)</Label>
+              <textarea
+                id="edit-notes"
+                value={editNotes}
+                onChange={(e) => setEditNotes(e.target.value)}
+                rows={4}
+                maxLength={5000}
+                placeholder="Anything not captured by the structured pricing — custom scope, special discounts, handoff instructions, etc."
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+              <p className="text-xs text-muted-foreground">
+                Shown to the customer on the quote review page and copied into the signed contract
+                PDF.
+              </p>
             </div>
 
             <div className="mt-6">

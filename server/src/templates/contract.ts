@@ -446,6 +446,16 @@ export function buildContractHtml(quote: QuoteData): string {
   </div>`;
   })() : ''}
 
+  <!-- Notes (admin-authored, customer-acknowledged) -->
+  ${quote.notes && quote.notes.trim() ? `
+  <div class="section">
+    <div class="section-title">Notes</div>
+    <div style="white-space: pre-line; font-size: 10pt; line-height: 1.6;">${quote.notes
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')}</div>
+  </div>` : ''}
+
   <!-- Add-on Services -->
   ${quote.selectedAddons?.length > 0 ? `
   <div class="section">

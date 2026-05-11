@@ -194,6 +194,9 @@ export interface QuoteData {
   // GoHighLevel
   ghlContactId?: string;
   ghlOpportunityId?: string;
+  // Admin-edited free-text notes shown to the customer + copied into the
+  // contract PDF. Captures anything the structured fields don't.
+  notes?: string;
   timestamp: string;
 }
 

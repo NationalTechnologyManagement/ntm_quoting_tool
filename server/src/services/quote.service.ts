@@ -312,6 +312,7 @@ function mapQuoteToData(quote: any): QuoteData {
     cwAgreementId: quote.cwAgreementId ?? undefined,
     ghlContactId: quote.ghlContactId ?? undefined,
     ghlOpportunityId: quote.ghlOpportunityId ?? undefined,
+    notes: quote.notes ?? undefined,
     timestamp: quote.createdAt.toISOString(),
   };
 }

@@ -36,6 +36,7 @@ interface QuoteData {
     businessName: string;
     address: string;
     userCount: number;
+    webUserCount?: number;
     locationCount: number;
     referrerCode?: string;
   };
@@ -43,6 +44,7 @@ interface QuoteData {
     id: string;
     name: string;
     pricePerUser: number;
+    pricePerUserF3?: number;
     pricePerLocation: number;
     frequency: string;
     calculatedPrice: number;
@@ -87,6 +89,7 @@ interface QuoteData {
   termsId: string;
   termsUrl: string;
   termsContent: string;
+  notes?: string;
 }
 
 const generateOrderNumber = () => {
@@ -364,6 +367,15 @@ export default function QuoteReview() {
           </div>
         </Card>
 
+        {/* Admin-authored notes, if any. Customer-visible. Plain text with
+            blank-line paragraphs preserved. */}
+        {quoteData.notes && quoteData.notes.trim() && (
+          <Card className="p-6 mb-6 animate-fade-in border-primary/30 bg-primary/5">
+            <h2 className="text-xl font-semibold mb-3">Notes</h2>
+            <p className="text-sm whitespace-pre-line">{quoteData.notes}</p>
+          </Card>
+        )}
+
         {/* Selected Package */}
         <Card className="p-6 mb-6 animate-fade-in">
           <h2 className="text-2xl font-semibold mb-4">Selected Package</h2>
@@ -373,12 +385,25 @@ export default function QuoteReview() {
                 <h3 className="font-semibold text-lg">{quoteData.selectedPackage.name}</h3>
                 <div className="text-sm text-muted-foreground space-y-1 mt-2">
                   <p>
-                    ${formatAmount(quoteData.selectedPackage.pricePerUser)}/user × {quoteData.customer.userCount} users = $
-                    {formatAmount(quoteData.selectedPackage.pricePerUser * quoteData.customer.userCount)}
+                    ${formatAmount(quoteData.selectedPackage.pricePerUser)}/desktop user ×{' '}
+                    {quoteData.customer.userCount} = $
+                    {formatAmount(
+                      quoteData.selectedPackage.pricePerUser * quoteData.customer.userCount,
+                    )}
                   </p>
+                  {(quoteData.customer.webUserCount ?? 0) > 0 && (
+                    <p>
+                      ${formatAmount(quoteData.selectedPackage.pricePerUserF3 ?? 0)}/web user ×{' '}
+                      {quoteData.customer.webUserCount ?? 0} = $
+                      {formatAmount(
+                        (quoteData.selectedPackage.pricePerUserF3 ?? 0) *
+                          (quoteData.customer.webUserCount ?? 0),
+                      )}
+                    </p>
+                  )}
                   <p>
                     ${formatAmount(quoteData.selectedPackage.pricePerLocation)}/location ×{" "}
-                    {quoteData.customer.locationCount} locations = $
+                    {quoteData.customer.locationCount} = $
                     {formatAmount(quoteData.selectedPackage.pricePerLocation * quoteData.customer.locationCount)}
                   </p>
                   <p className="font-semibold text-primary pt-1">

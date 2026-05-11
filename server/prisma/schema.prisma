@@ -154,6 +154,11 @@ model Quote {
   parent             Quote?   @relation("QuoteAmendments", fields: [parentQuoteId], references: [id])
   amendments         Quote[]  @relation("QuoteAmendments")
 
+  // Free-text notes — admin-edited, customer-visible. Used to capture
+  // anything the structured fields don't cover (custom scope, special
+  // pricing rationale, hand-off instructions, etc.).
+  notes              String?
+
   // Provisioning state (populated by the CW step machine).
   // pending = nothing started; provisioned = all required steps ok;
   // partial = some non-critical step failed and was logged for retry;

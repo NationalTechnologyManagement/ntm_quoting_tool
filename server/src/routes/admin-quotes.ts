@@ -223,6 +223,7 @@ const editSelectedPackageSchema = z.object({
   id: z.string(),
   name: z.string(),
   pricePerUser: z.number().min(0),
+  pricePerUserF3: z.number().min(0).optional(),
   pricePerLocation: z.number().min(0),
   frequency: z.string(),
   features: z.array(z.string()),
@@ -245,6 +246,7 @@ const editSelectedAddonSchema = z.object({
 
 const editQuoteSchema = z.object({
   userCount: z.number().int().min(1).optional(),
+  webUserCount: z.number().int().min(0).optional(),
   locationCount: z.number().int().min(1).optional(),
   selectedPackage: editSelectedPackageSchema.optional(),
   selectedAddons: z.array(editSelectedAddonSchema).optional(),
@@ -252,6 +254,9 @@ const editQuoteSchema = z.object({
   // without changing anything else. agreementMonths on selectedPackage
   // takes precedence if both are present.
   agreementMonths: z.number().int().min(0).optional(),
+  // Free-text notes shown to the customer on the review page and copied
+  // into the contract PDF. Optional — pass null to clear.
+  notes: z.string().max(5000).nullable().optional(),
   // When true and the quote is paid, the server creates an amendment quote.
   // Default true so the caller doesn't need to know the quote's status.
   amendIfPaid: z.boolean().optional().default(true),
@@ -261,13 +266,16 @@ function computeQuoteTotals(input: {
   pkg: any;
   addons: any[];
   userCount: number;
+  webUserCount: number;
   locationCount: number;
   appliedPromoCodes: any[];
   waiveOnboarding: boolean;
 }) {
-  const { pkg, addons, userCount, locationCount, appliedPromoCodes, waiveOnboarding } = input;
+  const { pkg, addons, userCount, webUserCount, locationCount, appliedPromoCodes, waiveOnboarding } = input;
   const packageCost =
-    (Number(pkg.pricePerUser) || 0) * userCount + (Number(pkg.pricePerLocation) || 0) * locationCount;
+    (Number(pkg.pricePerUser) || 0) * userCount +
+    (Number(pkg.pricePerUserF3) || 0) * webUserCount +
+    (Number(pkg.pricePerLocation) || 0) * locationCount;
   const addonRecurring = addons
     .filter((a) => a.pricingType === 'recurring-only' || a.pricingType === 'both')
     .reduce((sum, a) => sum + (Number(a.recurringPrice) || 0) * (Number(a.quantity) || 1), 0);
@@ -344,6 +352,7 @@ router.put(
     const currentAddons = (quote.selectedAddons as any[]) ?? [];
 
     const userCount = body.userCount ?? customer?.userCount ?? 1;
+    const webUserCount = body.webUserCount ?? customer?.webUserCount ?? 0;
     const locationCount = body.locationCount ?? customer?.locationCount ?? 1;
 
     const editedPkg = body.selectedPackage
@@ -354,6 +363,7 @@ router.put(
     }
     editedPkg.calculatedPrice =
       Number(editedPkg.pricePerUser ?? 0) * userCount +
+      Number(editedPkg.pricePerUserF3 ?? 0) * webUserCount +
       Number(editedPkg.pricePerLocation ?? 0) * locationCount;
 
     const editedAddons = (body.selectedAddons ?? currentAddons).map((a: any) => {
@@ -379,6 +389,7 @@ router.put(
       pkg: editedPkg,
       addons: editedAddons,
       userCount,
+      webUserCount,
       locationCount,
       appliedPromoCodes: (quote.appliedPromoCodes as any[]) ?? [],
       waiveOnboarding,
@@ -395,7 +406,8 @@ router.put(
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + QUOTE_VALIDITY_DAYS);
 
-      const newCustomer = { ...customer, userCount, locationCount };
+      const newCustomer = { ...customer, userCount, webUserCount, locationCount };
+      const nextNotes = body.notes !== undefined ? body.notes : quote.notes;
 
       const created = await prisma.quote.create({
         data: {
@@ -409,6 +421,7 @@ router.put(
           totals: recomputed.totals as any,
           terms: quote.terms as any,
           parentQuoteId: quote.id,
+          notes: nextNotes,
           expiresAt,
         },
       });
@@ -468,11 +481,12 @@ router.put(
     const updated = await prisma.quote.update({
       where: { id: quote.id },
       data: {
-        customer: { ...customer, userCount, locationCount } as any,
+        customer: { ...customer, userCount, webUserCount, locationCount } as any,
         selectedPackage: editedPkg as any,
         selectedAddons: editedAddons as any,
         onboarding: recomputed.onboarding as any,
         totals: recomputed.totals as any,
+        ...(body.notes !== undefined ? { notes: body.notes } : {}),
       },
     });
 
