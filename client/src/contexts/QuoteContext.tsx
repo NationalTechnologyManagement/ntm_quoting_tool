@@ -103,7 +103,7 @@ export interface SiteContent {
 const defaultSiteContent: SiteContent = {
   quoteBuilderHeading: 'Choose Your Package',
   quoteBuilderSubheading:
-    "Tell us how many of each type of user you have, then pick the plan that fits. We'll size the quote to your team.",
+    "Pick the plan that fits. We'll size the quote to your team on the next step.",
   quoteBuilderExplainerTitle: 'Desktop User vs Web User',
   quoteBuilderExplainerBody:
     'Desktop User — full Microsoft 365 Business Premium. Use this for your primary staff who need the full desktop apps, Teams calls, and offline access.\n\nWeb User — Microsoft 365 F3 (Web & Email Only). Use this for frontline, warehouse, kiosk, or shared-device employees who only need email and browser-based apps. Costs less per user.',

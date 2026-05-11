@@ -9,18 +9,24 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Check, ChevronDown, ChevronUp, ArrowLeft } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, ArrowLeft, Info, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { SiteHeader } from '@/components/SiteHeader';
 
 const QuoteInfo = () => {
   const navigate = useNavigate();
-  const { customerInfo, setCustomerInfo, selectedPackage, selectedAddons, setSelectedAddons, addons } = useQuote();
+  const { customerInfo, setCustomerInfo, selectedPackage, selectedAddons, setSelectedAddons, addons, siteContent } = useQuote();
 
   const [formData, setFormData] = useState(customerInfo);
   const [formErrors, setFormErrors] = useState<Record<string, boolean>>({});
   const [showAddons, setShowAddons] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Surfaced as a red error only after the customer tries to advance without
+  // at least one Desktop User. Stays red until they fix it.
+  const [attemptedAdvance, setAttemptedAdvance] = useState(false);
+  const explainerParagraphs = siteContent.quoteBuilderExplainerBody.split(/\n\n+/);
+  const needsDesktop = (formData.userCount ?? 0) < 1;
 
   const activeAddons = addons.filter((addon) => addon.active);
 
@@ -150,6 +156,7 @@ const QuoteInfo = () => {
 
   const handleContinue = async () => {
     if (!isFormValid()) {
+      setAttemptedAdvance(true);
       toast.error('Please fill in all required fields');
       return;
     }
@@ -326,9 +333,9 @@ const QuoteInfo = () => {
           className="p-6 md:p-8 bg-card border-border shadow-card hover:shadow-card-hover transition-all duration-300 animate-slide-up"
           style={{ animationDelay: '0.05s' }}
         >
-          <h2 className="text-2xl font-semibold mb-6 text-foreground">Service Details</h2>
-          <p className="text-sm text-muted-foreground -mt-4 mb-6">
-            We pre-filled these from the package step — you can fine-tune them here. At least one
+          <h2 className="text-2xl font-semibold mb-2 text-foreground">Service Details</h2>
+          <p className="text-sm text-muted-foreground mb-6">
+            Tell us how many of each user type and how many sites we'll cover. At least one
             Desktop User is required.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -337,7 +344,30 @@ const QuoteInfo = () => {
                 userCountHighlighted ? 'rounded-md ring-2 ring-primary ring-offset-2 ring-offset-background transition-shadow' : ''
               }`}
             >
-              <Label htmlFor="userCount">Desktop Users *</Label>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="userCount">Desktop Users *</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      type="button"
+                      className="text-muted-foreground hover:text-foreground"
+                      aria-label="What's the difference between Desktop and Web Users?"
+                    >
+                      <Info className="w-4 h-4" />
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="max-w-md text-sm space-y-2">
+                    <p className="font-semibold">
+                      {siteContent.quoteBuilderExplainerTitle}
+                    </p>
+                    {explainerParagraphs.map((para, i) => (
+                      <p key={i} className="text-muted-foreground whitespace-pre-line">
+                        {para}
+                      </p>
+                    ))}
+                  </PopoverContent>
+                </Popover>
+              </div>
               <div className="relative">
                 <Input
                   id="userCount"
@@ -346,7 +376,12 @@ const QuoteInfo = () => {
                   value={formData.userCount || ''}
                   onChange={(e) => handleInputChange('userCount', parseInt(e.target.value) || 0)}
                   placeholder="e.g., 10"
-                  className="pr-10"
+                  className={[
+                    'pr-10',
+                    attemptedAdvance && needsDesktop
+                      ? 'border-destructive focus-visible:ring-destructive'
+                      : '',
+                  ].join(' ')}
                 />
                 {isFieldValid('userCount') && <Check className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-primary" />}
               </div>
@@ -389,6 +424,16 @@ const QuoteInfo = () => {
               <p className="text-xs text-muted-foreground">Total number of physical locations</p>
             </div>
           </div>
+
+          {attemptedAdvance && needsDesktop && (
+            <div className="mt-4 flex items-center gap-2 text-sm text-destructive">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span>
+                At least one Desktop User is required to continue. Web Users alone aren't
+                supported.
+              </span>
+            </div>
+          )}
         </Card>
 
         {/* Add-ons */}

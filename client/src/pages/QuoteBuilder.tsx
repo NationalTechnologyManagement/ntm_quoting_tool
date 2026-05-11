@@ -1,57 +1,20 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuote } from '@/contexts/QuoteContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import {
-  Check,
-  Star,
-  Search,
-  ArrowRight,
-  FileSearch,
-  X,
-  Info,
-  AlertCircle,
-} from 'lucide-react';
+import { Check, Star, Search, ArrowRight, FileSearch, X } from 'lucide-react';
 import { SiteHeader } from '@/components/SiteHeader';
-import { formatContractTerm, formatCurrency } from '@/lib/utils';
+import { formatContractTerm } from '@/lib/utils';
 
 const QuoteBuilder = () => {
   const navigate = useNavigate();
-  const {
-    selectedPackage,
-    setSelectedPackage,
-    packages,
-    customerInfo,
-    setCustomerInfo,
-    siteContent,
-  } = useQuote();
+  const { selectedPackage, setSelectedPackage, packages, siteContent } = useQuote();
 
   const [showLookup, setShowLookup] = useState(false);
   const [quoteSearch, setQuoteSearch] = useState('');
-  // Surfaced inline only after the customer tries to advance without at
-  // least one Desktop User. Stays in red until they fix it.
-  const [attemptedAdvance, setAttemptedAdvance] = useState(false);
-
-  const desktopCount = customerInfo.userCount;
-  const webCount = customerInfo.webUserCount ?? 0;
-  const locationCount = customerInfo.locationCount;
-  const needsDesktop = desktopCount < 1;
-
-  const setDesktopCount = (n: number) =>
-    setCustomerInfo({ ...customerInfo, userCount: Math.max(0, n) });
-  const setWebCount = (n: number) =>
-    setCustomerInfo({ ...customerInfo, webUserCount: Math.max(0, n) });
-  const setLocationCount = (n: number) =>
-    setCustomerInfo({ ...customerInfo, locationCount: Math.max(1, n) });
 
   const handleLookup = () => {
     const v = quoteSearch.trim();
@@ -65,29 +28,13 @@ const QuoteBuilder = () => {
 
   const handleBuildQuote = () => {
     if (!selectedPackage) return;
-    if (needsDesktop) {
-      setAttemptedAdvance(true);
-      return;
-    }
     navigate('/quote-info');
   };
-
-  const monthlyForPackage = (pkg: typeof packages[number]) =>
-    pkg.pricePerUser * desktopCount +
-    (pkg.pricePerUserF3 ?? 0) * webCount +
-    pkg.pricePerLocation * locationCount;
-
-  // Explainer body is admin-editable plain text with blank-line paragraph
-  // breaks. Render newlines as <br/> so the formatting stays faithful.
-  const explainerParagraphs = useMemo(
-    () => siteContent.quoteBuilderExplainerBody.split(/\n\n+/),
-    [siteContent.quoteBuilderExplainerBody],
-  );
 
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader />
-      <div className="max-w-6xl mx-auto space-y-8 py-12 px-4">
+      <div className="max-w-6xl mx-auto space-y-10 py-12 px-4">
         {/* Header — editable copy comes from siteContent (admin-controlled) */}
         <div className="text-center space-y-4 animate-fade-in">
           <div className="flex justify-center">
@@ -105,103 +52,6 @@ const QuoteBuilder = () => {
           </p>
         </div>
 
-        {/* User sizing + explainer. Put the inputs front-and-center so the
-            customer can size their team before picking a package — the
-            package cards then show live monthly totals based on these
-            counts. */}
-        <Card className="p-6 shadow-card animate-slide-up">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Label htmlFor="desktop-users" className="font-semibold">
-                  Desktop Users
-                </Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      className="text-muted-foreground hover:text-foreground"
-                      aria-label="What's a Desktop User?"
-                    >
-                      <Info className="w-4 h-4" />
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent className="max-w-md text-sm space-y-2">
-                    <p className="font-semibold">
-                      {siteContent.quoteBuilderExplainerTitle}
-                    </p>
-                    {explainerParagraphs.map((para, i) => (
-                      <p key={i} className="text-muted-foreground whitespace-pre-line">
-                        {para}
-                      </p>
-                    ))}
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <Input
-                id="desktop-users"
-                type="number"
-                min={0}
-                value={desktopCount}
-                onChange={(e) => setDesktopCount(parseInt(e.target.value) || 0)}
-                className={
-                  attemptedAdvance && needsDesktop
-                    ? 'border-destructive focus-visible:ring-destructive'
-                    : ''
-                }
-              />
-              <p className="text-xs text-muted-foreground">
-                Full Microsoft 365 — primary staff.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="web-users" className="font-semibold">
-                Web Users
-              </Label>
-              <Input
-                id="web-users"
-                type="number"
-                min={0}
-                value={webCount}
-                onChange={(e) => setWebCount(parseInt(e.target.value) || 0)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Web &amp; email only — frontline, kiosk, shared devices.
-              </p>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="locations" className="font-semibold">
-                Locations
-              </Label>
-              <Input
-                id="locations"
-                type="number"
-                min={1}
-                value={locationCount}
-                onChange={(e) => setLocationCount(parseInt(e.target.value) || 1)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Number of physical sites we'll manage.
-              </p>
-            </div>
-          </div>
-
-          {/* Required-Desktop validator. Red only after the customer tries
-              to proceed without one — pre-validation isn't useful when the
-              default count is already 1 and they typed 0. */}
-          {attemptedAdvance && needsDesktop && (
-            <div className="mt-4 flex items-center gap-2 text-sm text-destructive">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              <span>
-                At least one Desktop User is required to continue. Web Users alone
-                aren't supported.
-              </span>
-            </div>
-          )}
-        </Card>
-
         {/* Packages — 3D feel + hover lift + selection ring. Grid auto-fits
             to the package count: 2 packages stay centered (Essentials is
             hidden by default), 3+ packages flow into the third column. */}
@@ -214,7 +64,6 @@ const QuoteBuilder = () => {
         >
           {packages.map((pkg, index) => {
             const isSelected = selectedPackage?.id === pkg.id;
-            const monthly = monthlyForPackage(pkg);
             return (
               <Card
                 key={pkg.id}
@@ -253,31 +102,33 @@ const QuoteBuilder = () => {
                       {formatContractTerm(pkg.agreementMonths)}
                     </p>
 
-                    {/* Live monthly total for THIS package given the sizing
-                        the customer entered above. Falls back to per-unit
-                        prices when nothing's been entered yet. */}
-                    <div className="mt-5 space-y-2">
-                      <div className="flex items-baseline gap-2">
-                        <span className="text-4xl font-bold text-primary">
-                          {formatCurrency(monthly)}
-                        </span>
+                    {/* Per-unit pricing display — original layout. Sizing
+                        happens on the next step (QuoteInfo). Web User price
+                        only shows if the package has an F3 tier configured. */}
+                    <div className="mt-5 space-y-1">
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-4xl font-bold text-primary">${pkg.pricePerUser}</span>
                         <span className="text-muted-foreground text-sm">
-                          /{pkg.frequency}
+                          /desktop user/{pkg.frequency}
                         </span>
                       </div>
-                      <div className="text-xs text-muted-foreground space-y-0.5">
-                        <div>
-                          {desktopCount} desktop × ${pkg.pricePerUser}
-                          {webCount > 0 && (
-                            <>
-                              {' '}+ {webCount} web × ${pkg.pricePerUserF3 ?? 0}
-                            </>
-                          )}
+                      {(pkg.pricePerUserF3 ?? 0) > 0 && (
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-xl font-semibold text-foreground/80">
+                            ${pkg.pricePerUserF3}
+                          </span>
+                          <span className="text-muted-foreground text-sm">
+                            /web user/{pkg.frequency}
+                          </span>
                         </div>
-                        <div>
-                          {locationCount} location{locationCount === 1 ? '' : 's'} × $
-                          {pkg.pricePerLocation}
-                        </div>
+                      )}
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-2xl font-semibold text-foreground/80">
+                          ${pkg.pricePerLocation}
+                        </span>
+                        <span className="text-muted-foreground text-sm">
+                          /location/{pkg.frequency}
+                        </span>
                       </div>
                     </div>
                   </div>
