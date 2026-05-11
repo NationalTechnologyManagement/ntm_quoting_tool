@@ -402,7 +402,9 @@ const QuoteInfo = () => {
                   id="webUserCount"
                   type="number"
                   min="0"
-                  value={formData.webUserCount ?? 0}
+                  // Render empty when 0 so the field doesn't pre-fill a leading
+                  // "0" that the customer ends up typing past (e.g. "018").
+                  value={formData.webUserCount || ''}
                   onChange={(e) =>
                     handleInputChange('webUserCount', parseInt(e.target.value) || 0)
                   }
