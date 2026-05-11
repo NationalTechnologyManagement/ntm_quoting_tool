@@ -262,13 +262,18 @@ async function findOrCreateCompany(
   if (!prospectTypeId || !activeStatusId) {
     throw new Error('CW config: company.typeProspectId / company.statusActiveId not set');
   }
+  // Quote-time status. Defaults to Active (legacy behavior); admins can set
+  // company.statusProspectId to a "Pending" / "Inactive" status so CW reps
+  // can see at a glance which companies haven't paid yet. Payment promotion
+  // then flips the status to Active.
+  const prospectStatusId = intCfg(cfg, 'company.statusProspectId') ?? activeStatusId;
 
   const created = await cwJson<any>('/company/companies', {
     method: 'POST',
     body: JSON.stringify({
       name: customer.businessName,
       identifier,
-      status: { id: activeStatusId },
+      status: { id: prospectStatusId },
       types: [{ id: prospectTypeId }],
       phoneNumber: customer.phone,
       addressLine1: customer.address,
@@ -833,11 +838,12 @@ async function updateCompanyToCustomer(
   if (!customerTypeId) {
     throw new Error('CW config: company.typeCustomerId not set');
   }
-  // CW rejects PATCH of /types on an existing company:
-  //   "typeIds can only be used when creating a new company."
-  // The supported flow is to add the type via /company/companyTypeAssociations.
-  // POST a new association with the customer type. CW idempotency: if the
-  // association already exists, the call returns 400 — treat as no-op.
+
+  // 1. Add the Customer type. CW rejects PATCH of /types on an existing
+  //    company ("typeIds can only be used when creating a new company.")
+  //    so the supported flow is the companyTypeAssociations endpoint.
+  //    Idempotent: if the association already exists CW returns 400 —
+  //    treat as no-op.
   const r = await cwFetch('/company/companyTypeAssociations', {
     method: 'POST',
     body: JSON.stringify({
@@ -847,10 +853,29 @@ async function updateCompanyToCustomer(
   });
   if (!r.ok) {
     const text = await r.text().catch(() => '');
-    if (/already exists|duplicate/i.test(text)) {
-      return; // already a Customer; success
+    if (!/already exists|duplicate/i.test(text)) {
+      throw new Error(`CW POST /company/companyTypeAssociations failed (${r.status}): ${text}`);
     }
-    throw new Error(`CW POST /company/companyTypeAssociations failed (${r.status}): ${text}`);
+  }
+
+  // 2. If a prospect status was configured at quote-time, flip the
+  //    company's status to Active now that payment has landed. This is a
+  //    PATCH on the company's /status reference. Skipped silently when
+  //    statusProspectId is unset (legacy behavior: company was already
+  //    created Active).
+  const prospectStatusId = intCfg(cfg, 'company.statusProspectId');
+  const activeStatusId = intCfg(cfg, 'company.statusActiveId');
+  if (prospectStatusId && activeStatusId && prospectStatusId !== activeStatusId) {
+    try {
+      await cwJson(`/company/companies/${companyId}`, {
+        method: 'PATCH',
+        body: JSON.stringify([
+          { op: 'replace', path: '/status', value: { id: activeStatusId } },
+        ]),
+      });
+    } catch (e) {
+      console.error('[CW] failed to flip company status to Active:', e);
+    }
   }
 }
 

@@ -12,6 +12,12 @@ export const CW_CONFIG_KEYS = [
   'company.typeProspectId',
   'company.typeCustomerId',
   'company.statusActiveId',
+  // Optional. When set, this status is used when the company is created at
+  // quote time (Prospect). On payment, updateCompanyToCustomer flips both
+  // type AND status — type → Customer, status → company.statusActiveId.
+  // When unset, the company is created with statusActiveId from the start
+  // (legacy behavior).
+  'company.statusProspectId',
   'company.marketId',
 
   // ── Communication item types ──
@@ -64,6 +70,10 @@ export const DEFAULTS: Record<CwConfigKey, string> = {
   'company.typeProspectId': '26',  // "Prospect"
   'company.typeCustomerId': '40',  // "Customer"
   'company.statusActiveId': '1',   // "Active"
+  // Defaults unset — admin opts in by setting a CW status id (e.g. "Inactive"
+  // or a custom "Pending" status) on the /admin/cw-reference-ids page. If
+  // left unset, companies are created Active at quote time.
+  'company.statusProspectId': 'null',
   'company.marketId': 'null',      // optional; 24 markets available, leave unset
 
   // Communication item types — confirmed via /company/communicationTypes
