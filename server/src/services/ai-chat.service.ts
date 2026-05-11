@@ -15,7 +15,7 @@
 //      from server-trusted data.
 
 import { cred } from './integration-credentials.service.js';
-import { getAiConfig, parseAllowedTools, type ToolName } from './ai-config.service.js';
+import { getAiConfig, parseAllowedTools, GUARDRAILS, type ToolName } from './ai-config.service.js';
 import { buildKbContext } from './ai-kb.service.js';
 import { redact } from './ai-redaction.js';
 import { prisma } from '../config/prisma.js';
@@ -163,11 +163,19 @@ function toolsForConfig(allowedToolsCsv: string): ToolDef[] {
 
 // ── System prompt assembly ───────────────────────────────────────────
 
+// The prompt is assembled in three layers, in order:
+//   1. GUARDRAILS — fixed in code; security/correctness invariants admins
+//      cannot override.
+//   2. systemPrompt — admin-editable from /admin/ai-chat; persona, tone,
+//      step-by-step playbook, scripts.
+//   3. KB + live page snapshot — facts the model reads to answer the
+//      customer (prices, packages, addons, current form state).
 export async function buildSystemPrompt(pageSnapshot: unknown): Promise<string> {
   const cfg = await getAiConfig();
   const kb = await buildKbContext();
   const snapshotJson = JSON.stringify(pageSnapshot ?? {}, null, 2);
   const parts = [
+    GUARDRAILS,
     cfg.systemPrompt.trim(),
     kb ? `\n\n---\n## Knowledge base (authoritative — use this, don't invent)\n${kb}` : '',
     `\n\n---\n## Current page (what the customer is looking at right now)\n\`\`\`json\n${snapshotJson}\n\`\`\`\nIf an answer isn't in the page snapshot or the knowledge base above, say you don't have that info.`,

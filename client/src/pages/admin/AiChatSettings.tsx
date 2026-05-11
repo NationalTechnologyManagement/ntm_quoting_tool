@@ -339,11 +339,25 @@ const AiChatSettings = () => {
 
           {/* PROMPT */}
           <TabsContent value="prompt" className="space-y-4 mt-4">
+            <Card className="p-4 bg-primary/5 border-primary/30">
+              <p className="text-sm">
+                <strong>Behavior is admin-controlled, guardrails are code-controlled.</strong>{' '}
+                Edit how the agent talks, the step-by-step playbook, the add-on script, and any
+                custom rules in the box below. Security and correctness rules (never invent
+                prices, never agree to terms for the customer, never reveal credentials, etc.)
+                are baked into code and always prepended — you can't disable them from here.
+              </p>
+              <p className="text-xs text-muted-foreground mt-2">
+                Knowledge-base docs from the KB tab and the live page snapshot (packages, prices,
+                add-ons, current form state) are also appended automatically every turn — you
+                don't need to repeat that data here.
+              </p>
+            </Card>
             <Card className="p-6 space-y-4">
               <div className="flex items-center justify-between flex-wrap gap-2">
-                <h3 className="font-semibold">System prompt</h3>
+                <h3 className="font-semibold">Playbook prompt (admin-editable)</h3>
                 <p className="text-xs text-muted-foreground">
-                  Defines the agent's role, tone, and hard rules. KB docs and the live page snapshot are appended automatically.
+                  Persona + step-by-step flow. Guardrails are prepended automatically.
                 </p>
               </div>
               <Textarea
