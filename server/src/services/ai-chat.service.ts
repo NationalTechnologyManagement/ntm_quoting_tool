@@ -136,6 +136,24 @@ const ALL_TOOLS: ToolDef[] = [
       },
     },
   },
+  {
+    type: 'function',
+    function: {
+      name: 'request_followup',
+      description:
+        "Offer the customer a scheduled call with an NTM sales rep. Use this when the customer's question isn't answerable from the page snapshot or knowledge base, when they want a human to review their setup, or when they ask for something that goes beyond the standard packages/add-ons. Always include a friendly text reply alongside this call.",
+      parameters: {
+        type: 'object',
+        properties: {
+          reason: {
+            type: 'string',
+            description: 'One short sentence summarizing what the rep should follow up on.',
+          },
+        },
+        required: ['reason'],
+      },
+    },
+  },
 ];
 
 function toolsForConfig(allowedToolsCsv: string): ToolDef[] {

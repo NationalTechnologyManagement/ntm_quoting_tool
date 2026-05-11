@@ -55,6 +55,10 @@ interface AiChatContextValue {
   messages: ChatMessage[];
   send: (text: string) => Promise<void>;
   reset: () => Promise<void>;
+  // Eagerly create a session + seed the greeting message. Called by the
+  // widget when the panel opens so the customer sees the agent's first
+  // line without having to type anything first.
+  primeGreeting: () => Promise<void>;
   // banner
   fallbackActive: boolean;
   // field registry — pages call registerField on mount, unregister on unmount
@@ -275,6 +279,22 @@ export const AiChatProvider = ({ children }: { children: ReactNode }) => {
           // Suggestions don't auto-apply; the chat message includes the
           // model's reasoning and the user can click the matching card.
           return { applied: true, note: 'suggestion' };
+        case 'request_followup': {
+          // The agent has offered to set the customer up with a sales rep.
+          // We open the GHL booking widget in a new tab so the customer can
+          // pick a slot without losing their place in the wizard. The agent's
+          // text reply explains what's happening.
+          const reason = String(parsed.reason || 'Quote follow-up');
+          const url =
+            (import.meta.env.VITE_GHL_BOOKING_URL as string | undefined) ||
+            'https://api.leadconnectorhq.com/widget/booking/snhTg4zQQSVrJ9R3jisc';
+          try {
+            window.open(url, '_blank', 'noopener,noreferrer');
+          } catch {
+            return { applied: false, note: 'could not open booking page' };
+          }
+          return { applied: true, note: `opened booking — ${reason}` };
+        }
         default:
           return { applied: false, note: 'unknown tool' };
       }
@@ -363,6 +383,13 @@ export const AiChatProvider = ({ children }: { children: ReactNode }) => {
     setStatus('idle');
   }, []);
 
+  // Used by the widget on first open so the greeting message renders
+  // immediately. Idempotent — re-calling once a session exists is a no-op.
+  const primeGreeting = useCallback(async () => {
+    if (session) return;
+    await ensureSession();
+  }, [session, ensureSession]);
+
   const value = useMemo<AiChatContextValue>(
     () => ({
       enabled,
@@ -376,11 +403,12 @@ export const AiChatProvider = ({ children }: { children: ReactNode }) => {
       messages,
       send,
       reset,
+      primeGreeting,
       fallbackActive,
       registerField,
       highlightedFieldId,
     }),
-    [enabled, session, status, open, messages, send, reset, fallbackActive, registerField, highlightedFieldId, ensureSession],
+    [enabled, session, status, open, messages, send, reset, primeGreeting, fallbackActive, registerField, highlightedFieldId],
   );
 
   return <AiChatContext.Provider value={value}>{children}</AiChatContext.Provider>;
