@@ -472,6 +472,12 @@ async function createAgreement(
   // exist. This is the spec's "don't ship a live agreement with no line items" guard.
   // Note: `billCycleId` is NOT a top-level field on CW Manage's Agreement; the
   // billing cycle comes from the agreement type's defaults. Don't send it.
+  //
+  // billAmount is intentionally OMITTED. CW Manage treats it as a flat fee
+  // billed in addition to whatever the Additions sum to, so leaving it at
+  // quote.totals.recurringCosts caused CW to invoice 2× the package + addon
+  // total (additions $X + billAmount $X = $2X). Leaving the field unset lets
+  // CW compute the invoice from the Additions alone.
   const agreement = await cwJson<any>('/finance/agreements', {
     method: 'POST',
     body: JSON.stringify({
@@ -481,7 +487,6 @@ async function createAgreement(
       contact: { id: contactId },
       startDate: today,
       noEndingDateFlag: true,
-      billAmount: quote.totals.recurringCosts,
       billStartDate: billStart,
       agreementStatus: 'Inactive',
       // CW Manage's Agreement schema uses billingTerms reference, not billTermsId.
@@ -864,6 +869,7 @@ async function updateCompanyToCustomer(
   if (!customerTypeId) {
     throw new Error('CW config: company.typeCustomerId not set');
   }
+  const prospectTypeId = intCfg(cfg, 'company.typeProspectId');
 
   // 1. Add the Customer type. CW rejects PATCH of /types on an existing
   //    company ("typeIds can only be used when creating a new company.")
@@ -881,6 +887,37 @@ async function updateCompanyToCustomer(
     const text = await r.text().catch(() => '');
     if (!/already exists|duplicate/i.test(text)) {
       throw new Error(`CW POST /company/companyTypeAssociations failed (${r.status}): ${text}`);
+    }
+  }
+
+  // 1b. Drop the Prospect type now that they're a Customer. CW models the
+  //     type assignment as a separate association resource keyed by
+  //     /company/companyTypeAssociations/{id}, where {id} is the
+  //     association row's own id (NOT the type id). Find the Prospect
+  //     association for this company and DELETE it. Best-effort — leave
+  //     the company as both types rather than fail the whole webhook.
+  if (prospectTypeId) {
+    try {
+      const conditions = encodeURIComponent(
+        `company/id=${companyId} and type/id=${prospectTypeId}`,
+      );
+      const assoc = await cwJson<Array<{ id: number }>>(
+        `/company/companyTypeAssociations?conditions=${conditions}&pageSize=1`,
+      ).catch(() => [] as Array<{ id: number }>);
+      const assocId = assoc[0]?.id;
+      if (assocId) {
+        const del = await cwFetch(`/company/companyTypeAssociations/${assocId}`, {
+          method: 'DELETE',
+        });
+        if (!del.ok) {
+          const t = await del.text().catch(() => '');
+          console.warn(
+            `[CW] could not drop Prospect type for company ${companyId} (${del.status}): ${t}`,
+          );
+        }
+      }
+    } catch (e) {
+      console.warn('[CW] prospect-type removal failed:', e);
     }
   }
 
