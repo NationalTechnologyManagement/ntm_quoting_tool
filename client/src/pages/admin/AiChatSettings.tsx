@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Save, Plus, Trash2, AlertTriangle, Bot, BookOpen, Activity, Settings } from 'lucide-react';
+import { Loader2, Save, Plus, Trash2, AlertTriangle, Bot, BookOpen, Activity, Settings, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { adminApi } from '@/services/api';
 import AdminNav from '@/components/admin/AdminNav';
@@ -424,6 +424,23 @@ function KbEditor({ docs, onChange }: { docs: any[]; onChange: () => void }) {
   const [draft, setDraft] = useState({ title: '', content: '', active: true });
   const [editing, setEditing] = useState<string | null>(null);
   const [edit, setEdit] = useState<any>({});
+  const [uploading, setUploading] = useState(false);
+
+  const handleUpload = async (file: File | undefined) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const r = await adminApi.uploadAiKb(file);
+      toast.success(
+        `Imported "${r.doc.title}" — ${r.meta.extractedChars.toLocaleString()} characters extracted.`,
+      );
+      onChange();
+    } catch (e: any) {
+      toast.error(e?.message || 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const create = async () => {
     if (!draft.title.trim() || !draft.content.trim()) {
@@ -479,11 +496,41 @@ function KbEditor({ docs, onChange }: { docs: any[]; onChange: () => void }) {
           </p>
         </div>
         {!creating && (
-          <Button onClick={() => setCreating(true)} size="sm">
-            <Plus className="w-4 h-4 mr-2" /> New doc
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <Button
+              variant="outline"
+              size="sm"
+              asChild
+              disabled={uploading}
+            >
+              <label className="cursor-pointer">
+                {uploading ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <Upload className="w-4 h-4 mr-2" />
+                )}
+                Upload file
+                <input
+                  type="file"
+                  className="hidden"
+                  accept=".pdf,.docx,.txt,.md,.markdown,.csv,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown,text/csv"
+                  onChange={(e) => {
+                    handleUpload(e.target.files?.[0]);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+            </Button>
+            <Button onClick={() => setCreating(true)} size="sm">
+              <Plus className="w-4 h-4 mr-2" /> New doc
+            </Button>
+          </div>
         )}
       </div>
+      <p className="text-xs text-muted-foreground -mt-2">
+        Upload supports PDF, DOCX, TXT, MD, CSV. Text is extracted and saved as a KB doc you
+        can review or edit. Image-only PDFs need to be OCR'd first.
+      </p>
 
       {creating && (
         <Card className="p-4 space-y-3 bg-secondary/30">

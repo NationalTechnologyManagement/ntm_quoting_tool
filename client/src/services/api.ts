@@ -395,6 +395,17 @@ export const adminApi = {
     }),
   deleteAiKb: (id: string) =>
     apiRequest<{ success: true }>(`/api/admin/ai-chat/kb/${id}`, { method: 'DELETE' }),
+  uploadAiKb: (file: File, title?: string) => {
+    // Multipart upload — apiRequest already skips the JSON Content-Type when
+    // the body is FormData and lets the browser set the boundary itself.
+    const fd = new FormData();
+    fd.append('file', file);
+    if (title) fd.append('title', title);
+    return apiRequest<{ doc: any; meta: { sourceFilename: string; sourceMime: string; sourceBytes: number; extractedChars: number } }>(
+      '/api/admin/ai-chat/kb/upload',
+      { method: 'POST', body: fd },
+    );
+  },
   getAiUsage: () =>
     apiRequest<{
       today: { usdCost: number; tokensIn: number; tokensOut: number; messages: number };

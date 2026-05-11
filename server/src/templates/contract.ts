@@ -413,14 +413,38 @@ export function buildContractHtml(quote: QuoteData): string {
   </div>
 
   <!-- Service Package -->
-  ${quote.selectedPackage ? `
+  ${quote.selectedPackage ? (() => {
+    const desktopCount = quote.customer.userCount || 0;
+    const webCount = (quote.customer as any).webUserCount || 0;
+    const pricePerUser = (quote.selectedPackage as any).pricePerUser || 0;
+    const pricePerUserF3 = (quote.selectedPackage as any).pricePerUserF3 || 0;
+    const pricePerLocation = (quote.selectedPackage as any).pricePerLocation || 0;
+    const locationCount = quote.customer.locationCount || 0;
+    const lines: string[] = [];
+    if (desktopCount > 0) {
+      lines.push(
+        `${desktopCount} desktop user${desktopCount === 1 ? '' : 's'} &times; ${formatCurrency(pricePerUser)} = ${formatCurrency(pricePerUser * desktopCount)}`,
+      );
+    }
+    if (webCount > 0 && pricePerUserF3 > 0) {
+      lines.push(
+        `${webCount} web user${webCount === 1 ? '' : 's'} &times; ${formatCurrency(pricePerUserF3)} = ${formatCurrency(pricePerUserF3 * webCount)}`,
+      );
+    }
+    if (locationCount > 0) {
+      lines.push(
+        `${locationCount} location${locationCount === 1 ? '' : 's'} &times; ${formatCurrency(pricePerLocation)} = ${formatCurrency(pricePerLocation * locationCount)}`,
+      );
+    }
+    return `
   <div class="section">
     <div class="section-title">Service Package</div>
     <div class="pkg-name">${quote.selectedPackage.name}</div>
-    <div class="pkg-detail">${quote.customer.userCount} users &times; ${formatCurrency(quote.selectedPackage.pricePerUser)}/user + ${quote.customer.locationCount} location${quote.customer.locationCount > 1 ? 's' : ''} &times; ${formatCurrency(quote.selectedPackage.pricePerLocation)}/location &mdash; billed ${quote.selectedPackage.frequency}</div>
+    <div class="pkg-detail">${lines.join(' &nbsp;+&nbsp; ')} &mdash; billed ${quote.selectedPackage.frequency}</div>
     <div class="pkg-detail"><strong>Monthly Package Cost: ${formatCurrency(quote.selectedPackage.calculatedPrice)}</strong></div>
     ${featuresInline ? `<div class="pkg-features"><strong>Includes:</strong> ${featuresInline}</div>` : ''}
-  </div>` : ''}
+  </div>`;
+  })() : ''}
 
   <!-- Add-on Services -->
   ${quote.selectedAddons?.length > 0 ? `

@@ -91,7 +91,12 @@ const Summary = () => {
             totalSetupCost: addon.setupPrice ? addon.setupPrice * addon.quantity : 0,
           })),
           onboarding: (() => {
-            const r = computeOnboardingFee(selectedPackage as any, customerInfo.userCount, customerInfo.locationCount, { waive: !IS_LEAD_GEN_MODE });
+            const r = computeOnboardingFee(
+              selectedPackage as any,
+              customerInfo.userCount,
+              customerInfo.locationCount,
+              { waive: !IS_LEAD_GEN_MODE, webUserCount: customerInfo.webUserCount ?? 0 },
+            );
             return {
               userCount: customerInfo.userCount,
               costPerUser: customerInfo.userCount > 0 ? r.base / customerInfo.userCount : 0,
@@ -102,9 +107,17 @@ const Summary = () => {
           })(),
           appliedPromoCodes: [],
           totals: {
-            onboardingCost: computeOnboardingFee(selectedPackage as any, customerInfo.userCount, customerInfo.locationCount, { waive: !IS_LEAD_GEN_MODE }).final,
+            onboardingCost: computeOnboardingFee(
+              selectedPackage as any,
+              customerInfo.userCount,
+              customerInfo.locationCount,
+              { waive: !IS_LEAD_GEN_MODE, webUserCount: customerInfo.webUserCount ?? 0 },
+            ).final,
             oneTimeCosts: 0,
-            recurringCosts: selectedPackage.pricePerUser * customerInfo.userCount + selectedPackage.pricePerLocation * customerInfo.locationCount,
+            recurringCosts:
+              selectedPackage.pricePerUser * customerInfo.userCount +
+              (selectedPackage.pricePerUserF3 ?? 0) * (customerInfo.webUserCount ?? 0) +
+              selectedPackage.pricePerLocation * customerInfo.locationCount,
             discount: 0, grandTotal: 0, recurringFrequency: selectedPackage.frequency,
           },
           terms: { version: termsContent.version, id: termsContent.id, url: `${window.location.origin}/terms`, content: termsContent.content },
@@ -510,8 +523,12 @@ const Summary = () => {
                   <p className="font-medium text-foreground">{customerInfo.address}</p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">Users</p>
+                  <p className="text-muted-foreground">Desktop Users</p>
                   <p className="font-medium text-foreground">{customerInfo.userCount}</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Web Users</p>
+                  <p className="font-medium text-foreground">{customerInfo.webUserCount ?? 0}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Locations</p>
@@ -537,11 +554,21 @@ const Summary = () => {
                     <h3 className="font-semibold text-lg text-foreground">{selectedPackage.name}</h3>
                     <div className="text-sm text-muted-foreground space-y-1 mt-1">
                       <p>
-                        ${selectedPackage.pricePerUser}/user × {customerInfo.userCount} users = $
+                        ${selectedPackage.pricePerUser}/desktop user × {customerInfo.userCount} = $
                         {formatAmount(selectedPackage.pricePerUser * customerInfo.userCount)}
                       </p>
+                      {(customerInfo.webUserCount ?? 0) > 0 && (
+                        <p>
+                          ${selectedPackage.pricePerUserF3 ?? 0}/web user ×{' '}
+                          {customerInfo.webUserCount ?? 0} = $
+                          {formatAmount(
+                            (selectedPackage.pricePerUserF3 ?? 0) *
+                              (customerInfo.webUserCount ?? 0),
+                          )}
+                        </p>
+                      )}
                       <p>
-                        ${selectedPackage.pricePerLocation}/location × {customerInfo.locationCount} locations = $
+                        ${selectedPackage.pricePerLocation}/location × {customerInfo.locationCount} = $
                         {formatAmount(selectedPackage.pricePerLocation * customerInfo.locationCount)}
                       </p>
                       <p className="font-semibold text-primary">
