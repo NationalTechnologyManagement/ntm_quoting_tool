@@ -5,11 +5,13 @@ import { IS_LEAD_GEN_MODE } from '@/lib/lead-gen';
 export interface Package {
   id: string;
   name: string;
-  pricePerUser: number;
+  pricePerUser: number;          // Desktop User (Business Premium)
+  pricePerUserF3?: number;       // Web User (F3)
   pricePerLocation: number;
   frequency: 'monthly' | 'annually' | 'one-time';
   features: string[];
   isBestValue?: boolean;
+  customerVisible?: boolean;
   cwAgreementTypeId?: number | null;
   cwPerUserProductId?: number | null;
   cwPerUserF3ProductId?: number | null;
@@ -40,12 +42,16 @@ export const ONBOARDING_WAIVED_FOR_PORTAL = true;
 // Lite quoting tool charges the full onboarding fee — no portal waiver. Pass
 // { waive: false } from lead-gen contexts to bypass the default waiver.
 export function computeOnboardingFee(
-  pkg: Pick<Package, 'pricePerUser' | 'pricePerLocation' | 'agreementMonths'>,
+  pkg: Pick<Package, 'pricePerUser' | 'pricePerUserF3' | 'pricePerLocation' | 'agreementMonths'>,
   userCount: number,
   locationCount: number,
-  options?: { waive?: boolean },
+  options?: { waive?: boolean; webUserCount?: number },
 ): { base: number; waived: boolean; final: number } {
-  const monthly = pkg.pricePerUser * userCount + pkg.pricePerLocation * locationCount;
+  const webUserCount = options?.webUserCount ?? 0;
+  const monthly =
+    pkg.pricePerUser * userCount +
+    (pkg.pricePerUserF3 ?? 0) * webUserCount +
+    pkg.pricePerLocation * locationCount;
   const base = monthly * ONBOARDING_FEE_MULTIPLIER;
   const waived = options?.waive ?? ONBOARDING_WAIVED_FOR_PORTAL;
   return { base, waived, final: waived ? 0 : base };
@@ -72,7 +78,10 @@ export interface CustomerInfo {
   phone: string;
   businessName: string;
   address: string;
+  /** Desktop User count (Business Premium). */
   userCount: number;
+  /** Web User count (F3 / Web & Email Only). */
+  webUserCount: number;
   locationCount: number;
   referrerCode?: string;
 }
@@ -83,6 +92,22 @@ export interface TermsContent {
   content: string;
   lastUpdated: string;
 }
+
+export interface SiteContent {
+  quoteBuilderHeading: string;
+  quoteBuilderSubheading: string;
+  quoteBuilderExplainerTitle: string;
+  quoteBuilderExplainerBody: string;
+}
+
+const defaultSiteContent: SiteContent = {
+  quoteBuilderHeading: 'Choose Your Package',
+  quoteBuilderSubheading:
+    "Tell us how many of each type of user you have, then pick the plan that fits. We'll size the quote to your team.",
+  quoteBuilderExplainerTitle: 'Desktop User vs Web User',
+  quoteBuilderExplainerBody:
+    'Desktop User — full Microsoft 365 Business Premium. Use this for your primary staff who need the full desktop apps, Teams calls, and offline access.\n\nWeb User — Microsoft 365 F3 (Web & Email Only). Use this for frontline, warehouse, kiosk, or shared-device employees who only need email and browser-based apps. Costs less per user.',
+};
 
 interface QuoteContextType {
   customerInfo: CustomerInfo;
@@ -103,6 +128,7 @@ interface QuoteContextType {
   setTermsContent: (terms: TermsContent) => void;
   termsHistory: TermsContent[];
   getTermsByVersion: (version: string) => TermsContent | null;
+  siteContent: SiteContent;
   refreshConfig: () => Promise<void>;
   saveConfig: (packages: Package[], addons: Addon[], promoCodes?: PromoCode[]) => Promise<void>;
 }
@@ -119,6 +145,7 @@ const defaultPackages: Package[] = [
     id: 'package-1',
     name: 'Essentials',
     pricePerUser: 59,
+    pricePerUserF3: 29,
     pricePerLocation: 300,
     frequency: 'monthly',
     features: [
@@ -130,6 +157,7 @@ const defaultPackages: Package[] = [
       'Automated patching & software deployment',
     ],
     isBestValue: false,
+    customerVisible: false, // hidden from public pricing
     agreementMonths: 0,
     cwAgreementTypeId: 36,
     cwPerUserProductId: 1096,
@@ -140,6 +168,7 @@ const defaultPackages: Package[] = [
     id: 'package-2',
     name: 'SafeSecure',
     pricePerUser: 119,
+    pricePerUserF3: 29,
     pricePerLocation: 400,
     frequency: 'monthly',
     features: [
@@ -151,6 +180,7 @@ const defaultPackages: Package[] = [
       'Microsoft 365 backups',
     ],
     isBestValue: true,
+    customerVisible: true,
     agreementMonths: 36,
     cwAgreementTypeId: 37,
     cwPerUserProductId: 1097,
@@ -161,6 +191,7 @@ const defaultPackages: Package[] = [
     id: 'package-3',
     name: 'SafeSecure Plus',
     pricePerUser: 179,
+    pricePerUserF3: 59,
     pricePerLocation: 500,
     frequency: 'monthly',
     features: [
@@ -170,6 +201,7 @@ const defaultPackages: Package[] = [
       'Advanced threat protection',
     ],
     isBestValue: false,
+    customerVisible: true,
     agreementMonths: 36,
     cwAgreementTypeId: 38,
     cwPerUserProductId: 1098,
@@ -317,6 +349,7 @@ export const QuoteProvider = ({ children }: { children: ReactNode }) => {
     businessName: '',
     address: '',
     userCount: 1,
+    webUserCount: 0,
     locationCount: 1,
     referrerCode: '',
   });
@@ -324,16 +357,17 @@ export const QuoteProvider = ({ children }: { children: ReactNode }) => {
   const [selectedAddons, setSelectedAddons] = useState<SelectedAddon[]>([]);
   // Lite quoting tool hides Essentials so the lead-gen visitor never sees it
   // even on the brief offline-fallback render before /api/config returns.
+  // Offline fallback — production data comes from /api/config which already
+  // applies the customerVisible filter server-side.
   const [packages, setPackages] = useState<Package[]>(
-    IS_LEAD_GEN_MODE
-      ? defaultPackages.filter((p) => p.name.toLowerCase() !== 'essentials')
-      : defaultPackages,
+    defaultPackages.filter((p) => p.customerVisible !== false),
   );
   const [addons, setAddons] = useState<Addon[]>(defaultAddons);
   const [promoCodes, setPromoCodes] = useState<PromoCode[]>(defaultPromoCodes);
   const [appliedPromoCodes, setAppliedPromoCodes] = useState<PromoCode[]>([]);
   const [termsContent, setTermsContent] = useState<TermsContent>(defaultTermsContent);
   const [termsHistory, setTermsHistory] = useState<TermsContent[]>([]);
+  const [siteContent, setSiteContent] = useState<SiteContent>(defaultSiteContent);
 
   const refreshConfig = async () => {
     try {
@@ -344,6 +378,9 @@ export const QuoteProvider = ({ children }: { children: ReactNode }) => {
       setPromoCodes(data.promoCodes || defaultPromoCodes);
       if (data.terms) {
         setTermsContent(data.terms);
+      }
+      if (data.siteContent) {
+        setSiteContent(data.siteContent);
       }
     } catch (error) {
       // Fall back to defaults if API is unreachable
@@ -415,6 +452,7 @@ export const QuoteProvider = ({ children }: { children: ReactNode }) => {
         setTermsContent: saveTermsContent,
         termsHistory,
         getTermsByVersion,
+        siteContent,
         refreshConfig,
         saveConfig,
       }}

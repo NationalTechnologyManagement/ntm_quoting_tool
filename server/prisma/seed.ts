@@ -25,10 +25,12 @@ async function main() {
     const fields = {
       name: pkg.name,
       pricePerUser: pkg.pricePerUser,
+      pricePerUserF3: pkg.pricePerUserF3 ?? 0,
       pricePerLocation: pkg.pricePerLocation,
       frequency: pkg.frequency,
       features: pkg.features,
       isBestValue: pkg.isBestValue ?? false,
+      customerVisible: pkg.customerVisible ?? true,
       sortOrder: i,
       cwAgreementTypeId: pkg.cwAgreementTypeId ?? null,
       cwPerUserProductId: pkg.cwPerUserProductId ?? null,
@@ -128,6 +130,16 @@ async function main() {
     },
   });
   console.log(`  ✓ Admin user: ${email}`);
+
+  // ── Site Content (singleton) ──
+  // Idempotent: created on first deploy with Prisma model defaults; left alone
+  // afterwards so admin edits survive the next deploy.
+  await prisma.siteContent.upsert({
+    where: { id: 'default' },
+    update: {},
+    create: { id: 'default' },
+  });
+  console.log('  ✓ Site content singleton');
 
   // ── CW Config ──
   // Idempotent upsert of every documented key with its default value.

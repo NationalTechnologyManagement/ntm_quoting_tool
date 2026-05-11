@@ -71,11 +71,15 @@ const Summary = () => {
             id: selectedPackage.id,
             name: selectedPackage.name,
             pricePerUser: selectedPackage.pricePerUser,
+            pricePerUserF3: selectedPackage.pricePerUserF3 ?? 0,
             pricePerLocation: selectedPackage.pricePerLocation,
             frequency: selectedPackage.frequency,
             features: selectedPackage.features,
             agreementMonths: selectedPackage.agreementMonths ?? 0,
-            calculatedPrice: selectedPackage.pricePerUser * customerInfo.userCount + selectedPackage.pricePerLocation * customerInfo.locationCount,
+            calculatedPrice:
+              selectedPackage.pricePerUser * customerInfo.userCount +
+              (selectedPackage.pricePerUserF3 ?? 0) * (customerInfo.webUserCount ?? 0) +
+              selectedPackage.pricePerLocation * customerInfo.locationCount,
           },
           selectedAddons: selectedAddons.map((addon) => ({
             id: addon.id, name: addon.name, description: addon.description,
@@ -158,16 +162,25 @@ const Summary = () => {
     return null;
   }
 
-  // Calculate package cost
+  // Calculate package cost — splits per-user into Desktop (Business Premium)
+  // and Web (F3) tiers. Existing quotes pre-2026 had webUserCount=undefined,
+  // which evaluates to 0 and falls back to the desktop-only math.
+  const webUserCount = customerInfo.webUserCount ?? 0;
   const packageCost = selectedPackage
     ? selectedPackage.pricePerUser * customerInfo.userCount +
+      (selectedPackage.pricePerUserF3 ?? 0) * webUserCount +
       selectedPackage.pricePerLocation * customerInfo.locationCount
     : 0;
 
   // Onboarding fee: 2x monthly recurring (per-user × users + per-location × locations).
   // Auto-waived for 36-month plans signed online (per ntm onboarding-fee policy).
   const onboardingResult = selectedPackage
-    ? computeOnboardingFee(selectedPackage as any, customerInfo.userCount, customerInfo.locationCount, { waive: !IS_LEAD_GEN_MODE })
+    ? computeOnboardingFee(
+        selectedPackage as any,
+        customerInfo.userCount,
+        customerInfo.locationCount,
+        { waive: !IS_LEAD_GEN_MODE, webUserCount },
+      )
     : { base: 0, waived: false, final: 0 };
   const onboardingCost = onboardingResult.final;
   const onboardingWaived = onboardingResult.waived;
@@ -259,6 +272,7 @@ const Summary = () => {
         id: selectedPackage.id,
         name: selectedPackage.name,
         pricePerUser: selectedPackage.pricePerUser,
+        pricePerUserF3: selectedPackage.pricePerUserF3 ?? 0,
         pricePerLocation: selectedPackage.pricePerLocation,
         frequency: selectedPackage.frequency,
         features: selectedPackage.features,

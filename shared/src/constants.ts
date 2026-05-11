@@ -16,15 +16,20 @@ export const ONBOARDING_COST_PER_USER = 200;
 export const QUOTE_VALIDITY_DAYS = 30;
 
 /** Compute base onboarding fee for a given package + sizing. Pass
- *  { waive: false } from lite/lead-gen contexts to charge the full fee. */
+ *  { waive: false } from lite/lead-gen contexts to charge the full fee.
+ *  Pass { webUserCount } to fold the F3 (Web User) tier into the recurring
+ *  base — without it, only Desktop users + locations contribute. */
 export function computeOnboardingFee(
-  pkg: Pick<Package, 'pricePerUser' | 'pricePerLocation' | 'agreementMonths'>,
+  pkg: Pick<Package, 'pricePerUser' | 'pricePerUserF3' | 'pricePerLocation' | 'agreementMonths'>,
   userCount: number,
   locationCount: number,
-  options?: { waive?: boolean },
+  options?: { waive?: boolean; webUserCount?: number },
 ): { base: number; waived: boolean; final: number } {
+  const webUserCount = options?.webUserCount ?? 0;
   const monthly =
-    pkg.pricePerUser * userCount + pkg.pricePerLocation * locationCount;
+    pkg.pricePerUser * userCount +
+    (pkg.pricePerUserF3 ?? 0) * webUserCount +
+    pkg.pricePerLocation * locationCount;
   const base = monthly * ONBOARDING_FEE_MULTIPLIER;
   // Default behavior: all online portal quotes get the waiver. The lite
   // quoting tool overrides this so the customer sees the real onboarding
@@ -40,7 +45,8 @@ export const defaultPackages: Package[] = [
   {
     id: 'package-1',
     name: 'Essentials',
-    pricePerUser: 59,
+    pricePerUser: 59,        // Desktop User (Business Premium)
+    pricePerUserF3: 29,      // Web User (F3 — Web & Email Only)
     pricePerLocation: 300,
     frequency: 'monthly',
     agreementMonths: 0, // month-to-month
@@ -53,6 +59,7 @@ export const defaultPackages: Package[] = [
       'Automated patching & software deployment',
     ],
     isBestValue: false,
+    customerVisible: false, // hidden from public pricing per NTM
     cwAgreementTypeId: 36, // CW: "00791 Essentials Package"
     cwPerUserProductId: 1096,     // PERUSER0001-MRR Business Premium
     cwPerUserF3ProductId: 1118,   // PERUSER0005-MRR F3 (Web & Email Only)
@@ -64,6 +71,7 @@ export const defaultPackages: Package[] = [
     // Per CW catalog (PERUSER0002-MRR / PERLOCATION0002-MRR). Previous seed
     // value of $99/user was stale and disagreed with what CW invoices.
     pricePerUser: 119,
+    pricePerUserF3: 29,
     pricePerLocation: 400,
     frequency: 'monthly',
     agreementMonths: 36,
@@ -76,6 +84,7 @@ export const defaultPackages: Package[] = [
       'Microsoft 365 backups',
     ],
     isBestValue: true,
+    customerVisible: true,
     cwAgreementTypeId: 37, // CW: "00792 SafeSecure Package"
     cwPerUserProductId: 1097,     // PERUSER0002-MRR Business Premium
     cwPerUserF3ProductId: 1119,   // PERUSER0006-MRR F3 (Web & Email Only)
@@ -86,6 +95,7 @@ export const defaultPackages: Package[] = [
     name: 'SafeSecure Plus',
     // Per CW catalog (PERUSER0003-MRR). Previous seed was $149.
     pricePerUser: 179,
+    pricePerUserF3: 59,
     pricePerLocation: 500,
     frequency: 'monthly',
     agreementMonths: 36,
@@ -96,6 +106,7 @@ export const defaultPackages: Package[] = [
       'Advanced threat protection',
     ],
     isBestValue: false,
+    customerVisible: true,
     cwAgreementTypeId: 38, // CW: "00793 SafeSecure Plus Package"
     cwPerUserProductId: 1098,     // PERUSER0003-MRR Business Premium
     cwPerUserF3ProductId: 1120,   // PERUSER0007-MRR F3 (Web & Email Only)

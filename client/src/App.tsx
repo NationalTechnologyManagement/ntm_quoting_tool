@@ -19,6 +19,7 @@ import PackageManagement from "./pages/admin/PackageManagement";
 import AddonManagement from "./pages/admin/AddonManagement";
 import PromoCodeManagement from "./pages/admin/PromoCodeManagement";
 import TermsManagement from "./pages/admin/TermsManagement";
+import SiteContentManagement from "./pages/admin/SiteContentManagement";
 import QuoteManagement from "./pages/admin/QuoteManagement";
 import IntegrationSettings from "./pages/admin/IntegrationSettings";
 import CwReferenceData from "./pages/admin/CwReferenceData";
@@ -63,6 +64,7 @@ const App = () => (
                 <Route path="/admin/addons" element={<AddonManagement />} />
                 <Route path="/admin/promo-codes" element={<PromoCodeManagement />} />
                 <Route path="/admin/terms" element={<TermsManagement />} />
+                <Route path="/admin/site-content" element={<SiteContentManagement />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
               <AiChatWidget />

@@ -20,6 +20,7 @@ import webhookRoutes from './routes/webhooks.js';
 import contractRoutes from './routes/contracts.js';
 import aiChatRoutes from './routes/ai-chat.js';
 import adminAiRoutes from './routes/admin-ai.js';
+import adminSiteContentRoutes from './routes/admin-site-content.js';
 
 export function createApp() {
   const app = express();
@@ -44,6 +45,7 @@ export function createApp() {
   app.use(adminQuoteRoutes);
   app.use(adminSettingsRoutes);
   app.use(adminAiRoutes);
+  app.use(adminSiteContentRoutes);
   app.use(quoteRoutes);
   app.use(leadRoutes);
   app.use(webhookRoutes);

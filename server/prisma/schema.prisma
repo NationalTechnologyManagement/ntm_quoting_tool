@@ -12,18 +12,27 @@ datasource db {
 model Package {
   id                     String   @id @default(cuid())
   name                   String
+  // Desktop User price = Microsoft 365 Business Premium tier. The headline
+  // per-user number customers see on the package card.
   pricePerUser           Float
+  // Web User price = Microsoft 365 F3 (Web & Email Only) tier. Surfaced on
+  // the customer wizard as "Web User"; admin-editable per package.
+  pricePerUserF3         Float    @default(0)
   pricePerLocation       Float
   frequency              String   @default("monthly") // monthly | annually | one-time
   features               Json     @default("[]")       // string[]
   isBestValue            Boolean  @default(false)
   sortOrder              Int      @default(0)
   active                 Boolean  @default(true)
+  // Admin toggle. When false the package row stays in DB and historical
+  // quotes referencing it keep working, but /api/config filters it out so
+  // customers can't pick it. Used to hide Essentials from public pricing.
+  customerVisible        Boolean  @default(true)
   cwAgreementTypeId      Int?     // CW agreement type to use when this package is sold
   // CW catalog product IDs for the per-package recurring lines. postAdditions
-  // posts one Addition per row that's set: per-user × userCount on the
-  // Business Premium product, per-user F3 × userCount on the F3 product (if
-  // a separate F3 count is ever introduced), per-location × locationCount.
+  // posts one Addition per row that's set: per-user (Desktop / Business
+  // Premium) × desktop count, per-user F3 (Web User) × web count,
+  // per-location × locationCount.
   cwPerUserProductId     Int?
   cwPerUserF3ProductId   Int?
   cwPerLocationProductId Int?
@@ -32,6 +41,22 @@ model Package {
   updatedAt              DateTime @updatedAt
 
   @@map("packages")
+}
+
+// ── Editable site copy ───────────────────────────────────────────────
+// Singleton row (id="default"). Admins edit customer-facing copy here so
+// marketing wording doesn't require a code deploy. Loaded by /api/config and
+// rendered on the customer wizard.
+
+model SiteContent {
+  id                            String   @id @default("default")
+  quoteBuilderHeading           String   @default("Choose Your Package")
+  quoteBuilderSubheading        String   @default("Tell us how many of each type of user you have, then pick the plan that fits. We'll size the quote to your team.")
+  quoteBuilderExplainerTitle    String   @default("Desktop User vs Web User")
+  quoteBuilderExplainerBody     String   @default("Desktop User — full Microsoft 365 Business Premium. Use this for your primary staff who need the full desktop apps, Teams calls, and offline access.\n\nWeb User — Microsoft 365 F3 (Web & Email Only). Use this for frontline, warehouse, kiosk, or shared-device employees who only need email and browser-based apps. Costs less per user.")
+  updatedAt                     DateTime @updatedAt
+
+  @@map("site_content")
 }
 
 // ── Addons ───────────────────────────────────────────────────────────

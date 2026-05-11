@@ -3,17 +3,23 @@
 export interface Package {
   id: string;
   name: string;
+  // Desktop User price (Microsoft 365 Business Premium tier).
   pricePerUser: number;
+  // Web User price (Microsoft 365 F3 / Web & Email Only tier).
+  pricePerUserF3?: number;
   pricePerLocation: number;
   frequency: 'monthly' | 'annually' | 'one-time';
   features: string[];
   isBestValue?: boolean;
+  // When false the package is hidden from the customer wizard. Admins still
+  // see it, and historical quotes referencing it still resolve.
+  customerVisible?: boolean;
   // CW agreement type id this package maps to. Required for `createAgreement`
   // to work; nullable so the schema doesn't break legacy rows during migration.
   cwAgreementTypeId?: number | null;
   // CW catalog product IDs for the package's recurring lines. postAdditions
-  // posts one Agreement Addition per filled-in product: per-user × userCount,
-  // per-user F3 × F3 count (if/when surfaced), per-location × locationCount.
+  // posts one Agreement Addition per filled-in product: per-user × desktop
+  // user count, per-user F3 × web user count, per-location × locationCount.
   cwPerUserProductId?: number | null;
   cwPerUserF3ProductId?: number | null;
   cwPerLocationProductId?: number | null;
@@ -62,7 +68,13 @@ export interface CustomerInfo {
   phone: string;
   businessName: string;
   address: string;
+  // Desktop User count (Business Premium). Historically just called
+  // "userCount" — kept under the old name for backwards compat with
+  // snapshotted quotes. Treated as the Desktop (Business Premium) tier.
   userCount: number;
+  // Web User count (F3 / Web & Email Only). Optional; defaults to 0 so
+  // pre-2026 quotes that didn't track this field still resolve.
+  webUserCount?: number;
   locationCount: number;
   referrerCode?: string;
 }
@@ -185,6 +197,15 @@ export interface QuoteData {
   timestamp: string;
 }
 
+// ── Site Content ─────────────────────────────────────────────────────
+
+export interface SiteContent {
+  quoteBuilderHeading: string;
+  quoteBuilderSubheading: string;
+  quoteBuilderExplainerTitle: string;
+  quoteBuilderExplainerBody: string;
+}
+
 // ── API Payloads ─────────────────────────────────────────────────────
 
 export interface CreateQuotePayload {
@@ -222,6 +243,7 @@ export interface ConfigResponse {
   addons: Addon[];
   promoCodes: PromoCode[];
   terms: TermsContent;
+  siteContent: SiteContent;
 }
 
 // ── Auth ─────────────────────────────────────────────────────────────

@@ -162,9 +162,9 @@ const PackageManagement = () => {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor={`price-per-user-${packageIndex}`}>Price Per User ($)</Label>
+                    <Label htmlFor={`price-per-user-${packageIndex}`}>Desktop User ($)</Label>
                     <Input
                       id={`price-per-user-${packageIndex}`}
                       type="number"
@@ -173,10 +173,26 @@ const PackageManagement = () => {
                       min="0"
                       step="0.01"
                     />
+                    <p className="text-xs text-muted-foreground">M365 Business Premium</p>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor={`price-per-location-${packageIndex}`}>Price Per Location ($)</Label>
+                    <Label htmlFor={`price-per-user-f3-${packageIndex}`}>Web User ($)</Label>
+                    <Input
+                      id={`price-per-user-f3-${packageIndex}`}
+                      type="number"
+                      value={pkg.pricePerUserF3 ?? 0}
+                      onChange={(e) =>
+                        updatePackage(packageIndex, 'pricePerUserF3', parseFloat(e.target.value) || 0)
+                      }
+                      min="0"
+                      step="0.01"
+                    />
+                    <p className="text-xs text-muted-foreground">M365 F3 (Web &amp; Email Only)</p>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor={`price-per-location-${packageIndex}`}>Per Location ($)</Label>
                     <Input
                       id={`price-per-location-${packageIndex}`}
                       type="number"
@@ -238,6 +254,24 @@ const PackageManagement = () => {
                     id={`best-value-${packageIndex}`}
                     checked={pkg.isBestValue || false}
                     onCheckedChange={(checked) => updatePackage(packageIndex, 'isBestValue', checked)}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between py-3">
+                  <div className="pr-4">
+                    <Label htmlFor={`visible-${packageIndex}`} className="cursor-pointer">
+                      Show on customer page
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Off = hidden from /quote-builder (e.g. Essentials).
+                    </p>
+                  </div>
+                  <Switch
+                    id={`visible-${packageIndex}`}
+                    checked={pkg.customerVisible !== false}
+                    onCheckedChange={(checked) =>
+                      updatePackage(packageIndex, 'customerVisible', checked)
+                    }
                   />
                 </div>
 

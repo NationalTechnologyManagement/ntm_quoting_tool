@@ -196,6 +196,7 @@ export const AiChatProvider = ({ children }: { children: ReactNode }) => {
         id: p.id,
         name: p.name,
         pricePerUser: p.pricePerUser,
+        pricePerUserF3: p.pricePerUserF3,
         pricePerLocation: p.pricePerLocation,
         frequency: p.frequency,
         agreementMonths: p.agreementMonths,

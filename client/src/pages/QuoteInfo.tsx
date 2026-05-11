@@ -62,6 +62,7 @@ const QuoteInfo = () => {
             businessName: formData.businessName || '',
             address: formData.address || '',
             userCount: formData.userCount || 0,
+            webUserCount: formData.webUserCount ?? 0,
             locationCount: formData.locationCount || 0,
             referrerCode: formData.referrerCode || null,
           },
@@ -326,13 +327,17 @@ const QuoteInfo = () => {
           style={{ animationDelay: '0.05s' }}
         >
           <h2 className="text-2xl font-semibold mb-6 text-foreground">Service Details</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <p className="text-sm text-muted-foreground -mt-4 mb-6">
+            We pre-filled these from the package step — you can fine-tune them here. At least one
+            Desktop User is required.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div
               className={`space-y-2 ${
                 userCountHighlighted ? 'rounded-md ring-2 ring-primary ring-offset-2 ring-offset-background transition-shadow' : ''
               }`}
             >
-              <Label htmlFor="userCount">Number of Users *</Label>
+              <Label htmlFor="userCount">Desktop Users *</Label>
               <div className="relative">
                 <Input
                   id="userCount"
@@ -345,7 +350,23 @@ const QuoteInfo = () => {
                 />
                 {isFieldValid('userCount') && <Check className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-primary" />}
               </div>
-              <p className="text-xs text-muted-foreground">Total number of users</p>
+              <p className="text-xs text-muted-foreground">Full Microsoft 365 — primary staff.</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="webUserCount">Web Users</Label>
+              <Input
+                id="webUserCount"
+                type="number"
+                min="0"
+                value={formData.webUserCount ?? 0}
+                onChange={(e) =>
+                  handleInputChange('webUserCount', parseInt(e.target.value) || 0)
+                }
+                placeholder="e.g., 5"
+              />
+              <p className="text-xs text-muted-foreground">
+                Web &amp; email only — frontline, kiosk, shared devices.
+              </p>
             </div>
             <div
               className={`space-y-2 ${

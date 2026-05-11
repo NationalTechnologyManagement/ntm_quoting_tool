@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { path: '/admin/addons', label: 'Add-Ons' },
   { path: '/admin/promo-codes', label: 'Promo Codes' },
   { path: '/admin/terms', label: 'Terms' },
+  { path: '/admin/site-content', label: 'Site Copy' },
   { path: '/admin/integrations', label: 'Integrations' },
   { path: '/admin/cw-reference-ids', label: 'CW IDs' },
   { path: '/admin/ai-chat', label: 'AI Chat' },

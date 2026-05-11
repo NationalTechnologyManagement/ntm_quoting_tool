@@ -309,6 +309,25 @@ export const adminApi = {
       body: JSON.stringify({ currentPassword, newPassword }),
     }),
 
+  // Site content (customer-facing wording on the quote builder page).
+  getSiteContent: () =>
+    apiRequest<{
+      quoteBuilderHeading: string;
+      quoteBuilderSubheading: string;
+      quoteBuilderExplainerTitle: string;
+      quoteBuilderExplainerBody: string;
+    }>('/api/admin/site-content'),
+  updateSiteContent: (patch: {
+    quoteBuilderHeading?: string;
+    quoteBuilderSubheading?: string;
+    quoteBuilderExplainerTitle?: string;
+    quoteBuilderExplainerBody?: string;
+  }) =>
+    apiRequest<any>('/api/admin/site-content', {
+      method: 'PUT',
+      body: JSON.stringify(patch),
+    }),
+
   // Integration credentials (editable)
   getCredentials: (reveal = false) =>
     apiRequest<{

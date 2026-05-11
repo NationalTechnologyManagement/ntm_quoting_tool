@@ -1,30 +1,47 @@
 import { Router } from 'express';
 import { prisma } from '../config/prisma.js';
 import { env } from '../config/env.js';
-import type { Package as PackageType, Addon as AddonType, PromoCode, TermsContent } from '@ntm/shared';
+import type {
+  Package as PackageType,
+  Addon as AddonType,
+  PromoCode,
+  TermsContent,
+  SiteContent,
+} from '@ntm/shared';
 
 const router = Router();
 
 router.get('/api/config', async (_req, res) => {
-  const [dbPackages, dbAddons, dbPromoCodes, dbTerms] = await Promise.all([
+  const [dbPackages, dbAddons, dbPromoCodes, dbTerms, dbSiteContent] = await Promise.all([
     prisma.package.findMany({ where: { active: true }, orderBy: { sortOrder: 'asc' } }),
     prisma.addon.findMany({ where: { active: true }, orderBy: { sortOrder: 'asc' } }),
     prisma.promoCode.findMany({ where: { active: true } }),
     prisma.terms.findFirst({ where: { active: true }, orderBy: { createdAt: 'desc' } }),
+    prisma.siteContent.upsert({
+      where: { id: 'default' },
+      update: {},
+      create: { id: 'default' },
+    }),
   ]);
 
   const packages: PackageType[] = dbPackages
-    // Lite quoting tool intentionally hides Essentials — it's the entry-level
-    // package and not what we want lead-gen visitors anchored on.
+    // Hide packages flagged as customerVisible=false (e.g. Essentials). Admin
+    // UI still sees the full list via /api/packages.
+    .filter((p) => p.customerVisible !== false)
+    // Lite quoting tool also hides Essentials by name as a defense in depth —
+    // even if customerVisible somehow gets toggled true on Essentials, lite
+    // still won't show it.
     .filter((p) => !env.LEAD_GEN_MODE || p.name.toLowerCase() !== 'essentials')
     .map((p) => ({
       id: p.id,
       name: p.name,
       pricePerUser: p.pricePerUser,
+      pricePerUserF3: p.pricePerUserF3,
       pricePerLocation: p.pricePerLocation,
       frequency: p.frequency as PackageType['frequency'],
       features: p.features as string[],
       isBestValue: p.isBestValue,
+      customerVisible: p.customerVisible,
       cwAgreementTypeId: p.cwAgreementTypeId,
       cwPerUserProductId: p.cwPerUserProductId,
       cwPerUserF3ProductId: p.cwPerUserF3ProductId,
@@ -69,7 +86,14 @@ router.get('/api/config', async (_req, res) => {
       }
     : null;
 
-  res.json({ packages, addons, promoCodes, terms });
+  const siteContent: SiteContent = {
+    quoteBuilderHeading: dbSiteContent.quoteBuilderHeading,
+    quoteBuilderSubheading: dbSiteContent.quoteBuilderSubheading,
+    quoteBuilderExplainerTitle: dbSiteContent.quoteBuilderExplainerTitle,
+    quoteBuilderExplainerBody: dbSiteContent.quoteBuilderExplainerBody,
+  };
+
+  res.json({ packages, addons, promoCodes, terms, siteContent });
 });
 
 export default router;

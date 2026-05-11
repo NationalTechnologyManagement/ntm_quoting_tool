@@ -10,10 +10,12 @@ const router = Router();
 const packageSchema = z.object({
   name: z.string().min(1),
   pricePerUser: z.number().min(0),
+  pricePerUserF3: z.number().min(0).optional(),
   pricePerLocation: z.number().min(0),
   frequency: z.enum(['monthly', 'annually', 'one-time']),
   features: z.array(z.string()),
   isBestValue: z.boolean().optional(),
+  customerVisible: z.boolean().optional(),
   sortOrder: z.number().optional(),
   cwAgreementTypeId: z.number().int().nullable().optional(),
   cwPerUserProductId: z.number().int().nullable().optional(),

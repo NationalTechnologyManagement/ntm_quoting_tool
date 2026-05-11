@@ -17,7 +17,11 @@ const createQuoteSchema = z.object({
     phone: z.string().min(1),
     businessName: z.string().min(1),
     address: z.string().min(1),
+    // Desktop (Business Premium) user count. The flow requires at least one,
+    // enforced UI-side too.
     userCount: z.number().int().min(1),
+    // Web (F3) user count. Optional; 0 if the customer has no F3 users.
+    webUserCount: z.number().int().min(0).optional().default(0),
     locationCount: z.number().int().min(1),
     referrerCode: z.string().nullable().optional(),
   }),
@@ -25,9 +29,11 @@ const createQuoteSchema = z.object({
     id: z.string(),
     name: z.string(),
     pricePerUser: z.number(),
+    pricePerUserF3: z.number().optional(),
     pricePerLocation: z.number(),
     frequency: z.string(),
     features: z.array(z.string()),
+    agreementMonths: z.number().int().min(0).optional(),
     calculatedPrice: z.number(),
   }),
   selectedAddons: z.array(z.any()),

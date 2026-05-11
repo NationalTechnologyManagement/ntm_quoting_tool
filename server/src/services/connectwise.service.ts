@@ -461,35 +461,52 @@ async function postAdditions(
     posted += 1;
   };
 
-  // ── Package lines (per-user + per-location) ──
-  // Pull the current package record so we have the latest CW product IDs.
-  // Quotes don't snapshot product IDs because they're CW-internal plumbing —
-  // ops can correct mis-mapped IDs on the package row and replay provisioning
-  // without re-issuing the customer's quote.
+  // ── Package lines (Desktop user + Web user + per-location) ──
+  // Pull the current package record so we have the latest CW product IDs and
+  // F3 pricing. Quotes don't snapshot product IDs because they're CW-internal
+  // plumbing — ops can correct mis-mapped IDs on the package row and replay
+  // provisioning without re-issuing the customer's quote.
   const pkg = await prisma.package.findUnique({
     where: { id: quote.selectedPackage.id },
     select: {
       name: true,
+      pricePerUserF3: true,
       cwPerUserProductId: true,
+      cwPerUserF3ProductId: true,
       cwPerLocationProductId: true,
     },
   });
 
-  const userCount = quote.customer.userCount ?? 0;
+  const desktopUserCount = quote.customer.userCount ?? 0;
+  const webUserCount = (quote.customer as any).webUserCount ?? 0;
   const locationCount = quote.customer.locationCount ?? 0;
   const pricePerUser = quote.selectedPackage.pricePerUser ?? 0;
+  const pricePerUserF3 = pkg?.pricePerUserF3 ?? 0;
   const pricePerLocation = quote.selectedPackage.pricePerLocation ?? 0;
 
-  if (userCount > 0 && pricePerUser > 0) {
+  if (desktopUserCount > 0 && pricePerUser > 0) {
     if (pkg?.cwPerUserProductId) {
       await postLine(
         pkg.cwPerUserProductId,
-        `${quote.selectedPackage.name} — Per User`,
-        userCount,
+        `${quote.selectedPackage.name} — Desktop User`,
+        desktopUserCount,
         pricePerUser,
       );
     } else {
-      missing.push(`${quote.selectedPackage.name} per-user`);
+      missing.push(`${quote.selectedPackage.name} per-user (Desktop)`);
+    }
+  }
+
+  if (webUserCount > 0 && pricePerUserF3 > 0) {
+    if (pkg?.cwPerUserF3ProductId) {
+      await postLine(
+        pkg.cwPerUserF3ProductId,
+        `${quote.selectedPackage.name} — Web User`,
+        webUserCount,
+        pricePerUserF3,
+      );
+    } else {
+      missing.push(`${quote.selectedPackage.name} per-user (Web/F3)`);
     }
   }
 
