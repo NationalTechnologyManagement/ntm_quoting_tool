@@ -45,8 +45,8 @@ export function buildPaymentConfirmationHtml(
         <h3 style="margin:0 0 12px 0;font-size:16px;">What Happens Next</h3>
         <ol style="margin:0;padding-left:20px;">
           ${paymentUrl ? '<li>Complete your payment using the link above</li>' : '<li>Your payment has been confirmed</li>'}
-          <li>Our team will reach out within 24 hours to begin onboarding</li>
-          <li>We\'ll schedule your implementation and training sessions</li>
+          <li>Someone from our team will reach out soon to begin the onboarding process with you</li>
+          <li>We\'ll work with you to schedule implementation and training</li>
         </ol>
       </div>
       <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin:24px 0;">

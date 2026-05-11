@@ -35,12 +35,14 @@ router.post('/api/webhooks/ap', async (req, res) => {
         if (quote) {
           const quoteData = await quoteService.getQuote(quote.quoteNumber);
 
-          // Generate contract PDF and email it
+          // Generate contract PDF and email it.
+          // We send ONE email: the Contract/Welcome email, with the signed
+          // PDF attached. It already covers "we got your payment" + welcome
+          // + next steps, so no separate Payment Received email goes out.
           try {
             const html = contractService.buildContractHtml(quoteData);
             const pdfBuffer = await pdfService.generatePdf(html);
             await emailService.sendContractEmail(quoteData, pdfBuffer);
-            await emailService.sendPaymentConfirmationEmail(quoteData);
           } catch (e) {
             console.error('[AP Webhook] Contract/email generation failed:', e);
           }

@@ -575,7 +575,6 @@ router.post(
         },
       });
       await emailService.sendContractEmail(quoteData, pdfBuffer);
-      await emailService.sendPaymentConfirmationEmail(quoteData);
       contractEmailed = true;
     } catch (err) {
       console.error('[simulate-payment] contract/email step failed:', err);
