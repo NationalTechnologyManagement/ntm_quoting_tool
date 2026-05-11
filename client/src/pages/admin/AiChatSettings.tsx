@@ -98,6 +98,29 @@ const AiChatSettings = () => {
     }
   };
 
+  // One-click activation toggle from the header. Persists immediately so
+  // admins don't have to remember to also click Save. Blocks activation when
+  // the OpenRouter API key isn't configured — without it the chat would
+  // 503 anyway and the toggle would look broken.
+  const [togglingActive, setTogglingActive] = useState(false);
+  const toggleActive = async (next: boolean) => {
+    if (!config) return;
+    if (next && !apiKeyConfigured) {
+      toast.error('Set OPENROUTER_API_KEY in Integrations before activating.');
+      return;
+    }
+    setTogglingActive(true);
+    try {
+      const r = await adminApi.updateAiConfig({ enabled: next });
+      setConfig(r.config);
+      toast.success(next ? 'AI chat is now live' : 'AI chat deactivated');
+    } catch (e: any) {
+      toast.error(e?.message || 'Could not change activation');
+    } finally {
+      setTogglingActive(false);
+    }
+  };
+
   if (loading || !config) {
     return (
       <div className="min-h-screen bg-background">
@@ -133,15 +156,36 @@ const AiChatSettings = () => {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <Badge
-              variant="secondary"
-              className={config.enabled ? 'bg-green-100 text-green-800' : 'bg-muted text-muted-foreground'}
+            {/* Single-click activation toggle — saves immediately so the
+                admin doesn't have to remember to also click "Save". */}
+            <div
+              className={[
+                'flex items-center gap-3 px-4 py-2 rounded-md border',
+                config.enabled
+                  ? 'border-green-300 bg-green-50 dark:bg-green-950/30'
+                  : 'border-border bg-muted/40',
+              ].join(' ')}
             >
-              {config.enabled ? 'Live' : 'Disabled'}
-            </Badge>
+              <div className="text-sm">
+                <p className="font-semibold leading-tight">
+                  {config.enabled ? 'Live for customers' : 'Disabled'}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {config.enabled
+                    ? 'Chat widget is visible on the quote builder.'
+                    : 'Flip on to make the chat widget visible.'}
+                </p>
+              </div>
+              <Switch
+                checked={!!config.enabled}
+                disabled={togglingActive}
+                onCheckedChange={toggleActive}
+                aria-label="Activate AI chat agent"
+              />
+            </div>
             <Button onClick={save} disabled={saving}>
               {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-              Save
+              Save all settings
             </Button>
           </div>
         </div>
@@ -180,16 +224,6 @@ const AiChatSettings = () => {
 
           {/* GENERAL */}
           <TabsContent value="general" className="space-y-4 mt-4">
-            <Card className="p-6 space-y-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label className="text-base font-semibold">Enable assistant</Label>
-                  <p className="text-sm text-muted-foreground">Master kill switch — chat widget hides when off.</p>
-                </div>
-                <Switch checked={!!config.enabled} onCheckedChange={(v) => update({ enabled: v })} />
-              </div>
-            </Card>
-
             <Card className="p-6 space-y-5">
               <h3 className="font-semibold">Models</h3>
               <div className="grid md:grid-cols-2 gap-4">
