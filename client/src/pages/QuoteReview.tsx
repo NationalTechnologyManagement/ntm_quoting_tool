@@ -554,25 +554,53 @@ export default function QuoteReview() {
         <div className="mb-6 animate-fade-in">
           <h2 className="text-2xl font-semibold mb-4">Cost Breakdown</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            {/* Standard Onboarding */}
-            <Card className="p-6 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/30 dark:to-purple-900/30 border-purple-200 dark:border-purple-800">
-              <div className="flex justify-between items-start mb-2">
-                <div>
-                  <h3 className="text-lg font-semibold text-purple-900 dark:text-purple-100">Standard Onboarding</h3>
-                  <p className="text-sm text-purple-700 dark:text-purple-300 mt-1">
-                    {quoteData.onboarding.userCount} users × ${quoteData.onboarding.costPerUser}/user
-                  </p>
-                  {quoteData.onboarding.discount > 0 && (
-                    <p className="text-sm text-green-600 dark:text-green-400 mt-1">
-                      Discount applied: ${formatAmount(quoteData.onboarding.discount)}
-                    </p>
-                  )}
-                </div>
-              </div>
-              <div className="text-3xl font-bold text-purple-900 dark:text-purple-100 mt-4">
-                ${formatAmount(quoteData.onboarding.finalCost)}
-              </div>
-            </Card>
+            {/* Standard Onboarding
+                Online portal quotes get onboarding waived per NTM policy, so
+                the customer-facing card shows the base ("normally $X") with a
+                strikethrough plus the waived $0 they're actually paying.
+                Avoids the awkward "$291.333333.../user" floating-point line. */}
+            {(() => {
+              const baseOnboarding = quoteData.onboarding.totalCost;
+              const finalOnboarding = quoteData.onboarding.finalCost;
+              const waived = baseOnboarding > 0 && finalOnboarding === 0;
+              const discounted =
+                !waived && quoteData.onboarding.discount > 0 && finalOnboarding < baseOnboarding;
+              return (
+                <Card className="p-6 bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-950/30 dark:to-purple-900/30 border-purple-200 dark:border-purple-800">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <h3 className="text-lg font-semibold text-purple-900 dark:text-purple-100">
+                        Standard Onboarding
+                      </h3>
+                      {baseOnboarding > 0 && (
+                        <p
+                          className={`text-sm mt-1 ${
+                            waived
+                              ? 'text-purple-700/70 dark:text-purple-300/70 line-through'
+                              : 'text-purple-700 dark:text-purple-300'
+                          }`}
+                        >
+                          Normally ${formatAmount(baseOnboarding)}
+                        </p>
+                      )}
+                      {waived && (
+                        <p className="text-sm font-semibold text-green-600 dark:text-green-400 mt-1">
+                          ✓ Waived — free onboarding for online signups
+                        </p>
+                      )}
+                      {discounted && (
+                        <p className="text-sm text-green-600 dark:text-green-400 mt-1">
+                          Discount applied: ${formatAmount(quoteData.onboarding.discount)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-3xl font-bold text-purple-900 dark:text-purple-100 mt-4">
+                    ${formatAmount(finalOnboarding)}
+                  </div>
+                </Card>
+              );
+            })()}
 
             {/* One-Time Add-ons */}
             {(() => {
