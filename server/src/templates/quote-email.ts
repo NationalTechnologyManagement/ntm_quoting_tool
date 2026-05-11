@@ -126,6 +126,7 @@ export function buildQuoteEmailHtml(
             ${onboardingCost > 0 ? `${formatCurrency(onboardingCost)} onboarding + ` : ''}${oneTimeCosts > 0 ? `${formatCurrency(oneTimeCosts)} one-time + ` : ''}${formatCurrency(firstMonth)} first month
           </div>
           <div style="opacity:0.85;font-size:13px;margin-top:12px;">Then ${formatCurrency(firstMonth)}/${quote.totals.recurringFrequency} starting next billing cycle</div>
+          <div style="opacity:0.8;font-size:12px;margin-top:8px;line-height:1.5;">Invoices are sent on the <strong>1st of every month</strong> and are due within <strong>30 days</strong> (Net 30).</div>
         </div>
       </div>
 

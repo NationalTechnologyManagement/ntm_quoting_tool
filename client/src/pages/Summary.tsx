@@ -874,6 +874,11 @@ const Summary = () => {
                   {recurringDiscount === 0 && (
                     <p className="text-lg font-bold text-primary mt-1">${formatAmount(recurringCosts)}/month</p>
                   )}
+                  <p className="text-xs text-muted-foreground mt-3 leading-relaxed">
+                    Invoices are sent on the <strong>1st of every month</strong> and are due
+                    within <strong>30 days</strong> (Net 30). Your first month is paid at
+                    checkout; recurring billing starts on the 1st of next month.
+                  </p>
                 </div>
 
                 {appliedPromoCodes.length > 0 && totalDiscount > 0 && (

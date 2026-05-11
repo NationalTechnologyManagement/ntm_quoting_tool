@@ -660,6 +660,11 @@ export default function QuoteReview() {
                       per {quoteData.totals.recurringFrequency}
                     </span>
                   </div>
+                  <p className="text-xs text-blue-700 dark:text-blue-300 mt-3 leading-relaxed">
+                    Invoices are sent on the <strong>1st of every month</strong> and are due
+                    within <strong>30 days</strong> (Net 30). Your first month is paid today;
+                    CW takes over from next month's invoice.
+                  </p>
                 </Card>
               );
             })()}
@@ -684,7 +689,8 @@ export default function QuoteReview() {
                 {`Then $${formatAmount(quoteData.totals.recurringCosts)}/month starting next billing cycle.`}
               </p>
               <p className="text-xs text-green-800 dark:text-green-200 mt-3 italic">
-                Services activate once payment is captured.
+                Services activate once payment is captured. Ongoing invoices are sent on the
+                1st of every month and are due within 30 days (Net 30).
               </p>
             </div>
           </Card>

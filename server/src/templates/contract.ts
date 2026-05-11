@@ -487,7 +487,7 @@ export function buildContractHtml(quote: QuoteData): string {
       </tbody>
     </table>
     <div class="fin-note">
-      <strong>Ongoing Billing:</strong> Beginning the next billing cycle, ${formatCurrency(quote.totals.recurringCosts)} will be charged ${quote.totals.recurringFrequency || 'monthly'} for the duration of the ${contractTerm} contract term. Onboarding and implementation will be completed within 30 days of contract execution.
+      <strong>Ongoing Billing:</strong> Beginning the next billing cycle, ${formatCurrency(quote.totals.recurringCosts)} will be charged ${quote.totals.recurringFrequency || 'monthly'} for the duration of the ${contractTerm} contract term. Invoices are issued on the <strong>1st of every month</strong> and are due within <strong>30 days</strong> (Net 30). Onboarding and implementation will be completed within 30 days of contract execution.
     </div>
   </div>
 
