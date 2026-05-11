@@ -32,8 +32,10 @@
     --secondary-foreground: 0 0% 100%;
 
     --muted: 216 35% 22%;
-    /* Lifted muted-foreground for legibility on the dark theme */
-    --muted-foreground: 216 25% 88%;
+    /* Per design feedback every label/helper line reads pure white on the
+       dark navy. Placeholders share this token so empty inputs now look
+       like prompts rather than greyed-out text. */
+    --muted-foreground: 0 0% 100%;
 
     /* Accent shares the orange to keep existing `bg-accent` CTAs vibrant.
        Secondary is the navy sub-surface — use that where you want subdued. */
@@ -89,7 +91,7 @@
     --secondary-foreground: 0 0% 100%;
 
     --muted: 216 40% 20%;
-    --muted-foreground: 216 20% 75%;
+    --muted-foreground: 0 0% 100%;
 
     --accent: 21 75% 55%;
     --accent-foreground: 0 0% 100%;

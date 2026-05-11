@@ -390,7 +390,7 @@ const QuoteInfo = () => {
                 {isFieldValid('userCount') && <Check className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-primary" />}
               </div>
               <p className="text-xs text-muted-foreground min-h-[2rem]">
-                Full Microsoft 365 — primary staff.
+                Full Microsoft 365 — primary staff. <strong>At least 1 required.</strong>
               </p>
             </div>
             <div className="space-y-2">

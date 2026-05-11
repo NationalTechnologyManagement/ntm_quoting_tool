@@ -102,26 +102,17 @@ const QuoteBuilder = () => {
                       {formatContractTerm(pkg.agreementMonths)}
                     </p>
 
-                    {/* Per-unit pricing display — original layout. Sizing
-                        happens on the next step (QuoteInfo). Web User price
-                        only shows if the package has an F3 tier configured. */}
+                    {/* Per-unit pricing display — Desktop User + Location only.
+                        Web User price is intentionally NOT shown on this
+                        screen; it's surfaced on the Service Details step
+                        alongside the Web Users input. */}
                     <div className="mt-5 space-y-1">
                       <div className="flex items-baseline gap-1">
                         <span className="text-4xl font-bold text-primary">${pkg.pricePerUser}</span>
                         <span className="text-muted-foreground text-sm">
-                          /desktop user/{pkg.frequency}
+                          /user/{pkg.frequency}
                         </span>
                       </div>
-                      {(pkg.pricePerUserF3 ?? 0) > 0 && (
-                        <div className="flex items-baseline gap-1">
-                          <span className="text-xl font-semibold text-foreground/80">
-                            ${pkg.pricePerUserF3}
-                          </span>
-                          <span className="text-muted-foreground text-sm">
-                            /web user/{pkg.frequency}
-                          </span>
-                        </div>
-                      )}
                       <div className="flex items-baseline gap-1">
                         <span className="text-2xl font-semibold text-foreground/80">
                           ${pkg.pricePerLocation}
