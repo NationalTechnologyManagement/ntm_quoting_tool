@@ -8,6 +8,14 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
   Loader2,
   ArrowLeft,
   Plus,
@@ -108,12 +116,43 @@ const QuoteDetail = () => {
     }
   };
 
+  // Multi-recipient send. The customer email is always included server-side;
+  // these extras land on To: / Cc: alongside it.
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [emailExtraTo, setEmailExtraTo] = useState('');
+  const [emailCc, setEmailCc] = useState('');
+
+  const parseEmailList = (raw: string): string[] => {
+    return raw
+      .split(/[\s,;]+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+  };
+
   const emailQuote = async () => {
     if (!quote) return;
+    const additionalTo = parseEmailList(emailExtraTo);
+    const cc = parseEmailList(emailCc);
+    const invalid = [...additionalTo, ...cc].filter(
+      (e) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e),
+    );
+    if (invalid.length) {
+      toast.error(`Invalid email address${invalid.length > 1 ? 'es' : ''}: ${invalid.join(', ')}`);
+      return;
+    }
+
     setSendingEmail(true);
     try {
-      await quoteApi.email(quote.quoteNumber);
-      toast.success(`Quote emailed to ${quote.customer?.email}`);
+      const result = await quoteApi.email(quote.quoteNumber, { additionalTo, cc });
+      const recipients = [...(result.to ?? []), ...(result.cc ?? [])];
+      toast.success(
+        recipients.length > 1
+          ? `Quote emailed to ${recipients.length} recipients`
+          : `Quote emailed to ${quote.customer?.email}`,
+      );
+      setEmailDialogOpen(false);
+      setEmailExtraTo('');
+      setEmailCc('');
       await fetchQuote();
     } catch (e: any) {
       toast.error(e?.message || 'Email send failed');
@@ -403,6 +442,59 @@ const QuoteDetail = () => {
   return (
     <div className="min-h-screen bg-background">
       <AdminNav />
+
+      <Dialog open={emailDialogOpen} onOpenChange={setEmailDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send Quote via Email</DialogTitle>
+            <DialogDescription>
+              The customer at <span className="font-medium">{quote.customer?.email}</span> is always
+              included. Add any additional recipients or sales rep below. Separate addresses with
+              commas, semicolons, or spaces.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="emailExtraTo">Additional recipients (To)</Label>
+              <Input
+                id="emailExtraTo"
+                placeholder="ceo@company.com, controller@company.com"
+                value={emailExtraTo}
+                onChange={(e) => setEmailExtraTo(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Other decision-makers on the customer side.
+              </p>
+            </div>
+            <div>
+              <Label htmlFor="emailCc">CC (sales rep, internal)</Label>
+              <Input
+                id="emailCc"
+                placeholder="rep@trustntm.com"
+                value={emailCc}
+                onChange={(e) => setEmailCc(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                The assigned sales rep typically goes here so they can follow up.
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEmailDialogOpen(false)} disabled={sendingEmail}>
+              Cancel
+            </Button>
+            <Button onClick={emailQuote} disabled={sendingEmail}>
+              {sendingEmail ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Mail className="w-4 h-4 mr-2" />
+              )}
+              Send
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
         <Button variant="ghost" size="sm" onClick={() => navigate('/admin/quotes')}>
           <ArrowLeft className="w-4 h-4 mr-2" /> Back to Quotes
@@ -473,11 +565,11 @@ const QuoteDetail = () => {
             <Button
               variant="outline"
               size="sm"
-              onClick={emailQuote}
+              onClick={() => setEmailDialogOpen(true)}
               disabled={sendingEmail || !quote.customer?.email}
               title={
                 quote.customer?.email
-                  ? `Send the quote review link to ${quote.customer.email}`
+                  ? `Send the quote review link to ${quote.customer.email} (and optionally more recipients)`
                   : 'Customer email missing — set it on the quote before sending'
               }
             >
@@ -520,9 +612,11 @@ const QuoteDetail = () => {
               </Button>
             )}
             <Button
-              variant="outline"
-              size="sm"
-              className="ml-auto text-destructive border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+              variant="ghost"
+              size="icon"
+              className="ml-auto text-destructive hover:bg-destructive/10 hover:text-destructive"
+              title="Delete this quote"
+              aria-label="Delete this quote"
               onClick={async () => {
                 if (
                   !confirm(
@@ -543,7 +637,7 @@ const QuoteDetail = () => {
                 }
               }}
             >
-              <AlertTriangle className="w-4 h-4 mr-2" /> Delete Quote
+              <Trash2 className="w-4 h-4" />
             </Button>
           </div>
         </Card>

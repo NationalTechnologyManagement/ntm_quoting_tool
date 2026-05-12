@@ -80,11 +80,19 @@ export const quoteApi = {
 
   get: (id: string) => apiRequest<any>(`/api/quotes/${id}`),
 
-  email: (id: string) =>
-    apiRequest<{ success: boolean; quoteUrl: string }>(
-      `/api/quotes/${id}/email`,
-      { method: 'POST' },
-    ),
+  email: (
+    id: string,
+    options?: { additionalTo?: string[]; cc?: string[] },
+  ) =>
+    apiRequest<{
+      success: boolean;
+      quoteUrl: string;
+      to?: string[];
+      cc?: string[];
+    }>(`/api/quotes/${id}/email`, {
+      method: 'POST',
+      body: JSON.stringify(options ?? {}),
+    }),
 
   applyPromo: (id: string, code: string) =>
     apiRequest<any>(`/api/quotes/${id}/promo`, {

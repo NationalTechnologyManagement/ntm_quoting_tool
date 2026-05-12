@@ -5,6 +5,7 @@ import { env } from './config/env.js';
 import { prisma } from './config/prisma.js';
 import { createApp } from './app.js';
 import { startCwRetryWorker } from './services/cw-retry.worker.js';
+import { startQuoteFollowupWorker } from './services/quote-followup.worker.js';
 import { initCredentialsCache } from './services/integration-credentials.service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -30,6 +31,7 @@ async function main() {
   });
 
   startCwRetryWorker();
+  startQuoteFollowupWorker();
 }
 
 main().catch((err) => {

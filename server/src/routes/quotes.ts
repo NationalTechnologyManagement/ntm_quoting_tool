@@ -129,13 +129,27 @@ router.delete('/api/quotes/:id/promo', async (req, res) => {
   res.json(result);
 });
 
-// Email a quote
+// Email a quote — optional `additionalTo` and `cc` arrays let admins
+// send the same quote link to extra recipients (e.g. assigned sales rep,
+// other decision-makers on the customer side).
+const emailQuoteBodySchema = z
+  .object({
+    additionalTo: z.array(z.string().email()).optional(),
+    cc: z.array(z.string().email()).optional(),
+  })
+  .optional()
+  .default({});
+
 router.post('/api/quotes/:id/email', async (req, res) => {
   const id = req.params.id as string;
+  const body = emailQuoteBodySchema.parse(req.body ?? {});
   const quote = await quoteService.getQuote(id);
   await quoteService.updateQuoteStatus(quote.quoteNumber, 'sent');
 
-  const emailResult = await emailService.sendQuoteEmail({ ...quote, status: 'sent' });
+  const emailResult = await emailService.sendQuoteEmail(
+    { ...quote, status: 'sent' },
+    { additionalTo: body.additionalTo, cc: body.cc },
+  );
 
   // Fire-and-forget: GHL note
   ghlService.onQuoteEmailed(quote).catch((err) => console.error('[GHL] onQuoteEmailed error:', err));
@@ -143,7 +157,12 @@ router.post('/api/quotes/:id/email', async (req, res) => {
   if (emailResult.skipped) {
     res.json({ success: true, skipped: true, message: 'Email service not configured', quoteUrl: `${process.env.FRONTEND_URL || ''}/quote-review?id=${quote.quoteNumber}` });
   } else {
-    res.json({ success: true, quoteUrl: `${process.env.FRONTEND_URL || ''}/quote-review?id=${quote.quoteNumber}` });
+    res.json({
+      success: true,
+      quoteUrl: `${process.env.FRONTEND_URL || ''}/quote-review?id=${quote.quoteNumber}`,
+      to: emailResult.to,
+      cc: emailResult.cc,
+    });
   }
 });
 

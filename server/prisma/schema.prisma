@@ -181,6 +181,10 @@ model Quote {
   provisioningStatus String  @default("pending")
 
   expiresAt          DateTime?
+  // Set when the 30-day follow-up email goes out. Stays null until then so
+  // the worker can find unpaid quotes that still need a nudge. Once stamped
+  // the worker leaves it alone — we only nudge once per quote.
+  followupSentAt     DateTime?
   createdAt          DateTime  @default(now())
   updatedAt          DateTime  @updatedAt
   contracts          Contract[]
@@ -190,6 +194,7 @@ model Quote {
   @@index([createdAt])
   @@index([provisioningStatus])
   @@index([parentQuoteId])
+  @@index([followupSentAt])
   @@map("quotes")
 }
 

@@ -46,6 +46,13 @@ const envSchema = z.object({
     .string()
     .optional()
     .transform((v) => v?.toLowerCase() === 'true'),
+  // 30-day follow-up worker. Defaults: scan hourly, nudge anything 30+ days old.
+  QUOTE_FOLLOWUP_INTERVAL_MS: z.coerce.number().default(60 * 60 * 1000),
+  QUOTE_FOLLOWUP_DAYS: z.coerce.number().default(30),
+  QUOTE_FOLLOWUP_DISABLED: z
+    .string()
+    .optional()
+    .transform((v) => v?.toLowerCase() === 'true'),
   INITIAL_ADMIN_EMAIL: z.string().optional(),
   INITIAL_ADMIN_PASSWORD: z.string().optional(),
   PUPPETEER_EXECUTABLE_PATH: z.string().optional(),
