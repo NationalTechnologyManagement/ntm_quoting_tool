@@ -14,12 +14,13 @@ async function main() {
   console.log('Seeding database...');
 
   // ── Packages ──
-  // Canonical 3 packages (Essentials/SafeSecure/SafeSecure Plus) are the source
-  // of truth in shared/src/constants.ts (sourced from ntm-sales-kb-upload-only/).
-  // Seed UPDATES on every deploy so prices/features/term stay in sync with the
-  // canonical source. Admin UI can add NEW packages, but edits to the canonical
-  // 3 are overwritten by deploy. To change the canonical 3, edit constants.ts
-  // and push.
+  // Canonical 3 packages (Essentials/SafeSecure/SafeSecure Plus). The
+  // constants.ts entries are FIRST-DEPLOY DEFAULTS — once a row exists,
+  // its prices / features / contract term / visibility belong to the
+  // admin and the seed will NOT overwrite them on subsequent deploys.
+  // We do still backfill columns that are still at their "unset" sentinel
+  // (NULL CW ids, empty featureGroups) so newly-added columns roll out
+  // without ops needing to fill every package by hand.
   for (let i = 0; i < defaultPackages.length; i++) {
     const pkg = defaultPackages[i];
     const fields = {
@@ -39,13 +40,27 @@ async function main() {
       cwPerLocationProductId: pkg.cwPerLocationProductId ?? null,
       agreementMonths: pkg.agreementMonths ?? 0,
     };
-    await prisma.package.upsert({
-      where: { id: pkg.id },
-      update: fields,
-      create: { id: pkg.id, ...fields },
-    });
+    const existing = await prisma.package.findUnique({ where: { id: pkg.id } });
+    if (!existing) {
+      await prisma.package.create({ data: { id: pkg.id, ...fields } });
+      continue;
+    }
+    // Existing row: only patch columns that are still at the unset
+    // sentinel. Admin edits to prices, features, visibility, etc. stick.
+    const patch: any = {};
+    const existingFg = (existing as any).featureGroups;
+    if (existingFg == null || (Array.isArray(existingFg) && existingFg.length === 0)) {
+      patch.featureGroups = fields.featureGroups;
+    }
+    if (existing.cwAgreementTypeId == null) patch.cwAgreementTypeId = fields.cwAgreementTypeId;
+    if (existing.cwPerUserProductId == null) patch.cwPerUserProductId = fields.cwPerUserProductId;
+    if (existing.cwPerUserF3ProductId == null) patch.cwPerUserF3ProductId = fields.cwPerUserF3ProductId;
+    if (existing.cwPerLocationProductId == null) patch.cwPerLocationProductId = fields.cwPerLocationProductId;
+    if (Object.keys(patch).length > 0) {
+      await prisma.package.update({ where: { id: pkg.id }, data: patch });
+    }
   }
-  console.log(`  ✓ ${defaultPackages.length} packages (canonical, source: constants.ts)`);
+  console.log(`  ✓ ${defaultPackages.length} packages (admin-edits preserved; only sentinel columns backfilled)`);
 
   // ── Addons ──
   // Same model as packages — canonical addons live in constants.ts and are
@@ -76,13 +91,20 @@ async function main() {
       sortOrder: i,
       cwProductId: addon.cwProductId ?? null,
     };
-    await prisma.addon.upsert({
-      where: { id: addon.id },
-      update: fields,
-      create: { id: addon.id, ...fields },
-    });
+    const existing = await prisma.addon.findUnique({ where: { id: addon.id } });
+    if (!existing) {
+      await prisma.addon.create({ data: { id: addon.id, ...fields } });
+      continue;
+    }
+    // Existing row: same policy as packages — admin edits to prices stick.
+    // Only backfill cwProductId when still unset.
+    const patch: any = {};
+    if (existing.cwProductId == null) patch.cwProductId = fields.cwProductId;
+    if (Object.keys(patch).length > 0) {
+      await prisma.addon.update({ where: { id: addon.id }, data: patch });
+    }
   }
-  console.log(`  ✓ ${defaultAddons.length} addons (canonical, source: constants.ts)`);
+  console.log(`  ✓ ${defaultAddons.length} addons (admin-edits preserved; only cwProductId backfilled when unset)`);
 
   // ── Promo Codes ──
   for (const promo of defaultPromoCodes) {

@@ -767,7 +767,7 @@ const QuoteDetail = () => {
         {/* Parent / amendment linkage. Shown only when this quote is part of
             an amendment chain — surfaces the relationship so admins don't lose
             track of which quote is the "live" one. */}
-        {(quote.parentQuoteId || (quote as any).amendments?.length) && (
+        {(quote.parentQuoteId || ((quote as any).amendments?.length ?? 0) > 0) && (
           <Card className="p-6 bg-amber-50/40 dark:bg-amber-950/10 border-amber-200/60 dark:border-amber-900/40">
             <h3 className="text-lg font-semibold mb-2">Amendment Chain</h3>
             {quote.parentQuoteId && (

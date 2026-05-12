@@ -484,12 +484,19 @@ export function buildContractHtml(quote: QuoteData): string {
         `${locationCount} location${locationCount === 1 ? '' : 's'} &times; ${formatCurrency(pricePerLocation)} = ${formatCurrency(pricePerLocation * locationCount)}`,
       );
     }
+    // Render each line on its own row instead of joining with " + " on a
+    // single line. The single-line format made the trailing "— billed
+    // monthly" look like it applied to just the last term ("...$399 =
+    // $399 — billed monthly") instead of the package total.
+    const lineRows = lines
+      .map((l) => `<div style="font-size:10pt; line-height:1.55;">${l}</div>`)
+      .join('');
     return `
   <div class="section">
     <div class="section-title">Service Package</div>
     <div class="pkg-name">${quote.selectedPackage.name}</div>
-    <div class="pkg-detail">${lines.join(' &nbsp;+&nbsp; ')} &mdash; billed ${quote.selectedPackage.frequency}</div>
-    <div class="pkg-detail"><strong>Monthly Package Cost: ${formatCurrency(quote.selectedPackage.calculatedPrice)}</strong></div>
+    ${lineRows}
+    <div class="pkg-detail" style="margin-top:6px;"><strong>Monthly Package Cost: ${formatCurrency(quote.selectedPackage.calculatedPrice)}</strong> &mdash; billed ${quote.selectedPackage.frequency}</div>
     ${featuresHtml ? `<div class="pkg-features"><strong>What's included:</strong>${featuresHtml}</div>` : ''}
   </div>`;
   })() : ''}
