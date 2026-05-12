@@ -46,7 +46,34 @@ export async function getQuote(quoteId: string): Promise<QuoteData> {
   });
 
   if (!quote) throw new AppError(404, 'Quote not found');
-  return mapQuoteToData(quote);
+  const data = mapQuoteToData(quote);
+
+  // Hydrate `featureGroups` from the live Package row when the snapshot
+  // doesn't carry it (legacy quotes created before the categorized
+  // structure existed, or admin-created quotes from before the
+  // CreateQuote payload included it). We only inject; we never overwrite
+  // a non-empty snapshot. Stored snapshot stays intact — this is a
+  // read-time hydration for display.
+  const pkg = data.selectedPackage as any;
+  if (pkg?.id) {
+    const hasGroups = Array.isArray(pkg.featureGroups) && pkg.featureGroups.length > 0;
+    if (!hasGroups) {
+      try {
+        const live = await prisma.package.findUnique({
+          where: { id: pkg.id },
+          select: { featureGroups: true },
+        });
+        const liveFg = (live as any)?.featureGroups;
+        if (Array.isArray(liveFg) && liveFg.length > 0) {
+          pkg.featureGroups = liveFg;
+        }
+      } catch (e) {
+        // Non-fatal — fall through to the legacy flat features list.
+        console.warn('[quote.service] featureGroups hydration failed:', e);
+      }
+    }
+  }
+  return data;
 }
 
 export async function getQuotesByEmail(email: string): Promise<Array<{

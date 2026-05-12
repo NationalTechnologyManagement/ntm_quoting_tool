@@ -194,6 +194,10 @@ const CreateQuote = () => {
           pricePerLocation,
           frequency: pkg.frequency,
           features: pkg.features ?? [],
+          // Snapshot the categorized list so the contract PDF + customer
+          // review page render the full per-category feature breakdown
+          // instead of falling back to the legacy flat features list.
+          featureGroups: pkg.featureGroups ?? [],
           agreementMonths,
           calculatedPrice: totals.packageCost,
         },
