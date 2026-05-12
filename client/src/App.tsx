@@ -28,6 +28,7 @@ import Account from "./pages/admin/Account";
 import ContractPreview from "./pages/admin/ContractPreview";
 import QuoteDetail from "./pages/admin/QuoteDetail";
 import Logs from "./pages/admin/Logs";
+import CreateQuote from "./pages/admin/CreateQuote";
 import QuoteLookup from "./pages/QuoteLookup";
 import NotFound from "./pages/NotFound";
 
@@ -54,6 +55,7 @@ const App = () => (
                 <Route path="/quote-lookup" element={<QuoteLookup />} />
                 <Route path="/admin/login" element={<Login />} />
                 <Route path="/admin/quotes" element={<QuoteManagement />} />
+                <Route path="/admin/quotes/new" element={<CreateQuote />} />
                 <Route path="/admin/quotes/:id" element={<QuoteDetail />} />
                 <Route path="/admin/logs" element={<Logs />} />
                 <Route path="/admin/integrations" element={<IntegrationSettings />} />

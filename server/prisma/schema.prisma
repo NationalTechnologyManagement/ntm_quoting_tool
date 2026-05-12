@@ -20,7 +20,12 @@ model Package {
   pricePerUserF3         Float    @default(0)
   pricePerLocation       Float
   frequency              String   @default("monthly") // monthly | annually | one-time
-  features               Json     @default("[]")       // string[]
+  features               Json     @default("[]")       // string[] (legacy flat list)
+  // Structured feature catalog used by the UI + contract PDF:
+  // [{ category: 'Support', items: ['8x5 Support', 'Helpdesk Button…', …] }, …]
+  // The flat `features` array is kept for backwards-compat with snapshotted
+  // quotes; new code prefers featureGroups when present.
+  featureGroups          Json     @default("[]")
   isBestValue            Boolean  @default(false)
   sortOrder              Int      @default(0)
   active                 Boolean  @default(true)

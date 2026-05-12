@@ -1,7 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { LogOut, ExternalLink } from 'lucide-react';
+import { LogOut, ExternalLink, PlusCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 const NAV_ITEMS = [
@@ -57,6 +57,15 @@ const AdminNav = () => {
           </button>
 
           <div className="flex items-center gap-2">
+            {/* Always-visible CTA. Bigger + accent-colored on purpose so
+                staff can spin up a quote from any admin page in one click. */}
+            <Button
+              onClick={() => navigate('/admin/quotes/new')}
+              className="bg-accent hover:bg-accent/90 text-accent-foreground shadow-md font-semibold"
+            >
+              <PlusCircle className="w-5 h-5 mr-2" />
+              <span>Create Quote</span>
+            </Button>
             <Button variant="outline" size="sm" onClick={() => navigate('/')}>
               <ExternalLink className="w-4 h-4 mr-2" />
               <span className="hidden sm:inline">View Site</span>

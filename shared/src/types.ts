@@ -1,5 +1,10 @@
 // ── Package & Addon Types ────────────────────────────────────────────
 
+export interface FeatureGroup {
+  category: string;
+  items: string[];
+}
+
 export interface Package {
   id: string;
   name: string;
@@ -9,7 +14,8 @@ export interface Package {
   pricePerUserF3?: number;
   pricePerLocation: number;
   frequency: 'monthly' | 'annually' | 'one-time';
-  features: string[];
+  features: string[]; // legacy flat list
+  featureGroups?: FeatureGroup[]; // preferred: structured list grouped by category
   isBestValue?: boolean;
   // When false the package is hidden from the customer wizard. Admins still
   // see it, and historical quotes referencing it still resolve.
@@ -124,9 +130,14 @@ export interface QuoteSelectedPackage {
   id: string;
   name: string;
   pricePerUser: number;
+  pricePerUserF3?: number;
   pricePerLocation: number;
   frequency: string;
   features: string[];
+  // Structured catalog snapshot. Older quotes only carry the flat
+  // `features` array; new code reads featureGroups when present and
+  // falls back to features otherwise.
+  featureGroups?: FeatureGroup[];
   // Snapshotted at quote-creation so historical quotes keep their term even
   // if an admin retunes the source package later. 0 = month-to-month,
   // 36 = 3-year, 60 = 5-year.

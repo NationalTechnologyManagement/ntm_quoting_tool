@@ -18,9 +18,10 @@ import {
   AlertTriangle,
   Pencil,
   Save,
+  Mail,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { adminApi } from '@/services/api';
+import { adminApi, quoteApi } from '@/services/api';
 import AdminNav from '@/components/admin/AdminNav';
 import { CONTRACT_TERM_OPTIONS, formatContractTerm } from '@/lib/utils';
 
@@ -78,6 +79,21 @@ const QuoteDetail = () => {
   // Admin-only promo codes (e.g. 5-year discount). Loaded lazily.
   const [adminPromos, setAdminPromos] = useState<Awaited<ReturnType<typeof adminApi.listAdminOnlyPromos>>['promos']>([]);
   const [applyingPromo, setApplyingPromo] = useState<string | null>(null);
+  const [sendingEmail, setSendingEmail] = useState(false);
+
+  const emailQuote = async () => {
+    if (!quote) return;
+    setSendingEmail(true);
+    try {
+      await quoteApi.email(quote.quoteNumber);
+      toast.success(`Quote emailed to ${quote.customer?.email}`);
+      await fetchQuote();
+    } catch (e: any) {
+      toast.error(e?.message || 'Email send failed');
+    } finally {
+      setSendingEmail(false);
+    }
+  };
 
   // New-item form
   const [name, setName] = useState('');
@@ -422,6 +438,24 @@ const QuoteDetail = () => {
             </Button>
             <Button variant="outline" size="sm" onClick={openEditPanel}>
               <Pencil className="w-4 h-4 mr-2" /> Edit Quote
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={emailQuote}
+              disabled={sendingEmail || !quote.customer?.email}
+              title={
+                quote.customer?.email
+                  ? `Send the quote review link to ${quote.customer.email}`
+                  : 'Customer email missing — set it on the quote before sending'
+              }
+            >
+              {sendingEmail ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <Mail className="w-4 h-4 mr-2" />
+              )}
+              Send Quote via Email
             </Button>
             {(quote.provisioningStatus === 'partial' || quote.provisioningStatus === 'failed') && (
               <Button
