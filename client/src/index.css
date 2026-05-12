@@ -2,77 +2,93 @@
 @tailwind components;
 @tailwind utilities;
 
-/* NTM design system — dark navy + orange accent.
- * Mirrors the marketing site (vibe preview); colors picked to match the
- * NTM shield logo (navy with orange globe).
- * All colors MUST be HSL.
+/* NTM design system — synced with the production marketing site at
+ * trustntm.com (extracted from /assets/index-Xd35aYRr.css). The site is
+ * dark-themed by default: deep navy background, orange primary accent,
+ * white text. Two color variants are kept in sync so Tailwind's dark:
+ * variants still fire correctly.
+ *
+ * Hue/saturation conventions:
+ *   - 216 (blue) for navy surfaces, borders, muted text
+ *   - 21 (orange) for primary CTAs, focus rings, brand highlights
+ *   - 216 80% 55% (bright blue) reserved for the sidebar accent
+ *
+ * Important: `--accent` is intentionally a subtle navy sub-surface (NOT
+ * orange). It's what every ghost/outline button hover, calendar cell,
+ * dialog-close icon, etc. uses, and an orange hover everywhere was loud
+ * and unfocused. CTAs that need to be orange should use `bg-primary` /
+ * `text-primary` directly.
+ *
+ * All values are HSL.
  */
 
 @layer base {
   :root {
-    /* Dark navy base */
+    /* Navy base — same exact values production ships */
     --background: 216 65% 11%;
     --foreground: 0 0% 100%;
 
-    /* Card surfaces are noticeably lighter than background so cards/forms
-       don't blend into the page. */
-    --card: 216 45% 20%;
+    --card: 216 50% 16%;
     --card-foreground: 0 0% 100%;
 
-    --popover: 216 45% 20%;
+    --popover: 216 50% 16%;
     --popover-foreground: 0 0% 100%;
 
-    /* NTM orange */
+    /* NTM orange — primary brand accent. Use for CTAs, focus rings,
+       brand highlights. */
     --primary: 21 75% 55%;
     --primary-foreground: 0 0% 100%;
     --primary-dark: 21 75% 45%;
 
-    /* Sub-surface used for input fields and section dividers */
-    --secondary: 216 40% 24%;
+    /* Navy sub-surface used for input fields + neutral dividers */
+    --secondary: 216 40% 20%;
     --secondary-foreground: 0 0% 100%;
 
-    --muted: 216 35% 22%;
-    /* Per design feedback every label/helper line reads pure white on the
-       dark navy. Placeholders share this token so empty inputs now look
-       like prompts rather than greyed-out text. */
-    --muted-foreground: 0 0% 100%;
+    --muted: 216 40% 20%;
+    /* Soft blue-grey for placeholders, helper text, secondary copy.
+       Production uses 75% lightness here instead of pure white so
+       secondary text recedes properly against the navy. */
+    --muted-foreground: 216 20% 75%;
 
-    /* Accent shares the orange to keep existing `bg-accent` CTAs vibrant.
-       Secondary is the navy sub-surface — use that where you want subdued. */
-    --accent: 21 75% 55%;
+    /* Subtle navy hover surface. Used by shadcn ghost/outline button
+       hover, dialog close, dropdown highlight, calendar today, etc.
+       Do NOT change to orange — single-color CTAs use bg-primary. */
+    --accent: 216 40% 20%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
 
-    /* Visible borders + form-field surface (bumped from 20% to 30% lightness) */
-    --border: 216 40% 30%;
-    --input: 216 40% 28%;
+    --border: 216 40% 25%;
+    --input: 216 40% 25%;
     --ring: 21 75% 55%;
 
     --radius: 0.5rem;
 
     /* Gradients tuned for the navy+orange palette */
     --gradient-hero: linear-gradient(135deg, hsl(216 65% 11%) 0%, hsl(216 50% 18%) 100%);
-    --gradient-card: linear-gradient(180deg, hsl(216 50% 12%) 0%, hsl(216 40% 16%) 100%);
+    --gradient-card: linear-gradient(180deg, hsl(216 50% 16%) 0%, hsl(216 40% 20%) 100%);
     --gradient-accent: linear-gradient(135deg, hsl(21 75% 55%) 0%, hsl(21 85% 45%) 100%);
     --shadow-card: 0 4px 6px -1px hsl(0 0% 0% / 0.4), 0 2px 4px -1px hsl(0 0% 0% / 0.3);
     --shadow-card-hover: 0 10px 15px -3px hsl(0 0% 0% / 0.5), 0 4px 6px -2px hsl(0 0% 0% / 0.4);
     --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 
-    /* Sidebar — slightly deeper navy than the page background */
-    --sidebar-background: 216 65% 8%;
+    /* Sidebar — production uses a bright blue (not orange) for sidebar
+       primary. We don't currently mount a sidebar but keeping the
+       tokens correct so shadcn's sidebar component would Just Work. */
+    --sidebar-background: 216 65% 11%;
     --sidebar-foreground: 0 0% 100%;
-    --sidebar-primary: 21 75% 55%;
+    --sidebar-primary: 216 80% 55%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 216 40% 16%;
+    --sidebar-accent: 216 40% 20%;
     --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 216 40% 20%;
-    --sidebar-ring: 21 75% 55%;
+    --sidebar-border: 216 40% 25%;
+    --sidebar-ring: 216 80% 55%;
   }
 
-  /* Keep .dark in sync — the design only has one palette but Tailwind dark:
-     variants will still fire when the class is present. */
+  /* .dark variant — slightly darker / more saturated. Matches the .dark
+     overrides shipped on trustntm.com so Tailwind dark: utilities resolve
+     to the same colors as production. */
   .dark {
     --background: 216 65% 8%;
     --foreground: 0 0% 100%;
@@ -87,30 +103,30 @@
     --primary-foreground: 0 0% 100%;
     --primary-dark: 21 75% 45%;
 
-    --secondary: 216 40% 20%;
+    --secondary: 216 40% 16%;
     --secondary-foreground: 0 0% 100%;
 
-    --muted: 216 40% 20%;
-    --muted-foreground: 0 0% 100%;
+    --muted: 216 40% 16%;
+    --muted-foreground: 216 20% 70%;
 
-    --accent: 21 75% 55%;
+    --accent: 216 40% 16%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 216 40% 25%;
-    --input: 216 40% 25%;
+    --border: 216 40% 20%;
+    --input: 216 40% 20%;
     --ring: 21 75% 55%;
 
     --sidebar-background: 216 65% 8%;
     --sidebar-foreground: 0 0% 100%;
-    --sidebar-primary: 21 75% 55%;
+    --sidebar-primary: 216 80% 55%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 216 40% 20%;
+    --sidebar-accent: 216 40% 16%;
     --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 216 40% 25%;
-    --sidebar-ring: 21 75% 55%;
+    --sidebar-border: 216 40% 20%;
+    --sidebar-ring: 216 80% 55%;
   }
 }
 

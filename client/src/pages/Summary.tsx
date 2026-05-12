@@ -814,7 +814,7 @@ const Summary = () => {
 
               <div className="space-y-4">
                 {/* Onboarding Cost */}
-                <div className="p-4 rounded-lg bg-accent/10 border border-accent/20">
+                <div className="p-4 rounded-lg bg-primary/10 border border-primary/20">
                   <div className="flex items-center justify-between mb-1">
                     <p className="text-sm text-muted-foreground">Onboarding Fee</p>
                     <p className={`text-sm ${onboardingWaived ? 'line-through text-muted-foreground' : 'text-muted-foreground'}`}>
@@ -835,7 +835,7 @@ const Summary = () => {
                     </div>
                   )}
                   {!onboardingWaived && onboardingDiscount > 0 && (
-                    <div className="mt-2 pt-2 border-t border-accent/20">
+                    <div className="mt-2 pt-2 border-t border-primary/20">
                       <div className="flex items-center justify-between">
                         <p className="text-xs text-green-600 dark:text-green-400">Discount Applied</p>
                         <p className="text-xs font-semibold text-green-600 dark:text-green-400">
@@ -843,13 +843,13 @@ const Summary = () => {
                         </p>
                       </div>
                       <div className="flex items-center justify-between mt-1">
-                        <p className="text-sm font-semibold text-accent">Final Onboarding Cost</p>
-                        <p className="text-lg font-bold text-accent">${formatAmount(finalOnboardingCost)}</p>
+                        <p className="text-sm font-semibold text-primary">Final Onboarding Cost</p>
+                        <p className="text-lg font-bold text-primary">${formatAmount(finalOnboardingCost)}</p>
                       </div>
                     </div>
                   )}
                   {!onboardingWaived && onboardingDiscount === 0 && (
-                    <p className="text-lg font-bold text-accent mt-1">${formatAmount(onboardingCost)}</p>
+                    <p className="text-lg font-bold text-primary mt-1">${formatAmount(onboardingCost)}</p>
                   )}
                 </div>
 

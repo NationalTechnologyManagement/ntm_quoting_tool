@@ -64,11 +64,11 @@ const AdminNav = () => {
           </button>
 
           <div className="flex items-center gap-2">
-            {/* Always-visible CTA. Bigger + accent-colored on purpose so
-                staff can spin up a quote from any admin page in one click. */}
+            {/* Always-visible CTA in NTM orange (bg-primary) so staff can
+                spin up a quote from any admin page in one click. */}
             <Button
               onClick={() => navigate('/admin/quotes/new')}
-              className="bg-accent hover:bg-accent/90 text-accent-foreground shadow-md font-semibold"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md font-semibold"
             >
               <PlusCircle className="w-5 h-5 mr-2" />
               <span>Create Quote</span>
