@@ -90,6 +90,12 @@ export function buildQuoteEmailHtml(
 <body>
   <div class="container">
     <div class="header">
+      <img
+        src="https://seahorse-space.nyc3.cdn.digitaloceanspaces.com/website/ntm_shield.ico"
+        alt="NTM"
+        width="56" height="56"
+        style="display:block; margin:0 auto 12px; width:56px; height:56px;"
+      />
       <h1>Your Custom ${docNoun} is Ready!</h1>
       <div class="quote-id">${docNoun} #${quote.quoteNumber}</div>
     </div>

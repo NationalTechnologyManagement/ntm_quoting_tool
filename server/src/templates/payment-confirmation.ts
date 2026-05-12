@@ -34,6 +34,12 @@ export function buildPaymentConfirmationHtml(
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;line-height:1.6;color:#1f2937;margin:0;padding:0;background:#f9fafb;">
   <div style="max-width:600px;margin:0 auto;background:white;">
     <div style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;padding:40px 30px;text-align:center;">
+      <img
+        src="https://seahorse-space.nyc3.cdn.digitaloceanspaces.com/website/ntm_shield.ico"
+        alt="NTM"
+        width="56" height="56"
+        style="display:block; margin:0 auto 12px; width:56px; height:56px;"
+      />
       <h1 style="margin:0 0 10px 0;font-size:24px;">Welcome to National Technology Management!</h1>
       <p style="margin:0;opacity:0.9;">Quote #${quote.quoteNumber}${quote.agreement ? ` | Order #${(quote as any).orderNumber || ''}` : ''}</p>
     </div>

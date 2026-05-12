@@ -32,7 +32,12 @@ export function buildPaymentReceivedHtml(quote: QuoteData): string {
 <body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;line-height:1.6;color:#1f2937;margin:0;padding:0;background:#f9fafb;">
   <div style="max-width:600px;margin:0 auto;background:white;">
     <div style="background:#10b981;color:white;padding:32px 30px;text-align:center;">
-      <div style="font-size:42px;line-height:1;margin-bottom:8px;">✓</div>
+      <img
+        src="https://seahorse-space.nyc3.cdn.digitaloceanspaces.com/website/ntm_shield.ico"
+        alt="NTM"
+        width="48" height="48"
+        style="display:block; margin:0 auto 8px; width:48px; height:48px;"
+      />
       <h1 style="margin:0;font-size:22px;">Payment Received</h1>
       <p style="margin:8px 0 0 0;opacity:0.9;font-size:14px;">
         Quote #${quote.quoteNumber}${orderNumber ? ` &nbsp;|&nbsp; Order #${orderNumber}` : ''}

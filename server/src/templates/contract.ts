@@ -1,6 +1,13 @@
 import type { QuoteData } from '@ntm/shared';
 import { SERVICE_PROVIDER } from '@ntm/shared';
 
+// NTM shield logo. Puppeteer fetches this when rendering the PDF.
+// External URL (not a local asset) so emails can reuse the same constant
+// without bundling a binary into the server image. ICO files can carry
+// multiple resolutions; Chrome picks the right one for the render size.
+const NTM_LOGO_URL =
+  'https://seahorse-space.nyc3.cdn.digitaloceanspaces.com/website/ntm_shield.ico';
+
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -434,10 +441,17 @@ export function buildContractHtml(quote: QuoteData): string {
   <!-- Header -->
   <div class="doc-header">
     <div class="doc-header-top">
-      <div>
-        <div class="company">SR Partners LLC</div>
-        <div class="company-sub">dba National Technology Management</div>
-        <div class="company-contact">${SERVICE_PROVIDER.address} &nbsp;|&nbsp; ${SERVICE_PROVIDER.phone} &nbsp;|&nbsp; ${SERVICE_PROVIDER.email}</div>
+      <div style="display:flex; align-items:center; gap:14px;">
+        <img
+          src="${NTM_LOGO_URL}"
+          alt="NTM"
+          style="width:56px; height:56px; flex-shrink:0;"
+        />
+        <div>
+          <div class="company">SR Partners LLC</div>
+          <div class="company-sub">dba National Technology Management</div>
+          <div class="company-contact">${SERVICE_PROVIDER.address} &nbsp;|&nbsp; ${SERVICE_PROVIDER.phone} &nbsp;|&nbsp; ${SERVICE_PROVIDER.email}</div>
+        </div>
       </div>
       <div class="ref-block">
         <strong>Quote #</strong> ${quote.quoteNumber || 'N/A'}<br>
