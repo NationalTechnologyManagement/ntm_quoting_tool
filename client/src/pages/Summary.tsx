@@ -13,6 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Mail, CreditCard, CalendarCheck, ChevronDown, ChevronUp, ArrowLeft, AlertCircle, X } from "lucide-react";
 import { toast } from "sonner";
 import { SiteHeader } from "@/components/SiteHeader";
+import { SendQuoteDialog } from "@/components/SendQuoteDialog";
 import { formatAmount, formatContractTerm } from "@/lib/utils";
 import { IS_LEAD_GEN_MODE } from "@/lib/lead-gen";
 
@@ -342,15 +343,21 @@ const Summary = () => {
     return result;
   };
 
+  // Track the created quote + open the send-quote dialog when the customer
+  // clicks "Email Me Quote". The dialog handles the actual send so the
+  // customer can optionally CC their team or NTM rep.
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  const [emailDialogQuoteNumber, setEmailDialogQuoteNumber] = useState<string | null>(null);
+
   const handleEmailQuote = async () => {
     setLoading("email");
     try {
       const quote = await getOrCreateQuote();
-      await quoteApi.email(quote.quoteNumber);
-      toast.success("Quote sent to your email!");
+      setEmailDialogQuoteNumber(quote.quoteNumber);
+      setEmailDialogOpen(true);
     } catch (error) {
       console.error("Email quote error:", error);
-      toast.error("Failed to send quote. Please try again.");
+      toast.error("Failed to prepare quote. Please try again.");
     } finally {
       setLoading(null);
     }
@@ -468,6 +475,16 @@ const Summary = () => {
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader />
+
+      {emailDialogQuoteNumber && (
+        <SendQuoteDialog
+          open={emailDialogOpen}
+          onOpenChange={setEmailDialogOpen}
+          quoteNumber={emailDialogQuoteNumber}
+          customerEmail={customerInfo.email}
+          variant="customer"
+        />
+      )}
       <div className="max-w-6xl mx-auto py-12 px-4">
         {/* Back button */}
         <Button variant="ghost" onClick={() => navigate("/quote-builder")} className="mb-6">

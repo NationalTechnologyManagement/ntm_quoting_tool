@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { SiteHeader } from "@/components/SiteHeader";
+import { SendQuoteDialog } from "@/components/SendQuoteDialog";
 import { formatAmount } from "@/lib/utils";
 import { IS_LEAD_GEN_MODE } from "@/lib/lead-gen";
 
@@ -126,6 +127,7 @@ export default function QuoteReview() {
   const [expandedFeatures, setExpandedFeatures] = useState(false);
   const [promoInput, setPromoInput] = useState("");
   const [applyingPromo, setApplyingPromo] = useState(false);
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false);
 
   const handleApplyPromo = async () => {
     if (!promoInput.trim() || !quoteData) return;
@@ -291,6 +293,15 @@ export default function QuoteReview() {
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader />
+
+      <SendQuoteDialog
+        open={emailDialogOpen}
+        onOpenChange={setEmailDialogOpen}
+        quoteNumber={quoteData.quoteNumber}
+        customerEmail={quoteData.customer.email}
+        variant="customer"
+      />
+
       <div className="max-w-4xl mx-auto py-12 px-4">
         {/* Header Section */}
         <div className="text-center mb-8 animate-fade-in">
@@ -307,6 +318,14 @@ export default function QuoteReview() {
             >
               Pending Approval
             </Badge>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setEmailDialogOpen(true)}
+            >
+              <Mail className="w-4 h-4 mr-2" />
+              Email this quote to someone
+            </Button>
           </div>
         </div>
 

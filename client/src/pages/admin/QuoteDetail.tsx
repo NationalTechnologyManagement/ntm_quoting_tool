@@ -7,14 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { SendQuoteDialog } from '@/components/SendQuoteDialog';
 import {
   Loader2,
   ArrowLeft,
@@ -30,7 +23,7 @@ import {
   RotateCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { adminApi, quoteApi, usersApi } from '@/services/api';
+import { adminApi, usersApi } from '@/services/api';
 import AdminNav from '@/components/admin/AdminNav';
 import { CONTRACT_TERM_OPTIONS, formatContractTerm } from '@/lib/utils';
 
@@ -88,7 +81,6 @@ const QuoteDetail = () => {
   // Admin-only promo codes (e.g. 5-year discount). Loaded lazily.
   const [adminPromos, setAdminPromos] = useState<Awaited<ReturnType<typeof adminApi.listAdminOnlyPromos>>['promos']>([]);
   const [applyingPromo, setApplyingPromo] = useState<string | null>(null);
-  const [sendingEmail, setSendingEmail] = useState(false);
   const [refreshingPkg, setRefreshingPkg] = useState(false);
 
   // Sales reps for the assignment picker + auto-CC on Send Quote.
@@ -146,50 +138,10 @@ const QuoteDetail = () => {
     }
   };
 
-  // Multi-recipient send. The customer email is always included server-side;
-  // these extras land on To: / Cc: alongside it.
+  // Multi-recipient send is handled by the shared SendQuoteDialog. Auto-CC
+  // of the assigned sales rep happens server-side, so we just pass the rep
+  // email through for the descriptive copy.
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
-  const [emailExtraTo, setEmailExtraTo] = useState('');
-  const [emailCc, setEmailCc] = useState('');
-
-  const parseEmailList = (raw: string): string[] => {
-    return raw
-      .split(/[\s,;]+/)
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-  };
-
-  const emailQuote = async () => {
-    if (!quote) return;
-    const additionalTo = parseEmailList(emailExtraTo);
-    const cc = parseEmailList(emailCc);
-    const invalid = [...additionalTo, ...cc].filter(
-      (e) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e),
-    );
-    if (invalid.length) {
-      toast.error(`Invalid email address${invalid.length > 1 ? 'es' : ''}: ${invalid.join(', ')}`);
-      return;
-    }
-
-    setSendingEmail(true);
-    try {
-      const result = await quoteApi.email(quote.quoteNumber, { additionalTo, cc });
-      const recipients = [...(result.to ?? []), ...(result.cc ?? [])];
-      toast.success(
-        recipients.length > 1
-          ? `Quote emailed to ${recipients.length} recipients`
-          : `Quote emailed to ${quote.customer?.email}`,
-      );
-      setEmailDialogOpen(false);
-      setEmailExtraTo('');
-      setEmailCc('');
-      await fetchQuote();
-    } catch (e: any) {
-      toast.error(e?.message || 'Email send failed');
-    } finally {
-      setSendingEmail(false);
-    }
-  };
 
   // New-item form
   const [name, setName] = useState('');
@@ -473,65 +425,18 @@ const QuoteDetail = () => {
     <div className="min-h-screen bg-background">
       <AdminNav />
 
-      <Dialog open={emailDialogOpen} onOpenChange={setEmailDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Send Quote via Email</DialogTitle>
-            <DialogDescription>
-              The customer at <span className="font-medium">{quote.customer?.email}</span> is always
-              included
-              {(quote as any).salesRep?.email && (
-                <>
-                  , and the assigned sales rep{' '}
-                  <span className="font-medium">{(quote as any).salesRep.email}</span> is
-                  auto-CCed
-                </>
-              )}
-              . Add any additional recipients below. Separate addresses with commas, semicolons, or
-              spaces.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="emailExtraTo">Additional recipients (To)</Label>
-              <Input
-                id="emailExtraTo"
-                placeholder="ceo@company.com, controller@company.com"
-                value={emailExtraTo}
-                onChange={(e) => setEmailExtraTo(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                Other decision-makers on the customer side.
-              </p>
-            </div>
-            <div>
-              <Label htmlFor="emailCc">CC (sales rep, internal)</Label>
-              <Input
-                id="emailCc"
-                placeholder="rep@trustntm.com"
-                value={emailCc}
-                onChange={(e) => setEmailCc(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                The assigned sales rep typically goes here so they can follow up.
-              </p>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setEmailDialogOpen(false)} disabled={sendingEmail}>
-              Cancel
-            </Button>
-            <Button onClick={emailQuote} disabled={sendingEmail}>
-              {sendingEmail ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Mail className="w-4 h-4 mr-2" />
-              )}
-              Send
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <SendQuoteDialog
+        open={emailDialogOpen}
+        onOpenChange={setEmailDialogOpen}
+        quoteNumber={quote.quoteNumber}
+        customerEmail={quote.customer?.email ?? ''}
+        salesRepEmail={(quote as any).salesRep?.email ?? null}
+        variant="admin"
+        onSent={async () => {
+          // Refresh the quote so status flips from draft -> sent in the UI.
+          await fetchQuote();
+        }}
+      />
 
       <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
         <Button variant="ghost" size="sm" onClick={() => navigate('/admin/quotes')}>
@@ -630,18 +535,14 @@ const QuoteDetail = () => {
               variant="outline"
               size="sm"
               onClick={() => setEmailDialogOpen(true)}
-              disabled={sendingEmail || !quote.customer?.email}
+              disabled={!quote.customer?.email}
               title={
                 quote.customer?.email
                   ? `Send the quote review link to ${quote.customer.email} (and optionally more recipients)`
                   : 'Customer email missing — set it on the quote before sending'
               }
             >
-              {sendingEmail ? (
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              ) : (
-                <Mail className="w-4 h-4 mr-2" />
-              )}
+              <Mail className="w-4 h-4 mr-2" />
               Send Quote via Email
             </Button>
             <Button
