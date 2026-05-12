@@ -96,7 +96,7 @@ const ALL_TOOLS: ToolDef[] = [
     function: {
       name: 'navigate',
       description:
-        'Suggest navigating to the next or previous step of the wizard. The user must confirm — this does not auto-advance.',
+        'Advance to the next or previous step of the wizard. Treat this as a commit — by the time you call it the customer has agreed in chat to move on. Always narrate the move in text first, then call this. No confirm dialog will pop up.',
       parameters: {
         type: 'object',
         properties: {
@@ -110,7 +110,8 @@ const ALL_TOOLS: ToolDef[] = [
     type: 'function',
     function: {
       name: 'suggest_package',
-      description: 'Recommend one of the packages currently visible on the page. Pass the package id from the page snapshot.',
+      description:
+        'Select a package on behalf of the customer. The package becomes their committed selection on the page AND the wizard advances to the sizing step (/quote-info) in one action when called from the picker. Use ONLY after the customer explicitly chooses or confirms a package — never to "preview" or "show" a recommendation. Pass the package id from the page snapshot.',
       parameters: {
         type: 'object',
         properties: {
@@ -125,7 +126,8 @@ const ALL_TOOLS: ToolDef[] = [
     type: 'function',
     function: {
       name: 'suggest_addon',
-      description: 'Recommend an add-on visible on the page. Pass the addon id from the page snapshot.',
+      description:
+        'Add an add-on to the customer\'s selection (quantity 1). The agent should increase quantity by prefilling the addon\'s quantity input via prefill_field if the customer wants more than one. Use ONLY after the customer explicitly says they want the add-on. Pass the addon id from the page snapshot.',
       parameters: {
         type: 'object',
         properties: {

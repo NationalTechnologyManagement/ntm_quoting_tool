@@ -267,18 +267,44 @@ export const AiChatProvider = ({ children }: { children: ReactNode }) => {
           if (i < 0) return { applied: false, note: 'unknown current step' };
           const target = dir === 'next' ? order[i + 1] : order[i - 1];
           if (!target) return { applied: false, note: 'no further step' };
-          // Confirmation for forward jumps, free for back
-          if (dir === 'next' && !window.confirm(`Move to the next step?`)) {
-            return { applied: false, note: 'user declined' };
-          }
+          // No confirm prompt — the agent is required (per system prompt) to
+          // narrate intent in text BEFORE calling navigate. Trust that.
           navigate(target);
           return { applied: true, note: `navigated ${dir}` };
         }
-        case 'suggest_package':
-        case 'suggest_addon':
-          // Suggestions don't auto-apply; the chat message includes the
-          // model's reasoning and the user can click the matching card.
-          return { applied: true, note: 'suggestion' };
+        case 'suggest_package': {
+          // Commits the selection AND advances to the sizing page if the
+          // customer is still on the picker. The agent uses this AFTER the
+          // user has chosen a package in chat — it's the click the agent
+          // does for them, not a soft "preview" of a recommendation.
+          const pkgId = String(parsed.packageId || '');
+          const pkg = quote.packages.find((p) => p.id === pkgId);
+          if (!pkg) return { applied: false, note: `unknown package "${pkgId}"` };
+          quote.setSelectedPackage(pkg);
+          const here = location.pathname;
+          if (here === '/' || here === '/quote-builder') {
+            navigate('/quote-info');
+          }
+          return { applied: true, note: `selected ${pkg.name}` };
+        }
+        case 'suggest_addon': {
+          // Mirrors suggest_package — adds the addon to the customer's
+          // selection (quantity 1) instead of just narrating it. Agent
+          // increments quantity by calling again or by tool-prefilling
+          // the addon's quantity input on QuoteInfo.
+          const addonId = String(parsed.addonId || '');
+          const addon = quote.addons.find((a) => a.id === addonId);
+          if (!addon) return { applied: false, note: `unknown addon "${addonId}"` };
+          const already = quote.selectedAddons.find((a) => a.id === addonId);
+          if (already) {
+            return { applied: true, note: `${addon.name} already selected` };
+          }
+          quote.setSelectedAddons([
+            ...quote.selectedAddons,
+            { ...addon, quantity: 1 },
+          ]);
+          return { applied: true, note: `added ${addon.name}` };
+        }
         case 'request_followup': {
           // The agent has offered to set the customer up with a sales rep.
           // We open the GHL booking widget in a new tab so the customer can
@@ -299,7 +325,7 @@ export const AiChatProvider = ({ children }: { children: ReactNode }) => {
           return { applied: false, note: 'unknown tool' };
       }
     },
-    [location.pathname, navigate],
+    [location.pathname, navigate, quote],
   );
 
   // ── Send a message (streams) ────────────────────────────────────────
