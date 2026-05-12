@@ -26,9 +26,14 @@ import {
 const PromoCodeManagement = () => {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
-  const { promoCodes, refreshConfig } = useQuote();
-  
-  const [editablePromoCodes, setEditablePromoCodes] = useState<PromoCode[]>(promoCodes);
+  const { refreshConfig } = useQuote();
+
+  // Pull from /api/promo-codes (admin) so adminOnly rows appear here too;
+  // the /api/config endpoint that QuoteContext.promoCodes hangs off filters
+  // adminOnly entries out. originalIds tracks what was on the server when
+  // the page loaded so handleSave can compute which rows to create/delete.
+  const [editablePromoCodes, setEditablePromoCodes] = useState<PromoCode[]>([]);
+  const [originalIds, setOriginalIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
@@ -39,8 +44,15 @@ const PromoCodeManagement = () => {
   }, [isAuthenticated, navigate]);
 
   useEffect(() => {
-    setEditablePromoCodes(promoCodes);
-  }, [promoCodes]);
+    adminApi
+      .getPromoCodes()
+      .then((rows) => {
+        const list = rows as PromoCode[];
+        setEditablePromoCodes(list);
+        setOriginalIds(new Set(list.map((p) => p.id)));
+      })
+      .catch(() => toast.error('Failed to load promo codes'));
+  }, []);
 
   const updatePromoCode = (index: number, field: keyof PromoCode, value: any) => {
     const updated = [...editablePromoCodes];
@@ -61,6 +73,8 @@ const PromoCodeManagement = () => {
       discountType: 'percentage',
       applyTo: 'one-time',
       active: true,
+      adminOnly: false,
+      cwProductId: null,
     };
 
     setEditablePromoCodes([...editablePromoCodes, newPromo]);
@@ -98,26 +112,30 @@ const PromoCodeManagement = () => {
 
     setLoading(true);
     try {
-      const originalIds = new Set(promoCodes.map(p => p.id));
-      const editableIds = new Set(editablePromoCodes.map(p => p.id));
+      const editableIds = new Set(editablePromoCodes.map((p) => p.id));
 
       // Create new or update existing promo codes
       for (const promo of editablePromoCodes) {
-        if (!originalIds.has(promo.id)) {
-          await adminApi.createPromoCode(promo);
+        const { id, ...payload } = promo;
+        if (!originalIds.has(id)) {
+          await adminApi.createPromoCode(payload);
         } else {
-          await adminApi.updatePromoCode(promo.id, promo);
+          await adminApi.updatePromoCode(id, payload);
         }
       }
 
       // Delete removed promo codes
-      for (const promo of promoCodes) {
-        if (!editableIds.has(promo.id)) {
-          await adminApi.deletePromoCode(promo.id);
+      for (const id of originalIds) {
+        if (!editableIds.has(id)) {
+          await adminApi.deletePromoCode(id);
         }
       }
 
       await refreshConfig();
+      // Re-pull from server so originalIds matches what's now persisted
+      const fresh = (await adminApi.getPromoCodes()) as PromoCode[];
+      setEditablePromoCodes(fresh);
+      setOriginalIds(new Set(fresh.map((p) => p.id)));
       toast.success('Promo codes saved successfully!');
     } catch (error) {
       toast.error('Failed to save promo codes');
@@ -240,9 +258,48 @@ const PromoCodeManagement = () => {
                   </div>
                 </div>
 
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex items-center justify-between p-3 rounded-lg border border-border bg-card">
+                    <div>
+                      <Label htmlFor={`admin-only-${index}`} className="font-medium">
+                        Admin-only
+                      </Label>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Hidden from the customer wizard. Apply from /admin/quotes/:id.
+                      </p>
+                    </div>
+                    <Switch
+                      id={`admin-only-${index}`}
+                      checked={promo.adminOnly ?? false}
+                      onCheckedChange={(checked) => updatePromoCode(index, 'adminOnly', checked)}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor={`cw-pid-${index}`}>CW Product ID (optional)</Label>
+                    <Input
+                      id={`cw-pid-${index}`}
+                      type="number"
+                      value={promo.cwProductId ?? ''}
+                      onChange={(e) =>
+                        updatePromoCode(
+                          index,
+                          'cwProductId',
+                          e.target.value === '' ? null : parseInt(e.target.value, 10),
+                        )
+                      }
+                      placeholder="e.g. PERUSER0004-MRR's id"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      If set, postAdditions posts a negative-priced discount line on the CW
+                      agreement so CW invoices match the discounted total.
+                    </p>
+                  </div>
+                </div>
+
                 <div className="mt-4 p-3 bg-muted/50 rounded-lg">
                   <p className="text-sm text-muted-foreground">
-                    <strong className="text-foreground">{promo.code || 'CODE'}</strong> will give{' '}
+                    <strong className="text-foreground">{promo.code || 'CODE'}</strong>{' '}
+                    {promo.adminOnly ? '(admin-only) ' : ''}will give{' '}
                     <strong className="text-foreground">
                       {promo.discountType === 'percentage' ? `${promo.discount}%` : `$${promo.discount}`}
                     </strong>{' '}

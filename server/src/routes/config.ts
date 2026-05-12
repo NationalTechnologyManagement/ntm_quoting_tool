@@ -64,6 +64,9 @@ router.get('/api/config', async (_req, res) => {
 
   const promoCodes: PromoCode[] = dbPromoCodes
     .filter((p) => {
+      // Hide admin-only promos from the customer wizard. They're still
+      // appliable from /admin/quotes/:id.
+      if ((p as any).adminOnly) return false;
       if (p.expiresAt && p.expiresAt < new Date()) return false;
       if (p.maxUses && p.currentUses >= p.maxUses) return false;
       return true;

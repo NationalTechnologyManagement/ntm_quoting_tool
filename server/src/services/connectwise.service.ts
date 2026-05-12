@@ -586,6 +586,15 @@ async function postAdditions(
   const pricePerUser = quote.selectedPackage.pricePerUser ?? 0;
   const pricePerUserF3 = pkg?.pricePerUserF3 ?? 0;
   const pricePerLocation = quote.selectedPackage.pricePerLocation ?? 0;
+  // Pre-discount monthly recurring base. Used downstream to size the
+  // negative-priced discount Additions for percentage-based admin promos.
+  const packageRecurringBase =
+    pricePerUser * desktopUserCount +
+    pricePerUserF3 * webUserCount +
+    pricePerLocation * locationCount +
+    quote.selectedAddons
+      .filter((a) => a.pricingType !== 'one-time-only' && (a.recurringPrice ?? 0) > 0)
+      .reduce((s, a) => s + (a.recurringPrice ?? 0) * a.quantity, 0);
 
   if (desktopUserCount > 0 && pricePerUser > 0) {
     if (pkg?.cwPerUserProductId) {
@@ -649,6 +658,32 @@ async function postAdditions(
       continue;
     }
     await postLine(productId, addon.name, addon.quantity, addon.recurringPrice ?? 0);
+  }
+
+  // ── Discount lines from applied promos ──
+  // When an admin-only promo is on the quote AND it carries a CW product
+  // id (e.g. PERUSER0004-MRR for the 5-year discount), post a negative-
+  // priced Addition for the discount dollar amount so CW invoices match
+  // the discounted total. Only applies to promos whose applyTo='monthly'
+  // — onboarding/one-time discounts only affect the upfront AP invoice.
+  const appliedPromos = (quote.appliedPromoCodes as any[]) ?? [];
+  const monthlyBase = packageRecurringBase;
+  for (const p of appliedPromos) {
+    if (p.applyTo !== 'monthly') continue;
+    const promoProductId = Number(p.cwProductId) || 0;
+    if (!promoProductId) {
+      // No CW product mapped — promo discounts the quote+AP total but not
+      // the CW agreement. Surface so ops knows to map a SKU if they want
+      // CW invoices reduced too.
+      missing.push(`promo ${p.code} (no cwProductId on PromoCode)`);
+      continue;
+    }
+    const amt = Number(p.discount) || 0;
+    const dollars =
+      p.discountType === 'percentage' ? monthlyBase * (amt / 100) : amt;
+    if (dollars <= 0) continue;
+    const description = `Discount — ${p.code}`;
+    await postLine(promoProductId, description, 1, -Math.round(dollars * 100) / 100);
   }
 
   return { posted, skipped, missingProductIds: missing };

@@ -217,6 +217,27 @@ export const adminApi = {
       `/api/admin/quotes/${encodeURIComponent(id)}/custom-items/${encodeURIComponent(itemId)}`,
       { method: 'DELETE' },
     ),
+  listAdminOnlyPromos: () =>
+    apiRequest<{
+      promos: Array<{
+        id: string;
+        code: string;
+        discount: number;
+        discountType: 'percentage' | 'fixed';
+        applyTo: 'one-time' | 'monthly' | 'onboarding';
+        cwProductId: number | null;
+      }>;
+    }>('/api/admin/admin-only-promos'),
+  applyAdminPromo: (id: string, code: string) =>
+    apiRequest<{ success: true; quote: any }>(
+      `/api/admin/quotes/${encodeURIComponent(id)}/admin-promo`,
+      { method: 'POST', body: JSON.stringify({ code }) },
+    ),
+  removeAdminPromo: (id: string, code: string) =>
+    apiRequest<{ success: true; quote: any }>(
+      `/api/admin/quotes/${encodeURIComponent(id)}/admin-promo`,
+      { method: 'DELETE', body: JSON.stringify({ code }) },
+    ),
   editQuote: (
     id: string,
     body: {

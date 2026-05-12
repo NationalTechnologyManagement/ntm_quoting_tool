@@ -14,6 +14,8 @@ const promoSchema = z.object({
   active: z.boolean().optional(),
   maxUses: z.number().nullable().optional(),
   expiresAt: z.string().datetime().nullable().optional(),
+  adminOnly: z.boolean().optional(),
+  cwProductId: z.number().int().nullable().optional(),
 });
 
 router.get('/api/promo-codes', requireAuth, async (_req, res) => {
@@ -57,6 +59,13 @@ router.post('/api/promo-codes/validate', async (req, res) => {
   });
 
   if (!promo || !promo.active) {
+    res.status(404).json({ error: 'Invalid promo code' });
+    return;
+  }
+
+  // Admin-only promos look "invalid" to public callers — same 404 as a
+  // missing code so customers can't probe for hidden discounts.
+  if ((promo as any).adminOnly) {
     res.status(404).json({ error: 'Invalid promo code' });
     return;
   }

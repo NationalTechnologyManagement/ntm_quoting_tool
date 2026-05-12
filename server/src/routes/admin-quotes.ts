@@ -656,6 +656,208 @@ router.delete('/api/admin/provisioning-errors', requireAuth, async (_req, res) =
   res.json({ success: true, deleted: deleted.count });
 });
 
+// List admin-only promo codes — used by QuoteDetail's edit panel to render
+// the "Apply admin-only promo" picker. Public /api/config and the
+// customer-facing validate route hide these.
+router.get('/api/admin/admin-only-promos', requireAuth, async (_req, res) => {
+  const promos = await prisma.promoCode.findMany({
+    where: { adminOnly: true, active: true },
+    orderBy: { code: 'asc' },
+    select: {
+      id: true,
+      code: true,
+      discount: true,
+      discountType: true,
+      applyTo: true,
+      cwProductId: true,
+    },
+  });
+  res.json({ promos });
+});
+
+// Apply an admin-only promo to a quote. Reuses the existing
+// quoteService.applyPromoCode path which validates + recomputes totals,
+// but bypasses the public adminOnly guard by reading the row directly.
+router.post(
+  '/api/admin/quotes/:id/admin-promo',
+  requireAuth,
+  validate(z.object({ code: z.string().min(1) })),
+  async (req, res) => {
+    const id = req.params.id as string;
+    const { code } = req.body as { code: string };
+
+    const promo = await prisma.promoCode.findFirst({
+      where: { code: { equals: code, mode: 'insensitive' }, active: true },
+    });
+    if (!promo) {
+      res.status(404).json({ error: 'Promo code not found' });
+      return;
+    }
+
+    const quote = await prisma.quote.findFirst({
+      where: { OR: [{ id }, { quoteNumber: id }] },
+    });
+    if (!quote) {
+      res.status(404).json({ error: 'Quote not found' });
+      return;
+    }
+
+    const existing = (quote.appliedPromoCodes as any[]) ?? [];
+    if (existing.some((p) => p.code?.toUpperCase() === promo.code.toUpperCase())) {
+      res.status(400).json({ error: 'Promo code already applied to this quote' });
+      return;
+    }
+
+    // Snapshot the promo onto the quote (same shape the customer-facing
+    // applyPromoCode uses). cwProductId carried along so postAdditions can
+    // emit the negative-priced discount line on CW later.
+    const newPromos = [
+      ...existing,
+      {
+        code: promo.code,
+        discount: promo.discount,
+        discountType: promo.discountType,
+        applyTo: promo.applyTo,
+        cwProductId: promo.cwProductId ?? null,
+        adminOnly: true,
+      },
+    ];
+
+    // Recompute totals from raw quote state. This mirrors quote.service's
+    // recalcAndSaveQuote but uses the snapshot already present here.
+    const onboarding = quote.onboarding as any;
+    const totals = quote.totals as any;
+    const selectedAddons = (quote.selectedAddons as any[]) ?? [];
+    const pkg = quote.selectedPackage as any;
+    const customer = quote.customer as any;
+    const webUserCount = Number(customer?.webUserCount ?? 0);
+    const baseOnboarding = onboarding?.totalCost ?? 0;
+    const baseOneTime = selectedAddons
+      .filter((a) => a.pricingType === 'one-time-only' || a.pricingType === 'both')
+      .reduce((s, a) => s + (Number(a.setupPrice) || 0) * (Number(a.quantity) || 1), 0);
+    const packageCost =
+      (Number(pkg?.pricePerUser) || 0) * (Number(customer?.userCount) || 0) +
+      (Number(pkg?.pricePerUserF3) || 0) * webUserCount +
+      (Number(pkg?.pricePerLocation) || 0) * (Number(customer?.locationCount) || 0);
+    const addonRecurring = selectedAddons
+      .filter((a) => a.pricingType === 'recurring-only' || a.pricingType === 'both')
+      .reduce((s, a) => s + (Number(a.recurringPrice) || 0) * (Number(a.quantity) || 1), 0);
+    const baseRecurring = packageCost + addonRecurring;
+
+    let onboardingDiscount = 0;
+    let oneTimeDiscount = 0;
+    let recurringDiscount = 0;
+    for (const p of newPromos) {
+      const pct = p.discountType === 'percentage';
+      const amt = Number(p.discount) || 0;
+      if (p.applyTo === 'onboarding') {
+        onboardingDiscount += pct ? baseOnboarding * (amt / 100) : Math.min(amt, baseOnboarding - onboardingDiscount);
+      } else if (p.applyTo === 'one-time') {
+        oneTimeDiscount += pct ? baseOneTime * (amt / 100) : Math.min(amt, baseOneTime - oneTimeDiscount);
+      } else if (p.applyTo === 'monthly') {
+        recurringDiscount += pct ? baseRecurring * (amt / 100) : Math.min(amt, baseRecurring - recurringDiscount);
+      }
+    }
+    const finalOnboarding = Math.max(0, baseOnboarding - onboardingDiscount);
+    const finalOneTime = Math.max(0, baseOneTime - oneTimeDiscount);
+    const finalRecurring = Math.max(0, baseRecurring - recurringDiscount);
+
+    const updated = await prisma.quote.update({
+      where: { id: quote.id },
+      data: {
+        appliedPromoCodes: newPromos as any,
+        onboarding: { ...onboarding, discount: onboardingDiscount, finalCost: finalOnboarding } as any,
+        totals: {
+          ...totals,
+          onboardingCost: finalOnboarding,
+          oneTimeCosts: finalOneTime,
+          recurringCosts: finalRecurring,
+          discount: onboardingDiscount + oneTimeDiscount + recurringDiscount,
+          grandTotal: finalOnboarding + finalOneTime + finalRecurring,
+        } as any,
+      },
+    });
+    res.json({ success: true, quote: updated });
+  },
+);
+
+// Remove an admin-only (or any) promo from a quote.
+router.delete(
+  '/api/admin/quotes/:id/admin-promo',
+  requireAuth,
+  validate(z.object({ code: z.string().min(1) })),
+  async (req, res) => {
+    const id = req.params.id as string;
+    const { code } = req.body as { code: string };
+    const quote = await prisma.quote.findFirst({
+      where: { OR: [{ id }, { quoteNumber: id }] },
+    });
+    if (!quote) {
+      res.status(404).json({ error: 'Quote not found' });
+      return;
+    }
+    const existing = (quote.appliedPromoCodes as any[]) ?? [];
+    const remaining = existing.filter((p) => p.code?.toUpperCase() !== code.toUpperCase());
+    if (remaining.length === existing.length) {
+      res.status(404).json({ error: 'Promo not applied to this quote' });
+      return;
+    }
+    // Same recompute as apply. Inline because we can't easily call
+    // quote.service's private recalcAndSaveQuote from here.
+    const onboarding = quote.onboarding as any;
+    const totals = quote.totals as any;
+    const selectedAddons = (quote.selectedAddons as any[]) ?? [];
+    const pkg = quote.selectedPackage as any;
+    const customer = quote.customer as any;
+    const webUserCount = Number(customer?.webUserCount ?? 0);
+    const baseOnboarding = onboarding?.totalCost ?? 0;
+    const baseOneTime = selectedAddons
+      .filter((a) => a.pricingType === 'one-time-only' || a.pricingType === 'both')
+      .reduce((s, a) => s + (Number(a.setupPrice) || 0) * (Number(a.quantity) || 1), 0);
+    const packageCost =
+      (Number(pkg?.pricePerUser) || 0) * (Number(customer?.userCount) || 0) +
+      (Number(pkg?.pricePerUserF3) || 0) * webUserCount +
+      (Number(pkg?.pricePerLocation) || 0) * (Number(customer?.locationCount) || 0);
+    const addonRecurring = selectedAddons
+      .filter((a) => a.pricingType === 'recurring-only' || a.pricingType === 'both')
+      .reduce((s, a) => s + (Number(a.recurringPrice) || 0) * (Number(a.quantity) || 1), 0);
+    const baseRecurring = packageCost + addonRecurring;
+    let onboardingDiscount = 0;
+    let oneTimeDiscount = 0;
+    let recurringDiscount = 0;
+    for (const p of remaining) {
+      const pct = p.discountType === 'percentage';
+      const amt = Number(p.discount) || 0;
+      if (p.applyTo === 'onboarding') {
+        onboardingDiscount += pct ? baseOnboarding * (amt / 100) : Math.min(amt, baseOnboarding - onboardingDiscount);
+      } else if (p.applyTo === 'one-time') {
+        oneTimeDiscount += pct ? baseOneTime * (amt / 100) : Math.min(amt, baseOneTime - oneTimeDiscount);
+      } else if (p.applyTo === 'monthly') {
+        recurringDiscount += pct ? baseRecurring * (amt / 100) : Math.min(amt, baseRecurring - recurringDiscount);
+      }
+    }
+    const finalOnboarding = Math.max(0, baseOnboarding - onboardingDiscount);
+    const finalOneTime = Math.max(0, baseOneTime - oneTimeDiscount);
+    const finalRecurring = Math.max(0, baseRecurring - recurringDiscount);
+    const updated = await prisma.quote.update({
+      where: { id: quote.id },
+      data: {
+        appliedPromoCodes: remaining as any,
+        onboarding: { ...onboarding, discount: onboardingDiscount, finalCost: finalOnboarding } as any,
+        totals: {
+          ...totals,
+          onboardingCost: finalOnboarding,
+          oneTimeCosts: finalOneTime,
+          recurringCosts: finalRecurring,
+          discount: onboardingDiscount + oneTimeDiscount + recurringDiscount,
+          grandTotal: finalOnboarding + finalOneTime + finalRecurring,
+        } as any,
+      },
+    });
+    res.json({ success: true, quote: updated });
+  },
+);
+
 // Recent provisioning failures across all quotes — drives the admin
 // Provisioning Errors view. Reads from AuditLog rows written by
 // logProvisioningStepFailure in notify.service.

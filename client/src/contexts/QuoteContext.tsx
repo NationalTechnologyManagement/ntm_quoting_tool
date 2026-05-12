@@ -70,6 +70,11 @@ export interface PromoCode {
   discountType: 'percentage' | 'fixed';
   applyTo: 'one-time' | 'monthly' | 'onboarding';
   active: boolean;
+  // Hidden from customer wizard; only applicable from /admin/quotes/:id.
+  adminOnly?: boolean;
+  // Optional CW catalog product id used to post a negative-priced
+  // discount Addition onto the agreement so CW invoices match.
+  cwProductId?: number | null;
 }
 
 export interface CustomerInfo {

@@ -91,6 +91,12 @@ export async function applyPromoCode(quoteNumber: string, code: string): Promise
     where: { code: { equals: code, mode: 'insensitive' }, active: true },
   });
   if (!promo) throw new AppError(400, 'Invalid or inactive promo code');
+  // Admin-only codes can only be applied via the admin edit panel, not the
+  // public /api/quotes/:id/promo route. Block it here so a customer who
+  // somehow learns the code can't apply it themselves.
+  if ((promo as any).adminOnly) {
+    throw new AppError(400, 'Invalid or inactive promo code');
+  }
 
   // Check expiration
   if (promo.expiresAt && promo.expiresAt < new Date()) {

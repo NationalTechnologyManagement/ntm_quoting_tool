@@ -92,6 +92,16 @@ model PromoCode {
   maxUses      Int?
   currentUses  Int      @default(0)
   expiresAt    DateTime?
+  // Hidden from the customer wizard + /api/promo-codes/validate. Admin can
+  // still apply it to a quote from /admin/quotes/:id. Used for things like
+  // the 5-year discount that NTM sales applies on case-by-case basis.
+  adminOnly    Boolean  @default(false)
+  // Optional CW catalog product id (e.g. PERUSER0004-MRR for the 5-year
+  // discount). When set, postAdditions posts a negative-priced Addition for
+  // the discount amount onto the CW agreement so CW invoices match the
+  // discounted total. When null, the discount only affects the quote totals
+  // and AP first-month invoice; CW invoices the full per-unit prices.
+  cwProductId  Int?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 

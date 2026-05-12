@@ -75,6 +75,10 @@ const QuoteDetail = () => {
   // addonId -> quantity (0 = not selected)
   const [editAddonQty, setEditAddonQty] = useState<Record<string, number>>({});
 
+  // Admin-only promo codes (e.g. 5-year discount). Loaded lazily.
+  const [adminPromos, setAdminPromos] = useState<Awaited<ReturnType<typeof adminApi.listAdminOnlyPromos>>['promos']>([]);
+  const [applyingPromo, setApplyingPromo] = useState<string | null>(null);
+
   // New-item form
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -243,8 +247,47 @@ const QuoteDetail = () => {
 
   useEffect(() => {
     fetchQuote();
+    // Load admin-only promos in parallel so the apply UI is ready when
+    // admin opens the quote.
+    adminApi
+      .listAdminOnlyPromos()
+      .then((r) => setAdminPromos(r.promos))
+      .catch(() => { /* non-critical */ });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  const isPromoApplied = (code: string) =>
+    ((quote?.appliedPromoCodes as any[]) ?? []).some(
+      (p) => p.code?.toUpperCase() === code.toUpperCase(),
+    );
+
+  const applyAdminPromo = async (code: string) => {
+    if (!quote) return;
+    setApplyingPromo(code);
+    try {
+      await adminApi.applyAdminPromo(quote.id, code);
+      toast.success(`Applied ${code}`);
+      await fetchQuote();
+    } catch (e: any) {
+      toast.error(e?.message || 'Apply failed');
+    } finally {
+      setApplyingPromo(null);
+    }
+  };
+
+  const removeAdminPromo = async (code: string) => {
+    if (!quote) return;
+    setApplyingPromo(code);
+    try {
+      await adminApi.removeAdminPromo(quote.id, code);
+      toast.success(`Removed ${code}`);
+      await fetchQuote();
+    } catch (e: any) {
+      toast.error(e?.message || 'Remove failed');
+    } finally {
+      setApplyingPromo(null);
+    }
+  };
 
   const addItem = async () => {
     if (!quote) return;
@@ -678,6 +721,82 @@ const QuoteDetail = () => {
                 ))}
               </div>
             )}
+          </Card>
+        )}
+
+        {/* Admin-only promo codes (e.g. 5-year discount). Applied here
+            never appear on the customer wizard. Discount snapshots onto
+            appliedPromoCodes and (if cwProductId is set) gets posted as a
+            negative-priced Addition on the CW agreement at provisioning. */}
+        {adminPromos.length > 0 && (
+          <Card className="p-6">
+            <h3 className="text-lg font-semibold mb-2">Admin-only discounts</h3>
+            <p className="text-sm text-muted-foreground mb-4">
+              These promos are hidden from the customer wizard. Apply here to discount the
+              quote and (when CW Product ID is set on the promo) the CW agreement invoices.
+            </p>
+            <div className="space-y-2">
+              {adminPromos.map((p) => {
+                const applied = isPromoApplied(p.code);
+                return (
+                  <div
+                    key={p.id}
+                    className="flex items-center justify-between p-3 bg-secondary/40 border border-border rounded-md"
+                  >
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <code className="font-mono text-sm">{p.code}</code>
+                        <Badge variant="secondary" className="text-xs">
+                          {p.discountType === 'percentage'
+                            ? `${p.discount}% off`
+                            : `$${p.discount.toFixed(2)} off`}
+                        </Badge>
+                        <Badge variant="outline" className="text-xs">
+                          {p.applyTo}
+                        </Badge>
+                        {p.cwProductId ? (
+                          <Badge variant="outline" className="text-xs">
+                            CW product {p.cwProductId}
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant="outline"
+                            className="text-xs text-amber-600 dark:text-amber-400"
+                            title="No CW Product ID set on this promo — quote totals + AP first-month invoice will reflect the discount but CW agreement invoices will charge the full amount. Set the id on /admin/promo-codes."
+                          >
+                            ⚠ no CW SKU
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    {applied ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => removeAdminPromo(p.code)}
+                        disabled={applyingPromo === p.code}
+                      >
+                        {applyingPromo === p.code ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : null}
+                        Remove
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        onClick={() => applyAdminPromo(p.code)}
+                        disabled={applyingPromo === p.code}
+                      >
+                        {applyingPromo === p.code ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : null}
+                        Apply
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </Card>
         )}
 
