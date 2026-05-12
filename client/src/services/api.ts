@@ -238,6 +238,19 @@ export const adminApi = {
       `/api/admin/quotes/${encodeURIComponent(id)}/admin-promo`,
       { method: 'DELETE', body: JSON.stringify({ code }) },
     ),
+  refreshQuotePackage: (id: string) =>
+    apiRequest<{
+      success: true;
+      quote: any;
+      refreshedFrom: {
+        pricePerUser: number;
+        pricePerUserF3: number;
+        pricePerLocation: number;
+        featureGroups: Array<{ category: string; items: string[] }>;
+      };
+    }>(`/api/admin/quotes/${encodeURIComponent(id)}/refresh-package`, {
+      method: 'POST',
+    }),
   editQuote: (
     id: string,
     body: {

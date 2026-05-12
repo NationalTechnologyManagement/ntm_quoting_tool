@@ -227,6 +227,9 @@ const editSelectedPackageSchema = z.object({
   pricePerLocation: z.number().min(0),
   frequency: z.string(),
   features: z.array(z.string()),
+  featureGroups: z
+    .array(z.object({ category: z.string(), items: z.array(z.string()) }))
+    .optional(),
   agreementMonths: z.number().int().min(0).optional(),
   calculatedPrice: z.number().min(0).optional(),
 });
@@ -330,6 +333,82 @@ function genQuoteNumber(): string {
   const rand = Math.floor(1000 + Math.random() * 9000);
   return `QT-${date}-${rand}`;
 }
+
+// Re-snapshot a quote's selectedPackage from the live catalog. Pulls the
+// current package row and overwrites the quote's snapshot with its
+// pricePerUser / pricePerUserF3 / pricePerLocation / features /
+// featureGroups / agreementMonths. Totals are recomputed against the
+// fresh values. Use after editing a package's pricing or features when
+// existing quotes need to reflect those changes without a manual edit.
+router.post('/api/admin/quotes/:id/refresh-package', requireAuth, async (req, res) => {
+  const id = req.params.id as string;
+  const quote = await prisma.quote.findFirst({
+    where: { OR: [{ id }, { quoteNumber: id }] },
+  });
+  if (!quote) {
+    res.status(404).json({ error: 'Quote not found' });
+    return;
+  }
+  const snapshotPkg = quote.selectedPackage as any;
+  if (!snapshotPkg?.id) {
+    res.status(400).json({ error: 'Quote has no selected package to refresh' });
+    return;
+  }
+  const live = await prisma.package.findUnique({ where: { id: snapshotPkg.id } });
+  if (!live) {
+    res.status(404).json({
+      error: `Package ${snapshotPkg.id} no longer exists in the catalog.`,
+    });
+    return;
+  }
+  const customer = quote.customer as any;
+  const userCount = Number(customer?.userCount ?? 1);
+  const webUserCount = Number(customer?.webUserCount ?? 0);
+  const locationCount = Number(customer?.locationCount ?? 1);
+  const editedPkg = {
+    ...snapshotPkg,
+    name: live.name,
+    pricePerUser: live.pricePerUser,
+    pricePerUserF3: live.pricePerUserF3,
+    pricePerLocation: live.pricePerLocation,
+    frequency: live.frequency,
+    features: live.features ?? [],
+    featureGroups: (live as any).featureGroups ?? [],
+    agreementMonths: live.agreementMonths,
+    calculatedPrice:
+      live.pricePerUser * userCount +
+      (live.pricePerUserF3 ?? 0) * webUserCount +
+      live.pricePerLocation * locationCount,
+  };
+  const waiveOnboarding = ((quote.onboarding as any)?.finalCost ?? 0) === 0;
+  const recomputed = computeQuoteTotals({
+    pkg: editedPkg,
+    addons: (quote.selectedAddons as any[]) ?? [],
+    userCount,
+    webUserCount,
+    locationCount,
+    appliedPromoCodes: (quote.appliedPromoCodes as any[]) ?? [],
+    waiveOnboarding,
+  });
+  const updated = await prisma.quote.update({
+    where: { id: quote.id },
+    data: {
+      selectedPackage: editedPkg as any,
+      onboarding: recomputed.onboarding as any,
+      totals: recomputed.totals as any,
+    },
+  });
+  res.json({
+    success: true,
+    quote: updated,
+    refreshedFrom: {
+      pricePerUser: live.pricePerUser,
+      pricePerUserF3: live.pricePerUserF3,
+      pricePerLocation: live.pricePerLocation,
+      featureGroups: (live as any).featureGroups ?? [],
+    },
+  });
+});
 
 router.put(
   '/api/admin/quotes/:id',

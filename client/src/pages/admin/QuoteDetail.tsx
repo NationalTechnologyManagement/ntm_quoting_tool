@@ -19,6 +19,7 @@ import {
   Pencil,
   Save,
   Mail,
+  RotateCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { adminApi, quoteApi } from '@/services/api';
@@ -80,6 +81,32 @@ const QuoteDetail = () => {
   const [adminPromos, setAdminPromos] = useState<Awaited<ReturnType<typeof adminApi.listAdminOnlyPromos>>['promos']>([]);
   const [applyingPromo, setApplyingPromo] = useState<string | null>(null);
   const [sendingEmail, setSendingEmail] = useState(false);
+  const [refreshingPkg, setRefreshingPkg] = useState(false);
+
+  const refreshPackage = async () => {
+    if (!quote) return;
+    if (
+      !confirm(
+        `Re-snapshot ${quote.selectedPackage?.name} from the live catalog?\n\n` +
+          'This overwrites the prices, contract term, features, and CW product IDs ' +
+          'on this quote with the current canonical values from /admin/packages. ' +
+          'Per-quote price overrides will be replaced. Totals will recompute. Add-on lines and notes are untouched.',
+      )
+    )
+      return;
+    setRefreshingPkg(true);
+    try {
+      const r = await adminApi.refreshQuotePackage(quote.id);
+      toast.success(
+        `Refreshed package — $${r.refreshedFrom.pricePerUser}/desktop user, $${r.refreshedFrom.pricePerLocation}/location, ${r.refreshedFrom.featureGroups.length} feature categories.`,
+      );
+      await fetchQuote();
+    } catch (e: any) {
+      toast.error(e?.message || 'Refresh failed');
+    } finally {
+      setRefreshingPkg(false);
+    }
+  };
 
   const emailQuote = async () => {
     if (!quote) return;
@@ -217,6 +244,10 @@ const QuoteDetail = () => {
           pricePerLocation: editPricePerLocation,
           frequency: pkg.frequency,
           features: pkg.features,
+          // Always pull the structured feature list from the live package
+          // so re-saving the quote refreshes the categorized list shown on
+          // /quote-review and in the contract PDF.
+          featureGroups: pkg.featureGroups ?? [],
           agreementMonths: editAgreementMonths,
         },
         selectedAddons: selectedAddons as any[],
@@ -456,6 +487,20 @@ const QuoteDetail = () => {
                 <Mail className="w-4 h-4 mr-2" />
               )}
               Send Quote via Email
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={refreshPackage}
+              disabled={refreshingPkg}
+              title="Re-snapshot the selected package's prices + features + CW IDs from the live catalog onto this quote"
+            >
+              {refreshingPkg ? (
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <RotateCw className="w-4 h-4 mr-2" />
+              )}
+              Refresh from Catalog
             </Button>
             {(quote.provisioningStatus === 'partial' || quote.provisioningStatus === 'failed') && (
               <Button
