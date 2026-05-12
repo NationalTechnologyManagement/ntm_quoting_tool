@@ -40,6 +40,7 @@ router.get('/api/config', async (_req, res) => {
       pricePerLocation: p.pricePerLocation,
       frequency: p.frequency as PackageType['frequency'],
       features: p.features as string[],
+      featureGroups: (p.featureGroups as any) ?? [],
       isBestValue: p.isBestValue,
       customerVisible: p.customerVisible,
       cwAgreementTypeId: p.cwAgreementTypeId,

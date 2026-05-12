@@ -90,10 +90,35 @@ export function buildContractHtml(quote: QuoteData): string {
     )
     .join('');
 
-  const featuresInline =
-    quote.selectedPackage?.features?.length > 0
-      ? quote.selectedPackage.features.join(' &bull; ')
-      : '';
+  // Categorized features for the contract's "Includes" block. Falls back to
+  // the legacy flat features list when an older snapshotted quote doesn't
+  // carry featureGroups. Renders as bolded category headers + bulleted
+  // items so the customer can see everything they're agreeing to.
+  const escapeHtml = (s: string) =>
+    s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;');
+  const pkgGroups: Array<{ category: string; items: string[] }> =
+    (quote.selectedPackage as any)?.featureGroups &&
+    (quote.selectedPackage as any).featureGroups.length > 0
+      ? (quote.selectedPackage as any).featureGroups
+      : quote.selectedPackage?.features?.length > 0
+        ? [{ category: 'Includes', items: quote.selectedPackage.features }]
+        : [];
+  const featuresHtml = pkgGroups.length
+    ? pkgGroups
+        .map(
+          (g) => `
+      <div style="margin-top:8px;">
+        <div style="font-size:9pt;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#1a3a5c;margin-bottom:4px;">${escapeHtml(g.category)}</div>
+        <ul style="margin:0 0 0 16px;padding:0;font-size:10pt;">
+          ${g.items.map((it) => `<li style="margin:1px 0;">${escapeHtml(it)}</li>`).join('')}
+        </ul>
+      </div>`,
+        )
+        .join('')
+    : '';
 
   const termsHtml = quote.terms?.content
     ? formatTermsContent(quote.terms.content)
@@ -465,7 +490,7 @@ export function buildContractHtml(quote: QuoteData): string {
     <div class="pkg-name">${quote.selectedPackage.name}</div>
     <div class="pkg-detail">${lines.join(' &nbsp;+&nbsp; ')} &mdash; billed ${quote.selectedPackage.frequency}</div>
     <div class="pkg-detail"><strong>Monthly Package Cost: ${formatCurrency(quote.selectedPackage.calculatedPrice)}</strong></div>
-    ${featuresInline ? `<div class="pkg-features"><strong>Includes:</strong> ${featuresInline}</div>` : ''}
+    ${featuresHtml ? `<div class="pkg-features"><strong>What's included:</strong>${featuresHtml}</div>` : ''}
   </div>`;
   })() : ''}
 

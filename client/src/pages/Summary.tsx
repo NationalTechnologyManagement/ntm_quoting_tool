@@ -75,6 +75,7 @@ const Summary = () => {
             pricePerLocation: selectedPackage.pricePerLocation,
             frequency: selectedPackage.frequency,
             features: selectedPackage.features,
+            featureGroups: selectedPackage.featureGroups ?? [],
             agreementMonths: selectedPackage.agreementMonths ?? 0,
             calculatedPrice:
               selectedPackage.pricePerUser * customerInfo.userCount +
@@ -582,14 +583,29 @@ const Summary = () => {
                 </div>
 
                 {expandedFeatures && (
-                  <ul className="space-y-2 pt-2 border-t">
-                    {selectedPackage.features.map((feature, i) => (
-                      <li key={i} className="text-sm text-foreground flex items-center gap-2">
-                        <div className="w-1.5 h-1.5 rounded-full bg-primary" />
-                        {feature}
-                      </li>
+                  <div className="pt-2 border-t space-y-3">
+                    {((selectedPackage.featureGroups?.length ?? 0) > 0
+                      ? selectedPackage.featureGroups!
+                      : [{ category: 'Includes', items: selectedPackage.features }]
+                    ).map((group, gi) => (
+                      <div key={gi}>
+                        <p className="text-xs font-semibold uppercase tracking-wider text-primary mb-1">
+                          {group.category}
+                        </p>
+                        <ul className="space-y-1.5">
+                          {group.items.map((item, i) => (
+                            <li
+                              key={i}
+                              className="text-sm text-foreground flex items-center gap-2"
+                            >
+                              <div className="w-1.5 h-1.5 rounded-full bg-primary" />
+                              {item}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 )}
               </div>
             </Card>

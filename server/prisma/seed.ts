@@ -29,6 +29,7 @@ async function main() {
       pricePerLocation: pkg.pricePerLocation,
       frequency: pkg.frequency,
       features: pkg.features,
+      featureGroups: (pkg.featureGroups ?? []) as any,
       isBestValue: pkg.isBestValue ?? false,
       customerVisible: pkg.customerVisible ?? true,
       sortOrder: i,

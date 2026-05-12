@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Check, Star, Search, ArrowRight, FileSearch, X } from 'lucide-react';
+import { Check, Star, Search, ArrowRight, FileSearch, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { SiteHeader } from '@/components/SiteHeader';
 import { formatContractTerm } from '@/lib/utils';
 
@@ -15,6 +15,10 @@ const QuoteBuilder = () => {
 
   const [showLookup, setShowLookup] = useState(false);
   const [quoteSearch, setQuoteSearch] = useState('');
+  // packageId -> whether the full feature list is expanded on its card.
+  // Collapsed view shows category headers + top 2 items per category so the
+  // three cards still fit comfortably; "Show more" reveals everything.
+  const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
 
   const handleLookup = () => {
     const v = quoteSearch.trim();
@@ -124,14 +128,65 @@ const QuoteBuilder = () => {
                     </div>
                   </div>
 
-                  <ul className="space-y-2 flex-1">
-                    {pkg.features.map((feature, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm">
-                        <Check className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
-                        <span className="text-foreground">{feature}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  {/* Categorized features. Collapsed view shows top 2 per
+                      category + a "+N more" hint so all three cards fit
+                      side-by-side. Full list reveals on Show more. */}
+                  <div className="flex-1 space-y-3">
+                    {((pkg.featureGroups?.length ?? 0) > 0
+                      ? pkg.featureGroups!
+                      : [{ category: 'Includes', items: pkg.features }]
+                    ).map((group, gi) => {
+                      const isExpanded = !!expandedCards[pkg.id];
+                      const PREVIEW = 2;
+                      const visible = isExpanded
+                        ? group.items
+                        : group.items.slice(0, PREVIEW);
+                      const remaining = isExpanded
+                        ? 0
+                        : Math.max(0, group.items.length - PREVIEW);
+                      return (
+                        <div key={gi}>
+                          <p className="text-xs font-semibold uppercase tracking-wider text-primary mb-1">
+                            {group.category}
+                          </p>
+                          <ul className="space-y-1.5">
+                            {visible.map((item, i) => (
+                              <li key={i} className="flex items-start gap-2 text-sm">
+                                <Check className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+                                <span className="text-foreground">{item}</span>
+                              </li>
+                            ))}
+                            {remaining > 0 && (
+                              <li className="text-xs text-muted-foreground pl-6">
+                                + {remaining} more
+                              </li>
+                            )}
+                          </ul>
+                        </div>
+                      );
+                    })}
+                    {(pkg.featureGroups?.some((g) => g.items.length > 2) ||
+                      (pkg.featureGroups?.length ?? 0) > 0) && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setExpandedCards((s) => ({ ...s, [pkg.id]: !s[pkg.id] }));
+                        }}
+                        className="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1"
+                      >
+                        {expandedCards[pkg.id] ? (
+                          <>
+                            <ChevronUp className="w-3 h-3" /> Show less
+                          </>
+                        ) : (
+                          <>
+                            <ChevronDown className="w-3 h-3" /> Show more
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
 
                   <Button
                     variant={isSelected ? 'default' : 'outline'}

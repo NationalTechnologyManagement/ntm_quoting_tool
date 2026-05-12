@@ -14,6 +14,14 @@ const packageSchema = z.object({
   pricePerLocation: z.number().min(0),
   frequency: z.enum(['monthly', 'annually', 'one-time']),
   features: z.array(z.string()),
+  featureGroups: z
+    .array(
+      z.object({
+        category: z.string().min(1).max(60),
+        items: z.array(z.string().min(1).max(300)),
+      }),
+    )
+    .optional(),
   isBestValue: z.boolean().optional(),
   customerVisible: z.boolean().optional(),
   sortOrder: z.number().optional(),

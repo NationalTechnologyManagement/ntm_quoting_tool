@@ -33,6 +33,9 @@ const createQuoteSchema = z.object({
     pricePerLocation: z.number(),
     frequency: z.string(),
     features: z.array(z.string()),
+    featureGroups: z
+      .array(z.object({ category: z.string(), items: z.array(z.string()) }))
+      .optional(),
     agreementMonths: z.number().int().min(0).optional(),
     calculatedPrice: z.number(),
   }),

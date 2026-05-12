@@ -50,6 +50,7 @@ interface QuoteData {
     frequency: string;
     calculatedPrice: number;
     features?: string[];
+    featureGroups?: Array<{ category: string; items: string[] }>;
   };
   selectedAddons: Array<{
     id: string;
@@ -420,21 +421,36 @@ export default function QuoteReview() {
               )}
             </div>
 
-            {expandedFeatures &&
-              quoteData.selectedPackage.features &&
-              quoteData.selectedPackage.features.length > 0 && (
-                <div className="pt-3 border-t">
-                  <p className="text-sm font-medium mb-2">Included Features:</p>
-                  <ul className="space-y-2">
-                    {quoteData.selectedPackage.features.map((feature, i) => (
-                      <li key={i} className="text-sm flex items-center gap-2">
-                        <div className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
+            {expandedFeatures && (() => {
+              const groups =
+                quoteData.selectedPackage.featureGroups &&
+                quoteData.selectedPackage.featureGroups.length > 0
+                  ? quoteData.selectedPackage.featureGroups
+                  : quoteData.selectedPackage.features &&
+                      quoteData.selectedPackage.features.length > 0
+                    ? [{ category: 'Includes', items: quoteData.selectedPackage.features }]
+                    : [];
+              if (groups.length === 0) return null;
+              return (
+                <div className="pt-3 border-t space-y-4">
+                  {groups.map((g, gi) => (
+                    <div key={gi}>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-primary mb-1">
+                        {g.category}
+                      </p>
+                      <ul className="space-y-1.5">
+                        {g.items.map((item, i) => (
+                          <li key={i} className="text-sm flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />
+                            {item}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
                 </div>
-              )}
+              );
+            })()}
           </div>
         </Card>
 

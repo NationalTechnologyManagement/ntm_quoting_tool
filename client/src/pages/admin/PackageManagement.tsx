@@ -56,6 +56,42 @@ const PackageManagement = () => {
     setEditablePackages(updated);
   };
 
+  // ── featureGroups (the categorized list rendered on the package card
+  //    and the contract PDF) ───────────────────────────────────────────
+  const mutateGroups = (
+    packageIndex: number,
+    fn: (groups: Array<{ category: string; items: string[] }>) => void,
+  ) => {
+    const updated = [...editablePackages];
+    const groups = [...(updated[packageIndex].featureGroups ?? [])].map((g) => ({
+      category: g.category,
+      items: [...g.items],
+    }));
+    fn(groups);
+    updated[packageIndex] = { ...updated[packageIndex], featureGroups: groups };
+    setEditablePackages(updated);
+  };
+  const addGroup = (pIdx: number) =>
+    mutateGroups(pIdx, (g) => g.push({ category: 'New category', items: [''] }));
+  const removeGroup = (pIdx: number, gIdx: number) =>
+    mutateGroups(pIdx, (g) => g.splice(gIdx, 1));
+  const updateGroupCategory = (pIdx: number, gIdx: number, value: string) =>
+    mutateGroups(pIdx, (g) => {
+      if (g[gIdx]) g[gIdx].category = value;
+    });
+  const addGroupItem = (pIdx: number, gIdx: number) =>
+    mutateGroups(pIdx, (g) => {
+      if (g[gIdx]) g[gIdx].items.push('');
+    });
+  const updateGroupItem = (pIdx: number, gIdx: number, iIdx: number, value: string) =>
+    mutateGroups(pIdx, (g) => {
+      if (g[gIdx]) g[gIdx].items[iIdx] = value;
+    });
+  const removeGroupItem = (pIdx: number, gIdx: number, iIdx: number) =>
+    mutateGroups(pIdx, (g) => {
+      if (g[gIdx]) g[gIdx].items.splice(iIdx, 1);
+    });
+
   const addPackage = () => {
     if (editablePackages.length >= 3) {
       toast.error('Maximum of 3 packages allowed');
@@ -353,9 +389,95 @@ const PackageManagement = () => {
                   optional — leave blank if you don't use a separate F3 tier.
                 </p>
 
-                <div className="space-y-2">
-                  <Label>Features</Label>
-                  <div className="space-y-2">
+                {/* Categorized features — what the customer sees on the
+                    package card and in the contract PDF. Add categories
+                    (Support / Security / Management is the canonical set)
+                    and one item per row inside each. */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label>Features (categorized)</Label>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => addGroup(packageIndex)}
+                    >
+                      <Plus className="w-4 h-4 mr-2" /> Add category
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Shown grouped by category on the package card. Customers can expand to see
+                    the full list. Same content is printed in the contract PDF.
+                  </p>
+                  {(pkg.featureGroups ?? []).length === 0 && (
+                    <p className="text-xs italic text-muted-foreground">
+                      No categories yet. Click <em>Add category</em> to start.
+                    </p>
+                  )}
+                  {(pkg.featureGroups ?? []).map((group, gIdx) => (
+                    <div
+                      key={gIdx}
+                      className="rounded-md border border-border bg-secondary/30 p-3 space-y-2"
+                    >
+                      <div className="flex gap-2">
+                        <Input
+                          value={group.category}
+                          onChange={(e) =>
+                            updateGroupCategory(packageIndex, gIdx, e.target.value)
+                          }
+                          placeholder="Category (e.g. Support)"
+                          className="font-semibold"
+                        />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => removeGroup(packageIndex, gIdx)}
+                          className="text-destructive hover:bg-destructive/10 flex-shrink-0"
+                          title="Remove category"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                      <div className="space-y-1.5 pl-1">
+                        {group.items.map((item, iIdx) => (
+                          <div key={iIdx} className="flex gap-2">
+                            <Input
+                              value={item}
+                              onChange={(e) =>
+                                updateGroupItem(packageIndex, gIdx, iIdx, e.target.value)
+                              }
+                              placeholder="Feature item"
+                            />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeGroupItem(packageIndex, gIdx, iIdx)}
+                              className="flex-shrink-0"
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ))}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => addGroupItem(packageIndex, gIdx)}
+                          className="w-full"
+                        >
+                          <Plus className="w-3 h-3 mr-1" /> Add item
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Legacy flat features. Backwards-compat with quotes
+                    snapshotted before featureGroups existed. New cards
+                    prefer featureGroups; keep this for safety. */}
+                <details className="space-y-2">
+                  <summary className="cursor-pointer text-sm text-muted-foreground select-none">
+                    Legacy flat feature list ({pkg.features.length} items)
+                  </summary>
+                  <div className="space-y-2 mt-2">
                     {pkg.features.map((feature, featureIndex) => (
                       <div key={featureIndex} className="flex gap-2">
                         <Input
@@ -385,7 +507,7 @@ const PackageManagement = () => {
                       </Button>
                     )}
                   </div>
-                </div>
+                </details>
               </div>
             </Card>
           ))}

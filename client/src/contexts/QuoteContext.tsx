@@ -2,6 +2,11 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { configApi } from '@/services/api';
 import { IS_LEAD_GEN_MODE } from '@/lib/lead-gen';
 
+export interface FeatureGroup {
+  category: string;
+  items: string[];
+}
+
 export interface Package {
   id: string;
   name: string;
@@ -9,7 +14,8 @@ export interface Package {
   pricePerUserF3?: number;       // Web User (F3)
   pricePerLocation: number;
   frequency: 'monthly' | 'annually' | 'one-time';
-  features: string[];
+  features: string[];                  // legacy flat list
+  featureGroups?: FeatureGroup[];      // preferred categorized list
   isBestValue?: boolean;
   customerVisible?: boolean;
   cwAgreementTypeId?: number | null;
@@ -161,6 +167,29 @@ const defaultPackages: Package[] = [
       'DNS filtering',
       'Automated patching & software deployment',
     ],
+    featureGroups: [
+      { category: 'Support', items: [
+        '8×5 Support (Emergency Support Extra)',
+        'Helpdesk Button Support & Forms',
+        'Remote Management and Support',
+        'Network Operations Center (NOC)',
+      ]},
+      { category: 'Security', items: [
+        'Device Antivirus Protection',
+        'Managed Detection and Response (MDR)',
+        'Endpoint Detection and Response (EDR)',
+        'Security Operations Center (SOC)',
+        'DNS Filtering',
+        'Darkweb Monitoring',
+      ]},
+      { category: 'Management', items: [
+        'Automated Patching and Microsoft Update Deployment',
+        'Support for Firewall, Switch and UPS',
+        'Automated Software Deployment',
+        'Professional Services Automation (PSA)',
+        'Documentation and Password Repository',
+      ]},
+    ],
     isBestValue: false,
     customerVisible: false, // hidden from public pricing
     agreementMonths: 0,
@@ -184,6 +213,41 @@ const defaultPackages: Package[] = [
       'Email encryption',
       'Microsoft 365 backups',
     ],
+    featureGroups: [
+      { category: 'Support', items: [
+        '8×5 Support (Emergency Support Extra)',
+        'Helpdesk Button Support & Forms',
+        'Remote Management and Support',
+        'Network Operations Center (NOC)',
+        'Microsoft Office 365 Business Premium Licenses and Support Management',
+        'Vendor Liaison',
+      ]},
+      { category: 'Security', items: [
+        'Device Antivirus Protection',
+        'Managed Detection and Response (MDR)',
+        'Endpoint Detection and Response (EDR)',
+        'Security Operations Center (SOC)',
+        'DNS Filtering',
+        'Darkweb Monitoring',
+        'Privileged Access Manager (PAM) Self Authorization',
+        'Mobile Device Management (MDM)',
+        'Email MFA',
+        'Email Encryption',
+        'Single Sign-on (SSO)',
+      ]},
+      { category: 'Management', items: [
+        'Automated Patching and Microsoft Update Deployment',
+        'Support for Firewall, Switch and UPS',
+        'Automated Software Deployment',
+        'Professional Services Automation (PSA)',
+        'Documentation and Password Repository',
+        'Licensed User M365 Backups',
+        'Conditional Access',
+        'Self Service Password Resets',
+        'Cloud Print Solution',
+        'Tenant Branding',
+      ]},
+    ],
     isBestValue: true,
     customerVisible: true,
     agreementMonths: 36,
@@ -204,6 +268,48 @@ const defaultPackages: Package[] = [
       '24x7 support included',
       'On-site support included',
       'Advanced threat protection',
+    ],
+    featureGroups: [
+      { category: 'Support', items: [
+        '24×7 Support (Emergencies Included)',
+        'Helpdesk Button Support & Forms',
+        'Remote Management and Support',
+        'Network Operations Center (NOC)',
+        'Microsoft Office 365 Business Premium Licenses and Support Management',
+        'Vendor Liaison',
+        'Monthly Account Summary Reporting',
+      ]},
+      { category: 'Security', items: [
+        'Device Antivirus Protection',
+        'Managed Detection and Response (MDR)',
+        'Endpoint Detection and Response (EDR)',
+        'Security Operations Center (SOC)',
+        'DNS Filtering',
+        'Darkweb Monitoring',
+        'Privileged Access Manager (PAM) Self Authorization',
+        'Mobile Device Management (MDM)',
+        'Email MFA',
+        'Email Encryption',
+        'Single Sign-on (SSO)',
+        'Advanced Threat Protection (ATP)',
+        'Security Vulnerability Reporting',
+        'Security Awareness Training (SAT)',
+        'Duo Multi-Factor Authentication',
+        'Security Information and Event Management (SIEM)',
+      ]},
+      { category: 'Management', items: [
+        'Automated Patching and Microsoft Update Deployment',
+        'Support for Firewall, Switch and UPS',
+        'Automated Software Deployment',
+        'Professional Services Automation (PSA)',
+        'Documentation and Password Repository',
+        'Licensed User M365 Backups',
+        'Conditional Access',
+        'Self Service Password Resets',
+        'Cloud Print Solution',
+        'Tenant Branding',
+        'Cyber Insurance Application and Audit Reviews',
+      ]},
     ],
     isBestValue: false,
     customerVisible: true,

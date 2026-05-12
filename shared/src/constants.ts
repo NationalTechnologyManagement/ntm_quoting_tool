@@ -50,6 +50,7 @@ export const defaultPackages: Package[] = [
     pricePerLocation: 300,
     frequency: 'monthly',
     agreementMonths: 0, // month-to-month
+    // Legacy flat list — kept for snapshotted-quote backwards compat.
     features: [
       '8x5 business hours support (24x7 emergencies)',
       'Remote management & support',
@@ -57,6 +58,39 @@ export const defaultPackages: Package[] = [
       'Antivirus + MDR + EDR',
       'DNS filtering',
       'Automated patching & software deployment',
+    ],
+    // Canonical structured list rendered on the package card + contract PDF.
+    featureGroups: [
+      {
+        category: 'Support',
+        items: [
+          '8×5 Support (Emergency Support Extra)',
+          'Helpdesk Button Support & Forms',
+          'Remote Management and Support',
+          'Network Operations Center (NOC)',
+        ],
+      },
+      {
+        category: 'Security',
+        items: [
+          'Device Antivirus Protection',
+          'Managed Detection and Response (MDR)',
+          'Endpoint Detection and Response (EDR)',
+          'Security Operations Center (SOC)',
+          'DNS Filtering',
+          'Darkweb Monitoring',
+        ],
+      },
+      {
+        category: 'Management',
+        items: [
+          'Automated Patching and Microsoft Update Deployment',
+          'Support for Firewall, Switch and UPS',
+          'Automated Software Deployment',
+          'Professional Services Automation (PSA)',
+          'Documentation and Password Repository',
+        ],
+      },
     ],
     isBestValue: false,
     customerVisible: false, // hidden from public pricing per NTM
@@ -83,6 +117,50 @@ export const defaultPackages: Package[] = [
       'Email encryption',
       'Microsoft 365 backups',
     ],
+    featureGroups: [
+      {
+        category: 'Support',
+        items: [
+          '8×5 Support (Emergency Support Extra)',
+          'Helpdesk Button Support & Forms',
+          'Remote Management and Support',
+          'Network Operations Center (NOC)',
+          'Microsoft Office 365 Business Premium Licenses and Support Management',
+          'Vendor Liaison',
+        ],
+      },
+      {
+        category: 'Security',
+        items: [
+          'Device Antivirus Protection',
+          'Managed Detection and Response (MDR)',
+          'Endpoint Detection and Response (EDR)',
+          'Security Operations Center (SOC)',
+          'DNS Filtering',
+          'Darkweb Monitoring',
+          'Privileged Access Manager (PAM) Self Authorization',
+          'Mobile Device Management (MDM)',
+          'Email MFA',
+          'Email Encryption',
+          'Single Sign-on (SSO)',
+        ],
+      },
+      {
+        category: 'Management',
+        items: [
+          'Automated Patching and Microsoft Update Deployment',
+          'Support for Firewall, Switch and UPS',
+          'Automated Software Deployment',
+          'Professional Services Automation (PSA)',
+          'Documentation and Password Repository',
+          'Licensed User M365 Backups',
+          'Conditional Access',
+          'Self Service Password Resets',
+          'Cloud Print Solution',
+          'Tenant Branding',
+        ],
+      },
+    ],
     isBestValue: true,
     customerVisible: true,
     cwAgreementTypeId: 37, // CW: "00792 SafeSecure Package"
@@ -104,6 +182,57 @@ export const defaultPackages: Package[] = [
       '24x7 support included',
       'On-site support included',
       'Advanced threat protection',
+    ],
+    featureGroups: [
+      {
+        category: 'Support',
+        items: [
+          '24×7 Support (Emergencies Included)',
+          'Helpdesk Button Support & Forms',
+          'Remote Management and Support',
+          'Network Operations Center (NOC)',
+          'Microsoft Office 365 Business Premium Licenses and Support Management',
+          'Vendor Liaison',
+          'Monthly Account Summary Reporting',
+        ],
+      },
+      {
+        category: 'Security',
+        items: [
+          'Device Antivirus Protection',
+          'Managed Detection and Response (MDR)',
+          'Endpoint Detection and Response (EDR)',
+          'Security Operations Center (SOC)',
+          'DNS Filtering',
+          'Darkweb Monitoring',
+          'Privileged Access Manager (PAM) Self Authorization',
+          'Mobile Device Management (MDM)',
+          'Email MFA',
+          'Email Encryption',
+          'Single Sign-on (SSO)',
+          'Advanced Threat Protection (ATP)',
+          'Security Vulnerability Reporting',
+          'Security Awareness Training (SAT)',
+          'Duo Multi-Factor Authentication',
+          'Security Information and Event Management (SIEM)',
+        ],
+      },
+      {
+        category: 'Management',
+        items: [
+          'Automated Patching and Microsoft Update Deployment',
+          'Support for Firewall, Switch and UPS',
+          'Automated Software Deployment',
+          'Professional Services Automation (PSA)',
+          'Documentation and Password Repository',
+          'Licensed User M365 Backups',
+          'Conditional Access',
+          'Self Service Password Resets',
+          'Cloud Print Solution',
+          'Tenant Branding',
+          'Cyber Insurance Application and Audit Reviews',
+        ],
+      },
     ],
     isBestValue: false,
     customerVisible: true,
