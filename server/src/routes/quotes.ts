@@ -62,6 +62,10 @@ const createQuoteSchema = z.object({
     url: z.string(),
     content: z.string(),
   }),
+  // Optional — admin-created quotes can pre-assign a sales rep so the
+  // auto-CC on send-quote works out of the box. Customer-built quotes
+  // omit this; an admin can assign one later.
+  salesRepId: z.string().nullable().optional(),
 });
 
 // Create a new quote
@@ -146,9 +150,16 @@ router.post('/api/quotes/:id/email', async (req, res) => {
   const quote = await quoteService.getQuote(id);
   await quoteService.updateQuoteStatus(quote.quoteNumber, 'sent');
 
+  // Auto-CC the assigned sales rep, if any, so they always get a copy
+  // without the admin having to type their address every time. Caller-
+  // supplied CCs stack on top.
+  const repEmail = quote.salesRep?.email;
+  const cc = [...(body.cc ?? [])];
+  if (repEmail) cc.push(repEmail);
+
   const emailResult = await emailService.sendQuoteEmail(
     { ...quote, status: 'sent' },
-    { additionalTo: body.additionalTo, cc: body.cc },
+    { additionalTo: body.additionalTo, cc },
   );
 
   // Fire-and-forget: GHL note

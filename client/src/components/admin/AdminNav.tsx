@@ -4,7 +4,14 @@ import { Button } from '@/components/ui/button';
 import { LogOut, ExternalLink, PlusCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
-const NAV_ITEMS = [
+type NavItem = {
+  path: string;
+  label: string;
+  match?: (p: string) => boolean;
+  adminOnly?: boolean;
+};
+
+const NAV_ITEMS: NavItem[] = [
   { path: '/admin/quotes', label: 'Quotes', match: (p: string) => p.startsWith('/admin/quotes') },
   { path: '/admin/logs', label: 'Logs' },
   { path: '/admin/packages', label: 'Packages' },
@@ -20,12 +27,13 @@ const NAV_ITEMS = [
     label: 'Contract',
     match: (p: string) => p.startsWith('/admin/contracts'),
   },
+  { path: '/admin/users', label: 'Users', adminOnly: true },
   { path: '/admin/account', label: 'Account' },
-] as const;
+];
 
 const AdminNav = () => {
   const navigate = useNavigate();
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
 
   const handleLogout = () => {
     logout();
@@ -34,10 +42,9 @@ const AdminNav = () => {
   };
 
   const currentPath = window.location.pathname;
-  const isActive = (item: (typeof NAV_ITEMS)[number]) =>
-    'match' in item && typeof item.match === 'function'
-      ? item.match(currentPath)
-      : currentPath === item.path;
+  const visibleItems = NAV_ITEMS.filter((item) => !item.adminOnly || user?.role === 'admin');
+  const isActive = (item: NavItem) =>
+    typeof item.match === 'function' ? item.match(currentPath) : currentPath === item.path;
 
   return (
     <nav className="bg-card border-b border-border shadow-sm">
@@ -80,7 +87,7 @@ const AdminNav = () => {
         {/* Bottom row: section navigation. Horizontally scrollable on narrow screens. */}
         <div className="mt-3 -mx-4 px-4 overflow-x-auto">
           <div className="flex gap-1 min-w-max">
-            {NAV_ITEMS.map((item) => (
+            {visibleItems.map((item) => (
               <Button
                 key={item.path}
                 variant={isActive(item) ? 'default' : 'ghost'}

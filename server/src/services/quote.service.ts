@@ -1,5 +1,4 @@
 import { prisma } from '../config/prisma.js';
-import { env } from '../config/env.js';
 import { AppError } from '../middleware/error-handler.js';
 import { QUOTE_VALIDITY_DAYS } from '@ntm/shared';
 import type { CreateQuotePayload, QuoteData, CheckoutPayload } from '@ntm/shared';
@@ -11,7 +10,9 @@ function generateQuoteNumber(): string {
   return `QT-${date}-${rand}`;
 }
 
-export async function createQuote(payload: CreateQuotePayload): Promise<QuoteData> {
+export async function createQuote(
+  payload: CreateQuotePayload & { salesRepId?: string | null },
+): Promise<QuoteData> {
   const quoteNumber = generateQuoteNumber();
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + QUOTE_VALIDITY_DAYS);
@@ -28,7 +29,9 @@ export async function createQuote(payload: CreateQuotePayload): Promise<QuoteDat
       totals: payload.totals as any,
       terms: payload.terms as any,
       expiresAt,
+      salesRepId: payload.salesRepId ?? null,
     },
+    include: { salesRep: { select: { id: true, email: true, name: true } } },
   });
 
   return mapQuoteToData(quote);
@@ -43,6 +46,7 @@ export async function getQuote(quoteId: string): Promise<QuoteData> {
         { id: quoteId },
       ],
     },
+    include: { salesRep: { select: { id: true, email: true, name: true } } },
   });
 
   if (!quote) throw new AppError(404, 'Quote not found');
@@ -195,6 +199,16 @@ export async function updateQuoteStatus(quoteNumber: string, status: string) {
   });
 }
 
+// Assign or clear the sales rep on an existing quote. Pass null to unassign.
+export async function assignSalesRep(quoteNumber: string, salesRepId: string | null) {
+  const updated = await prisma.quote.update({
+    where: { quoteNumber },
+    data: { salesRepId },
+    include: { salesRep: { select: { id: true, email: true, name: true } } },
+  });
+  return mapQuoteToData(updated);
+}
+
 export async function updateQuoteAgreement(quoteNumber: string, payload: CheckoutPayload) {
   const quote = await prisma.quote.update({
     where: { quoteNumber },
@@ -323,7 +337,6 @@ async function recalcAndSaveQuote(quote: any, promos: any[]): Promise<any> {
 }
 
 function mapQuoteToData(quote: any): QuoteData {
-  const quoteUrl = `${env.FRONTEND_URL}/quote-review?id=${quote.quoteNumber}`;
   return {
     quoteNumber: quote.quoteNumber,
     customer: quote.customer as QuoteData['customer'],
@@ -346,6 +359,10 @@ function mapQuoteToData(quote: any): QuoteData {
     ghlContactId: quote.ghlContactId ?? undefined,
     ghlOpportunityId: quote.ghlOpportunityId ?? undefined,
     notes: quote.notes ?? undefined,
+    salesRepId: quote.salesRepId ?? undefined,
+    salesRep: quote.salesRep
+      ? { id: quote.salesRep.id, email: quote.salesRep.email, name: quote.salesRep.name }
+      : undefined,
     timestamp: quote.createdAt.toISOString(),
   };
 }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useQuote } from '@/contexts/QuoteContext';
-import { adminApi, quoteApi } from '@/services/api';
+import { adminApi, quoteApi, usersApi } from '@/services/api';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -59,9 +59,25 @@ const CreateQuote = () => {
 
   const [notes, setNotes] = useState('');
 
+  // Sales rep assignment — defaults to the current admin (if they're an
+  // active rep) so quotes get attributed to whoever's typing them.
+  const [salesRepId, setSalesRepId] = useState<string>('');
+  const [salesReps, setSalesReps] = useState<
+    Array<{ id: string; email: string; name: string | null; role: string }>
+  >([]);
+
   useEffect(() => {
     if (!isAuthenticated) navigate('/admin/login');
   }, [isAuthenticated, navigate]);
+
+  useEffect(() => {
+    usersApi
+      .listSalesReps()
+      .then((r) => setSalesReps(r.reps))
+      .catch(() => {
+        /* non-fatal */
+      });
+  }, []);
 
   useEffect(() => {
     (async () => {
@@ -218,6 +234,7 @@ const CreateQuote = () => {
           url: `${window.location.origin}/terms`,
           content: termsContent.content,
         },
+        salesRepId: salesRepId || null,
       };
 
       const created = await quoteApi.create(payload);
@@ -485,6 +502,30 @@ const CreateQuote = () => {
               ))}
             </div>
           )}
+        </Card>
+
+        {/* Sales rep assignment */}
+        <Card className="p-6 space-y-2">
+          <h3 className="text-lg font-semibold">Sales Rep</h3>
+          <Select
+            value={salesRepId || 'none'}
+            onValueChange={(v) => setSalesRepId(v === 'none' ? '' : v)}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Unassigned" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">Unassigned</SelectItem>
+              {salesReps.map((r) => (
+                <SelectItem key={r.id} value={r.id}>
+                  {r.name || r.email} ({r.role === 'admin' ? 'Admin' : 'Sales Rep'})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            The rep is auto-CCed when the quote is emailed and tracks who owns this opportunity.
+          </p>
         </Card>
 
         {/* Notes */}

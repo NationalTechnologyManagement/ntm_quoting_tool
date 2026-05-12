@@ -208,6 +208,9 @@ export interface QuoteData {
   // Admin-edited free-text notes shown to the customer + copied into the
   // contract PDF. Captures anything the structured fields don't.
   notes?: string;
+  // Assigned sales rep — used to auto-CC their email when the quote is sent.
+  salesRepId?: string;
+  salesRep?: { id: string; email: string; name?: string | null };
   timestamp: string;
 }
 

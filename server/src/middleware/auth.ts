@@ -6,6 +6,7 @@ import { AppError } from './error-handler.js';
 export interface AuthPayload {
   userId: string;
   email: string;
+  role: string;
 }
 
 declare global {
@@ -25,9 +26,22 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction) {
   const token = header.slice(7);
   try {
     const payload = jwt.verify(token, env.JWT_SECRET) as AuthPayload;
-    req.admin = payload;
+    // Backfill role for legacy tokens issued before the role field existed.
+    req.admin = { ...payload, role: payload.role ?? 'admin' };
     next();
   } catch {
     throw new AppError(401, 'Invalid or expired token');
   }
+}
+
+// Role gate. Pass one or more role names; the authenticated user must hold
+// one of them. Always chain after requireAuth.
+export function requireRole(...allowed: string[]) {
+  return (req: Request, _res: Response, next: NextFunction) => {
+    if (!req.admin) throw new AppError(401, 'Not authenticated');
+    if (!allowed.includes(req.admin.role)) {
+      throw new AppError(403, 'You do not have permission to do that');
+    }
+    next();
+  };
 }

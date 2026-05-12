@@ -89,6 +89,7 @@ router.get('/api/admin/quotes/:id', requireAuth, async (req, res) => {
         select: { id: true, quoteNumber: true, status: true, totals: true, createdAt: true },
         orderBy: { createdAt: 'desc' },
       },
+      salesRep: { select: { id: true, email: true, name: true } },
     },
   });
 
@@ -99,6 +100,29 @@ router.get('/api/admin/quotes/:id', requireAuth, async (req, res) => {
 
   res.json(quote);
 });
+
+// Assign / unassign the sales rep on a quote. salesRepId=null clears it.
+const assignSalesRepSchema = z.object({
+  salesRepId: z.string().nullable(),
+});
+router.patch(
+  '/api/admin/quotes/:id/sales-rep',
+  requireAuth,
+  validate(assignSalesRepSchema),
+  async (req, res) => {
+    const id = req.params.id as string;
+    const quote = await prisma.quote.findFirst({
+      where: { OR: [{ id }, { quoteNumber: id }] },
+      select: { quoteNumber: true },
+    });
+    if (!quote) {
+      res.status(404).json({ error: 'Quote not found' });
+      return;
+    }
+    const updated = await quoteService.assignSalesRep(quote.quoteNumber, req.body.salesRepId);
+    res.json(updated);
+  },
+);
 
 // CW provisioning step state for a quote (used by admin UI's retry view)
 router.get('/api/admin/quotes/:id/provisioning', requireAuth, async (req, res) => {

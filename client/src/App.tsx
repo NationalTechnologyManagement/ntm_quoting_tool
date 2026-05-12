@@ -15,6 +15,9 @@ import QuoteReview from "./pages/QuoteReview";
 import PaymentSuccess from "./pages/PaymentSuccess";
 import PaymentCancelled from "./pages/PaymentCancelled";
 import Login from "./pages/admin/Login";
+import TwoFactorSetup from "./pages/admin/TwoFactorSetup";
+import AcceptInvite from "./pages/admin/AcceptInvite";
+import Users from "./pages/admin/Users";
 import PackageManagement from "./pages/admin/PackageManagement";
 import AddonManagement from "./pages/admin/AddonManagement";
 import PromoCodeManagement from "./pages/admin/PromoCodeManagement";
@@ -54,6 +57,9 @@ const App = () => (
                 <Route path="/payment-cancelled" element={<PaymentCancelled />} />
                 <Route path="/quote-lookup" element={<QuoteLookup />} />
                 <Route path="/admin/login" element={<Login />} />
+                <Route path="/admin/2fa-setup" element={<TwoFactorSetup />} />
+                <Route path="/admin/accept-invite" element={<AcceptInvite />} />
+                <Route path="/admin/users" element={<Users />} />
                 <Route path="/admin/quotes" element={<QuoteManagement />} />
                 <Route path="/admin/quotes/new" element={<CreateQuote />} />
                 <Route path="/admin/quotes/:id" element={<QuoteDetail />} />

@@ -30,7 +30,7 @@ import {
   RotateCw,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { adminApi, quoteApi } from '@/services/api';
+import { adminApi, quoteApi, usersApi } from '@/services/api';
 import AdminNav from '@/components/admin/AdminNav';
 import { CONTRACT_TERM_OPTIONS, formatContractTerm } from '@/lib/utils';
 
@@ -90,6 +90,36 @@ const QuoteDetail = () => {
   const [applyingPromo, setApplyingPromo] = useState<string | null>(null);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [refreshingPkg, setRefreshingPkg] = useState(false);
+
+  // Sales reps for the assignment picker + auto-CC on Send Quote.
+  const [salesReps, setSalesReps] = useState<
+    Array<{ id: string; email: string; name: string | null; role: string }>
+  >([]);
+  const [assigningRep, setAssigningRep] = useState(false);
+
+  useEffect(() => {
+    usersApi
+      .listSalesReps()
+      .then((r) => setSalesReps(r.reps))
+      .catch(() => {
+        /* non-fatal */
+      });
+  }, []);
+
+  const assignRep = async (salesRepId: string | null) => {
+    if (!quote) return;
+    setAssigningRep(true);
+    try {
+      await usersApi.assignSalesRep(quote.quoteNumber, salesRepId);
+      const rep = salesRepId ? salesReps.find((r) => r.id === salesRepId) : null;
+      toast.success(rep ? `Assigned to ${rep.name || rep.email}` : 'Sales rep cleared');
+      await fetchQuote();
+    } catch (e: any) {
+      toast.error(e?.message || 'Could not assign sales rep');
+    } finally {
+      setAssigningRep(false);
+    }
+  };
 
   const refreshPackage = async () => {
     if (!quote) return;
@@ -449,8 +479,16 @@ const QuoteDetail = () => {
             <DialogTitle>Send Quote via Email</DialogTitle>
             <DialogDescription>
               The customer at <span className="font-medium">{quote.customer?.email}</span> is always
-              included. Add any additional recipients or sales rep below. Separate addresses with
-              commas, semicolons, or spaces.
+              included
+              {(quote as any).salesRep?.email && (
+                <>
+                  , and the assigned sales rep{' '}
+                  <span className="font-medium">{(quote as any).salesRep.email}</span> is
+                  auto-CCed
+                </>
+              )}
+              . Add any additional recipients below. Separate addresses with commas, semicolons, or
+              spaces.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -544,7 +582,33 @@ const QuoteDetail = () => {
             </div>
           </div>
 
-          <div className="flex gap-2 mt-4">
+          <div className="mt-4 pt-4 border-t flex items-center gap-3 text-sm flex-wrap">
+            <span className="text-muted-foreground">Assigned sales rep:</span>
+            <Select
+              value={(quote as any).salesRepId ?? 'none'}
+              onValueChange={(v) => assignRep(v === 'none' ? null : v)}
+              disabled={assigningRep}
+            >
+              <SelectTrigger className="w-[260px] h-8">
+                <SelectValue placeholder="Unassigned" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Unassigned</SelectItem>
+                {salesReps.map((r) => (
+                  <SelectItem key={r.id} value={r.id}>
+                    {r.name || r.email} ({r.role === 'admin' ? 'Admin' : 'Sales Rep'})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {(quote as any).salesRep?.email && (
+              <span className="text-xs text-muted-foreground">
+                Auto-CCed on Send Quote → {(quote as any).salesRep.email}
+              </span>
+            )}
+          </div>
+
+          <div className="flex gap-2 mt-4 flex-wrap">
             <Button
               variant="outline"
               size="sm"

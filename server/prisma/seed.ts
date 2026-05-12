@@ -147,10 +147,15 @@ async function main() {
 
   await prisma.adminUser.upsert({
     where: { email },
-    update: { passwordHash: hash },
+    // Don't overwrite admin-set fields on every deploy — only fill in defaults
+    // on first create. Re-running the seed updates passwordHash from
+    // INITIAL_ADMIN_PASSWORD only if the env var is set, otherwise leaves it.
+    update: process.env.INITIAL_ADMIN_PASSWORD ? { passwordHash: hash } : {},
     create: {
       email,
       passwordHash: hash,
+      role: 'admin',
+      active: true,
     },
   });
   console.log(`  ✓ Admin user: ${email}`);

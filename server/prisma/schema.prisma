@@ -174,6 +174,12 @@ model Quote {
   // pricing rationale, hand-off instructions, etc.).
   notes              String?
 
+  // Assigned sales rep — used to auto-CC them when the quote is emailed
+  // and to enable per-rep reporting later. Nullable: legacy quotes and
+  // self-serve customer quotes have no rep.
+  salesRepId         String?
+  salesRep           AdminUser? @relation("QuoteSalesRep", fields: [salesRepId], references: [id])
+
   // Provisioning state (populated by the CW step machine).
   // pending = nothing started; provisioned = all required steps ok;
   // partial = some non-critical step failed and was logged for retry;
@@ -195,6 +201,7 @@ model Quote {
   @@index([provisioningStatus])
   @@index([parentQuoteId])
   @@index([followupSentAt])
+  @@index([salesRepId])
   @@map("quotes")
 }
 
@@ -237,14 +244,69 @@ model Contract {
 
 // ── Admin Users ──────────────────────────────────────────────────────
 
+// Internal staff with admin-portal access. Two roles:
+//   admin     — full access (settings, integrations, user management)
+//   sales_rep — quote create/view/send + assign self as rep on quotes
+// 2FA enforcement: required after first login. twoFactorMethod is null until
+// the user enrolls (forced on first successful password login). Once set,
+// every subsequent login requires the second factor.
 model AdminUser {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                String   @id @default(cuid())
+  email             String   @unique
+  passwordHash      String?  // null for users who joined via invite but haven't accepted yet
+  name              String?
+  role              String   @default("admin") // admin | sales_rep
+  active            Boolean  @default(true)
+
+  // 2FA
+  twoFactorMethod   String?  // null | 'totp' | 'email'
+  twoFactorSecret   String?  // base32 TOTP secret (encrypted at rest? — DB is trusted boundary for now)
+  recoveryCodesHash Json     @default("[]") // bcrypt-hashed one-time recovery codes
+
+  lastLoginAt       DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  invitesSent       Invite[] @relation("InvitedBy")
+  quotesAsRep       Quote[]  @relation("QuoteSalesRep")
+  emailCodes        EmailLoginCode[]
 
   @@map("admin_users")
+}
+
+// One-time invite tokens. Admin generates, recipient clicks the email link,
+// sets password + enrolls 2FA. Token is stored as a sha256 hash so a DB
+// leak doesn't yield usable invite links. Single-use: acceptedAt seals it.
+model Invite {
+  id           String   @id @default(cuid())
+  email        String
+  role         String   @default("sales_rep")
+  tokenHash    String   @unique
+  invitedById  String?
+  invitedBy    AdminUser? @relation("InvitedBy", fields: [invitedById], references: [id])
+  expiresAt    DateTime
+  acceptedAt   DateTime?
+  acceptedUserId String?
+  createdAt    DateTime @default(now())
+
+  @@index([email])
+  @@map("admin_invites")
+}
+
+// Short-lived email-delivered 2FA codes (for users who chose 'email' over TOTP).
+// One pending row per (userId); old rows are deleted on each issue. Code is
+// stored hashed and expires in 10 minutes.
+model EmailLoginCode {
+  id        String   @id @default(cuid())
+  userId    String
+  user      AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("admin_email_login_codes")
 }
 
 // ── Integration Credentials ──────────────────────────────────────────

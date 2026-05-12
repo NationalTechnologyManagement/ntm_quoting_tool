@@ -59,14 +59,134 @@ export const configApi = {
 
 // ── Auth ────────────────────────────────────────────────────────────
 
+export type LoginResponse =
+  | {
+      status: 'ok';
+      token: string;
+      user: { id: string; email: string; role: string; name: string | null };
+    }
+  | { status: 'needs_setup'; setupToken: string; email: string }
+  | {
+      status: 'needs_2fa';
+      challengeToken: string;
+      method: 'totp' | 'email';
+      email: string;
+    };
+
 export const authApi = {
   login: (email: string, password: string) =>
-    apiRequest<{ token: string; user: { id: string; email: string } }>(
-      '/api/admin/login',
-      { method: 'POST', body: JSON.stringify({ email, password }) },
-    ),
+    apiRequest<LoginResponse>('/api/admin/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    }),
+  verify2fa: (challengeToken: string, code: string) =>
+    apiRequest<{
+      token: string;
+      user: { id: string; email: string; role: string; name: string | null };
+    }>('/api/admin/login/verify', {
+      method: 'POST',
+      body: JSON.stringify({ challengeToken, code }),
+    }),
+  resendEmailCode: (challengeToken: string) =>
+    apiRequest<{ success: boolean }>('/api/admin/login/resend-code', {
+      method: 'POST',
+      body: JSON.stringify({ challengeToken }),
+    }),
+  setup2faStart: (setupToken: string, method: 'totp' | 'email') =>
+    apiRequest<
+      | { method: 'totp'; secret: string; otpauthUri: string; qrDataUrl: string }
+      | { method: 'email'; email: string }
+    >('/api/admin/2fa/setup/start', {
+      method: 'POST',
+      body: JSON.stringify({ setupToken, method }),
+    }),
+  setup2faConfirm: (setupToken: string, method: 'totp' | 'email', code: string) =>
+    apiRequest<{
+      token: string;
+      user: { id: string; email: string; role: string; name: string | null };
+      recoveryCodes: string[];
+    }>('/api/admin/2fa/setup/confirm', {
+      method: 'POST',
+      body: JSON.stringify({ setupToken, method, code }),
+    }),
   me: () =>
-    apiRequest<{ user: { userId: string; email: string } }>('/api/admin/me'),
+    apiRequest<{
+      user: { userId: string; email: string; role: string };
+    }>('/api/admin/me'),
+  getInvite: (token: string) =>
+    apiRequest<{ email: string; role: string; expiresAt: string }>(
+      `/api/admin/invites/${encodeURIComponent(token)}`,
+    ),
+  acceptInvite: (token: string, name: string, password: string) =>
+    apiRequest<{
+      userId: string;
+      email: string;
+      role: string;
+      setupToken: string;
+    }>(`/api/admin/invites/${encodeURIComponent(token)}/accept`, {
+      method: 'POST',
+      body: JSON.stringify({ name, password }),
+    }),
+};
+
+// ── Users / invites (admin) ─────────────────────────────────────────
+
+export const usersApi = {
+  list: () =>
+    apiRequest<{
+      users: Array<{
+        id: string;
+        email: string;
+        name: string | null;
+        role: string;
+        active: boolean;
+        twoFactorMethod: string | null;
+        lastLoginAt: string | null;
+        createdAt: string;
+      }>;
+    }>('/api/admin/users'),
+  invite: (email: string, role: 'admin' | 'sales_rep') =>
+    apiRequest<{ inviteId: string; expiresAt: string }>('/api/admin/users/invite', {
+      method: 'POST',
+      body: JSON.stringify({ email, role }),
+    }),
+  listInvites: () =>
+    apiRequest<{
+      invites: Array<{
+        id: string;
+        email: string;
+        role: string;
+        expiresAt: string;
+        acceptedAt: string | null;
+        createdAt: string;
+        invitedBy: { id: string; email: string; name: string | null } | null;
+      }>;
+    }>('/api/admin/invites'),
+  revokeInvite: (id: string) =>
+    apiRequest<{ success: boolean }>(`/api/admin/invites/${id}`, { method: 'DELETE' }),
+  setActive: (id: string, active: boolean) =>
+    apiRequest<{ success: boolean }>(`/api/admin/users/${id}/active`, {
+      method: 'PATCH',
+      body: JSON.stringify({ active }),
+    }),
+  setRole: (id: string, role: 'admin' | 'sales_rep') =>
+    apiRequest<{ success: boolean }>(`/api/admin/users/${id}/role`, {
+      method: 'PATCH',
+      body: JSON.stringify({ role }),
+    }),
+  reset2fa: (id: string) =>
+    apiRequest<{ success: boolean }>(`/api/admin/users/${id}/reset-2fa`, { method: 'POST' }),
+  remove: (id: string) =>
+    apiRequest<{ success: boolean }>(`/api/admin/users/${id}`, { method: 'DELETE' }),
+  listSalesReps: () =>
+    apiRequest<{
+      reps: Array<{ id: string; email: string; name: string | null; role: string }>;
+    }>('/api/admin/sales-reps'),
+  assignSalesRep: (quoteId: string, salesRepId: string | null) =>
+    apiRequest<any>(`/api/admin/quotes/${quoteId}/sales-rep`, {
+      method: 'PATCH',
+      body: JSON.stringify({ salesRepId }),
+    }),
 };
 
 // ── Quotes ──────────────────────────────────────────────────────────

@@ -6,6 +6,7 @@ import { buildQuoteEmailHtml } from '../templates/quote-email.js';
 import { buildPaymentConfirmationHtml } from '../templates/payment-confirmation.js';
 import { buildPaymentReceivedHtml } from '../templates/payment-received.js';
 import { buildQuoteFollowupHtml } from '../templates/quote-followup.js';
+import { buildAdminInviteHtml, buildLoginCodeHtml } from '../templates/admin-invite.js';
 
 const fromEmail = () => cred('FROM_EMAIL') || env.FROM_EMAIL;
 
@@ -136,5 +137,51 @@ export async function sendPaymentConfirmationEmail(quote: QuoteData) {
     html,
   });
 
+  return { success: true, id: result.data?.id };
+}
+
+// Admin-portal invite (new staff joining the team).
+export async function sendAdminInviteEmail(opts: {
+  inviteeEmail: string;
+  inviterName: string;
+  role: string;
+  acceptUrl: string;
+  expiresAt: Date;
+}) {
+  const resend = getResend();
+  if (!resend) {
+    console.warn('[Email] Resend not configured — skipping admin invite email');
+    return { success: true, skipped: true };
+  }
+
+  const html = buildAdminInviteHtml(opts);
+  const result = await resend.emails.send({
+    from: fromEmail(),
+    to: opts.inviteeEmail,
+    subject: `You're invited to the NTM admin portal`,
+    html,
+  });
+  return { success: true, id: result.data?.id };
+}
+
+// 2FA email code (for users who chose 'email' over TOTP).
+export async function sendLoginCodeEmail(opts: {
+  email: string;
+  code: string;
+  expiresInMinutes: number;
+}) {
+  const resend = getResend();
+  if (!resend) {
+    console.warn('[Email] Resend not configured — skipping login code email');
+    return { success: true, skipped: true };
+  }
+
+  const html = buildLoginCodeHtml(opts);
+  const result = await resend.emails.send({
+    from: fromEmail(),
+    to: opts.email,
+    subject: `NTM login code: ${opts.code}`,
+    html,
+  });
   return { success: true, id: result.data?.id };
 }
