@@ -462,6 +462,35 @@ export const adminApi = {
     }),
   deleteAiKb: (id: string) =>
     apiRequest<{ success: true }>(`/api/admin/ai-chat/kb/${id}`, { method: 'DELETE' }),
+  getAiChatSession: (id: string) =>
+    apiRequest<{
+      session: {
+        id: string;
+        status: string;
+        usdSpent: number;
+        tokensIn: number;
+        tokensOut: number;
+        usingFallback: boolean;
+        ipAddress: string | null;
+        userAgent: string | null;
+        quoteId: string | null;
+        createdAt: string;
+        endedAt: string | null;
+        lastActivityAt: string;
+        messages: Array<{
+          id: string;
+          role: 'user' | 'assistant' | 'system' | 'tool';
+          content: string;
+          model: string | null;
+          tokensIn: number | null;
+          tokensOut: number | null;
+          usdCost: number;
+          fallback: boolean;
+          toolCalls: any | null;
+          createdAt: string;
+        }>;
+      };
+    }>(`/api/admin/ai-chat/sessions/${encodeURIComponent(id)}`),
   uploadAiKb: (file: File, title?: string) => {
     // Multipart upload — apiRequest already skips the JSON Content-Type when
     // the body is FormData and lets the browser set the boundary itself.

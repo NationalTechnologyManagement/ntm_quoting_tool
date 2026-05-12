@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
@@ -633,8 +633,31 @@ function KbEditor({ docs, onChange }: { docs: any[]; onChange: () => void }) {
 }
 
 function UsageDashboard({ usage }: { usage: any }) {
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [transcripts, setTranscripts] = useState<
+    Record<string, Awaited<ReturnType<typeof adminApi.getAiChatSession>>['session'] | 'loading' | 'error'>
+  >({});
+
   if (!usage) return <Card className="p-6"><Loader2 className="w-5 h-5 animate-spin" /></Card>;
   const fmtUsd = (n: number) => `$${n.toFixed(4)}`;
+
+  const toggleSession = async (id: string) => {
+    if (openId === id) {
+      setOpenId(null);
+      return;
+    }
+    setOpenId(id);
+    if (transcripts[id] && transcripts[id] !== 'error') return;
+    setTranscripts((t) => ({ ...t, [id]: 'loading' }));
+    try {
+      const r = await adminApi.getAiChatSession(id);
+      setTranscripts((t) => ({ ...t, [id]: r.session }));
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to load transcript');
+      setTranscripts((t) => ({ ...t, [id]: 'error' }));
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -645,10 +668,15 @@ function UsageDashboard({ usage }: { usage: any }) {
       </div>
       <Card className="p-6">
         <h3 className="font-semibold mb-3">Recent sessions</h3>
+        <p className="text-xs text-muted-foreground mb-3">
+          Click a row to expand the full transcript. Customer PII (emails, phones) is redacted
+          before storage; tool calls show as small chips inline.
+        </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-muted-foreground border-b border-border">
+                <th className="py-2 pr-4 w-6"></th>
                 <th className="py-2 pr-4">Started</th>
                 <th className="py-2 pr-4">Status</th>
                 <th className="py-2 pr-4">Msgs</th>
@@ -658,28 +686,127 @@ function UsageDashboard({ usage }: { usage: any }) {
               </tr>
             </thead>
             <tbody>
-              {usage.recentSessions.map((s: any) => (
-                <tr key={s.id} className="border-b border-border/50">
-                  <td className="py-2 pr-4">{new Date(s.createdAt).toLocaleString()}</td>
-                  <td className="py-2 pr-4">
-                    <Badge variant="secondary" className="text-xs">{s.status}</Badge>
-                    {s.usingFallback && <Badge variant="outline" className="ml-1 text-xs">fallback</Badge>}
-                  </td>
-                  <td className="py-2 pr-4">{s._count.messages}</td>
-                  <td className="py-2 pr-4">{fmtUsd(s.usdSpent)}</td>
-                  <td className="py-2 pr-4 font-mono text-xs">{s.quoteId?.slice(0, 8) ?? '—'}</td>
-                  <td className="py-2 pr-4 font-mono text-xs">{s.ipAddress ?? '—'}</td>
-                </tr>
-              ))}
+              {usage.recentSessions.map((s: any) => {
+                const isOpen = openId === s.id;
+                const t = transcripts[s.id];
+                return (
+                  <Fragment key={s.id}>
+                    <tr
+                      className="border-b border-border/50 cursor-pointer hover:bg-secondary/30"
+                      onClick={() => toggleSession(s.id)}
+                    >
+                      <td className="py-2 pr-2 text-muted-foreground">
+                        {isOpen ? '▾' : '▸'}
+                      </td>
+                      <td className="py-2 pr-4">{new Date(s.createdAt).toLocaleString()}</td>
+                      <td className="py-2 pr-4">
+                        <Badge variant="secondary" className="text-xs">{s.status}</Badge>
+                        {s.usingFallback && <Badge variant="outline" className="ml-1 text-xs">fallback</Badge>}
+                      </td>
+                      <td className="py-2 pr-4">{s._count.messages}</td>
+                      <td className="py-2 pr-4">{fmtUsd(s.usdSpent)}</td>
+                      <td className="py-2 pr-4 font-mono text-xs">{s.quoteId?.slice(0, 8) ?? '—'}</td>
+                      <td className="py-2 pr-4 font-mono text-xs">{s.ipAddress ?? '—'}</td>
+                    </tr>
+                    {isOpen && (
+                      <tr className="border-b border-border/50 bg-secondary/20">
+                        <td colSpan={7} className="p-4">
+                          {t === 'loading' && (
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+                              <Loader2 className="w-4 h-4 animate-spin" /> Loading transcript…
+                            </div>
+                          )}
+                          {t === 'error' && (
+                            <p className="text-sm text-destructive py-2">Could not load this transcript.</p>
+                          )}
+                          {t && t !== 'loading' && t !== 'error' && <Transcript session={t} />}
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
               {usage.recentSessions.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-6 text-center text-muted-foreground">No sessions yet.</td>
+                  <td colSpan={7} className="py-6 text-center text-muted-foreground">No sessions yet.</td>
                 </tr>
               )}
             </tbody>
           </table>
         </div>
       </Card>
+    </div>
+  );
+}
+
+function Transcript({ session }: { session: Awaited<ReturnType<typeof adminApi.getAiChatSession>>['session'] }) {
+  if (session.messages.length === 0) {
+    return <p className="text-sm text-muted-foreground italic">No messages in this session.</p>;
+  }
+  return (
+    <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
+      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground pb-2 border-b border-border">
+        <span>Session <code className="font-mono">{session.id.slice(0, 12)}</code></span>
+        <span>·</span>
+        <span>{session.messages.length} messages</span>
+        <span>·</span>
+        <span>{session.tokensIn.toLocaleString()} in / {session.tokensOut.toLocaleString()} out tokens</span>
+        <span>·</span>
+        <span>${session.usdSpent.toFixed(4)} spent</span>
+        {session.endedAt && (
+          <>
+            <span>·</span>
+            <span>Ended {new Date(session.endedAt).toLocaleString()}</span>
+          </>
+        )}
+      </div>
+      {session.messages.map((m) => {
+        const isUser = m.role === 'user';
+        const isAssistant = m.role === 'assistant';
+        const tools = Array.isArray(m.toolCalls) ? m.toolCalls : [];
+        return (
+          <div key={m.id} className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+            <div
+              className={[
+                'max-w-[85%] rounded-lg px-3 py-2 text-sm',
+                isUser
+                  ? 'bg-primary text-primary-foreground rounded-br-sm'
+                  : isAssistant
+                    ? 'bg-card border border-border rounded-bl-sm'
+                    : 'bg-muted text-muted-foreground border border-border',
+              ].join(' ')}
+            >
+              <div className="flex items-center gap-2 mb-1 text-[10px] uppercase tracking-wider opacity-70">
+                <span>{m.role}</span>
+                <span>·</span>
+                <span>{new Date(m.createdAt).toLocaleTimeString()}</span>
+                {m.fallback && <Badge variant="outline" className="text-[9px] py-0">fallback</Badge>}
+              </div>
+              <div className="whitespace-pre-wrap break-words">
+                {m.content || <span className="italic opacity-60">(empty — tool-only turn)</span>}
+              </div>
+              {tools.length > 0 && (
+                <div className="mt-2 space-y-1">
+                  {tools.map((tc: any, i: number) => (
+                    <div
+                      key={i}
+                      className="text-[10px] font-mono px-2 py-1 rounded bg-black/10 dark:bg-white/10"
+                    >
+                      <span className="font-semibold">{tc.function?.name || tc.name}</span>
+                      {tc.function?.arguments && (
+                        <span className="opacity-70"> — {tc.function.arguments}</span>
+                      )}
+                      {tc.arguments && !tc.function && (
+                        <span className="opacity-70"> — {typeof tc.arguments === 'string' ? tc.arguments : JSON.stringify(tc.arguments)}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
