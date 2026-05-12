@@ -39,7 +39,7 @@ export async function createLead(payload: LeadPayload) {
         address1: payload.customer.address,
         locationId: cred('GHL_LOCATION_ID'),
         source: payload.source,
-        tags: ['quote-builder'],
+        tags: ['quote-builder', 'Protect'],
         customFields: [
           { key: 'userCount', field_value: String(payload.customer.userCount) },
           { key: 'locationCount', field_value: String(payload.customer.locationCount) },
@@ -100,7 +100,7 @@ export async function createOrUpdateContact(
           phone: customer.phone,
           companyName: customer.businessName,
           address1: customer.address,
-          tags: ['quote-builder'],
+          tags: ['quote-builder', 'Protect'],
           customField: {
             userCount: customer.userCount,
             locationCount: customer.locationCount,
@@ -126,7 +126,7 @@ export async function createOrUpdateContact(
         companyName: customer.businessName,
         address1: customer.address,
         locationId: cred('GHL_LOCATION_ID'),
-        tags: ['quote-builder'],
+        tags: ['quote-builder', 'Protect'],
         customFields: [
           { key: 'userCount', field_value: String(customer.userCount) },
           { key: 'locationCount', field_value: String(customer.locationCount) },
@@ -346,6 +346,10 @@ export async function onPaymentCompleted(quote: QuoteData): Promise<void> {
   }
 
   if (quote.ghlContactId) {
+    // Tag drop on payment so the GHL automation (welcome sequence, etc.)
+    // can fire off "quote-paid". The existing "quote-builder" + "Protect"
+    // tags from contact creation stay in place.
+    await addTagsToContact(quote.ghlContactId, ['quote-paid']);
     await addContactNote(
       quote.ghlContactId,
       `Payment received for quote ${quote.quoteNumber} - ${quote.selectedPackage.name}`,
