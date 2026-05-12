@@ -123,9 +123,13 @@ export const defaultAddons: Addon[] = [
     id: 'addon-voice-voip',
     name: 'Voice Phone (VoIP)',
     description: 'Cloud VoIP phone line. Billed per phone line per month.',
-    price: 30,
+    // Customer-facing price intentionally below the WHITELABEL0001-MRR
+    // catalog rate ($30) — postAdditions posts each Addition with this
+    // recurringPrice as the unitPrice, so CW invoices $20/line regardless
+    // of the catalog default.
+    price: 20,
     frequency: 'monthly',
-    recurringPrice: 30,
+    recurringPrice: 20,
     recurringFrequency: 'monthly',
     setupPrice: 0,
     pricingType: 'recurring-only',

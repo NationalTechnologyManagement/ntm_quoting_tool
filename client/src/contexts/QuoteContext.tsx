@@ -216,10 +216,10 @@ const defaultAddons: Addon[] = [
     id: 'addon-voice-voip',
     name: 'Voice Phone (VoIP)',
     description: 'Cloud VoIP phone line. Billed per phone line per month.',
-    price: 30, frequency: 'monthly',
-    recurringPrice: 30, recurringFrequency: 'monthly', setupPrice: 0,
+    price: 20, frequency: 'monthly',
+    recurringPrice: 20, recurringFrequency: 'monthly', setupPrice: 0,
     pricingType: 'recurring-only', active: true,
-    cwProductId: 310, // WHITELABEL0001-MRR
+    cwProductId: 310, // WHITELABEL0001-MRR — quoted at $20 vs $30 catalog rate
   },
   {
     id: 'addon-teams-phone',
