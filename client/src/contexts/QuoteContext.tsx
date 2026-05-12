@@ -216,9 +216,10 @@ const defaultAddons: Addon[] = [
     id: 'addon-voice-voip',
     name: 'Voice Phone (VoIP)',
     description: 'Cloud VoIP phone line. Billed per phone line per month.',
-    price: 25, frequency: 'monthly',
-    recurringPrice: 25, recurringFrequency: 'monthly', setupPrice: 0,
+    price: 30, frequency: 'monthly',
+    recurringPrice: 30, recurringFrequency: 'monthly', setupPrice: 0,
     pricingType: 'recurring-only', active: true,
+    cwProductId: 310, // WHITELABEL0001-MRR
   },
   {
     id: 'addon-teams-phone',
@@ -227,6 +228,7 @@ const defaultAddons: Addon[] = [
     price: 15, frequency: 'monthly',
     recurringPrice: 15, recurringFrequency: 'monthly', setupPrice: 0,
     pricingType: 'recurring-only', active: true,
+    cwProductId: 1274, // MICROSOFT0057-MRR
   },
   {
     id: 'addon-efax',
@@ -235,14 +237,16 @@ const defaultAddons: Addon[] = [
     price: 25, frequency: 'monthly',
     recurringPrice: 25, recurringFrequency: 'monthly', setupPrice: 0,
     pricingType: 'recurring-only', active: true,
+    cwProductId: 792, // WHITELABEL0004-MRR
   },
   {
     id: 'addon-m365-backups',
     name: 'Microsoft SaaS Backups',
-    description: 'Backups of Microsoft 365 mailboxes (mail, OneDrive, SharePoint). Billed per mailbox per month.',
+    description: 'Infinite SaaS protection backups for Microsoft 365 (mail, OneDrive, SharePoint). Billed per mailbox per month.',
     price: 6, frequency: 'monthly',
     recurringPrice: 6, recurringFrequency: 'monthly', setupPrice: 0,
     pricingType: 'recurring-only', active: true,
+    cwProductId: 189, // DATTO0003-MRR
   },
   {
     id: 'addon-server-mgmt',
@@ -251,6 +255,7 @@ const defaultAddons: Addon[] = [
     price: 175, frequency: 'monthly',
     recurringPrice: 175, recurringFrequency: 'monthly', setupPrice: 0,
     pricingType: 'recurring-only', active: true,
+    cwProductId: 204, // MANAGEDIT0004
   },
 ];
 

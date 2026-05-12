@@ -114,21 +114,23 @@ export const defaultPackages: Package[] = [
   },
 ];
 
-// Real NTM addon catalog from ntm-sales-kb-upload-only/add-on-pricing.csv.
-// All recurring-only with no setup fee. cwProductId left null — ops fills these
-// in via /admin/addons after looking up each item in CW's procurement catalog.
+// Real NTM addon catalog. Each row carries the real CW catalog product id
+// (cwProductId) so postAdditions can create the Addition with the right SKU
+// without ops having to fill them in manually post-deploy. IDs sourced from
+// cw-id-finder/quote-catalog.md, audited 2026-05-12.
 export const defaultAddons: Addon[] = [
   {
     id: 'addon-voice-voip',
     name: 'Voice Phone (VoIP)',
     description: 'Cloud VoIP phone line. Billed per phone line per month.',
-    price: 25,
+    price: 30,
     frequency: 'monthly',
-    recurringPrice: 25,
+    recurringPrice: 30,
     recurringFrequency: 'monthly',
     setupPrice: 0,
     pricingType: 'recurring-only',
     active: true,
+    cwProductId: 310, // WHITELABEL0001-MRR — SafeSecure Voice - Cloud User License
   },
   {
     id: 'addon-teams-phone',
@@ -141,6 +143,7 @@ export const defaultAddons: Addon[] = [
     setupPrice: 0,
     pricingType: 'recurring-only',
     active: true,
+    cwProductId: 1274, // MICROSOFT0057-MRR — SafeSecure Licensing - Microsoft Teams Premium
   },
   {
     id: 'addon-efax',
@@ -153,11 +156,12 @@ export const defaultAddons: Addon[] = [
     setupPrice: 0,
     pricingType: 'recurring-only',
     active: true,
+    cwProductId: 792, // WHITELABEL0004-MRR — SafeSecure Voice - Cloud Efax License
   },
   {
     id: 'addon-m365-backups',
     name: 'Microsoft SaaS Backups',
-    description: 'Backups of Microsoft 365 mailboxes (mail, OneDrive, SharePoint). Billed per mailbox per month.',
+    description: 'Infinite SaaS protection backups for Microsoft 365 (mail, OneDrive, SharePoint). Billed per mailbox per month.',
     price: 6,
     frequency: 'monthly',
     recurringPrice: 6,
@@ -165,6 +169,7 @@ export const defaultAddons: Addon[] = [
     setupPrice: 0,
     pricingType: 'recurring-only',
     active: true,
+    cwProductId: 189, // DATTO0003-MRR — SafeSecure Protect Management - Infinite SaaS Protection
   },
   {
     id: 'addon-server-mgmt',
@@ -177,6 +182,7 @@ export const defaultAddons: Addon[] = [
     setupPrice: 0,
     pricingType: 'recurring-only',
     active: true,
+    cwProductId: 204, // MANAGEDIT0004 — SafeSecure Server Management - Virtual Server
   },
 ];
 

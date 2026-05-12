@@ -73,6 +73,7 @@ async function main() {
       setupPrice: addon.setupPrice ?? null,
       pricingType: addon.pricingType,
       sortOrder: i,
+      cwProductId: addon.cwProductId ?? null,
     };
     await prisma.addon.upsert({
       where: { id: addon.id },
