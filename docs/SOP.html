@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>NTM Quoting Tool — SOP</title>
+<style>
+  @page { size: Letter; margin: 0.6in; }
+  :root {
+    --navy: #1a3a5c;
+    --orange: #e87f37;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --bg-soft: #f9fafb;
+    --bg-warn: #fef3c7;
+    --border-warn: #fbbf24;
+    --bg-ok: #ecfdf5;
+    --border-ok: #34d399;
+  }
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    color: var(--text);
+    line-height: 1.55;
+    font-size: 10.5pt;
+    margin: 0;
+  }
+  h1 {
+    font-size: 22pt;
+    color: var(--navy);
+    margin: 0 0 4px 0;
+    letter-spacing: -0.5px;
+  }
+  h2 {
+    font-size: 14pt;
+    color: var(--navy);
+    border-bottom: 2px solid var(--navy);
+    padding-bottom: 4px;
+    margin: 28px 0 12px 0;
+    page-break-after: avoid;
+  }
+  h3 {
+    font-size: 11.5pt;
+    color: var(--navy);
+    margin: 18px 0 6px 0;
+    page-break-after: avoid;
+  }
+  h4 {
+    font-size: 10.5pt;
+    color: var(--navy);
+    margin: 12px 0 4px 0;
+    page-break-after: avoid;
+  }
+  p { margin: 6px 0; }
+  ul, ol { margin: 6px 0 8px 22px; padding: 0; }
+  li { margin-bottom: 3px; }
+  code {
+    font-family: 'Menlo', 'Consolas', monospace;
+    background: var(--bg-soft);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 9.5pt;
+  }
+  strong { color: var(--navy); }
+  .doc-header {
+    border-bottom: 3px solid var(--navy);
+    padding-bottom: 12px;
+    margin-bottom: 18px;
+  }
+  .doc-header .sub {
+    color: var(--muted);
+    font-size: 10pt;
+    margin-top: 4px;
+  }
+  .doc-header .meta {
+    color: var(--muted);
+    font-size: 9pt;
+    margin-top: 6px;
+  }
+  .toc {
+    background: var(--bg-soft);
+    border: 1px solid var(--border);
+    padding: 12px 18px;
+    border-radius: 4px;
+    margin: 14px 0 24px 0;
+  }
+  .toc h3 { margin-top: 0; }
+  .toc ol { margin: 0 0 0 22px; }
+  .callout {
+    border-left: 3px solid var(--orange);
+    background: var(--bg-soft);
+    padding: 8px 12px;
+    margin: 10px 0;
+    border-radius: 0 3px 3px 0;
+    font-size: 10pt;
+  }
+  .callout.warn {
+    border-left-color: var(--border-warn);
+    background: var(--bg-warn);
+  }
+  .callout.ok {
+    border-left-color: var(--border-ok);
+    background: var(--bg-ok);
+  }
+  .callout .label {
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 8.5pt;
+    color: var(--navy);
+    margin-bottom: 2px;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 8px 0 14px 0;
+    font-size: 10pt;
+    page-break-inside: avoid;
+  }
+  th, td {
+    border: 1px solid var(--border);
+    padding: 6px 8px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: var(--bg-soft);
+    color: var(--navy);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    font-size: 9pt;
+  }
+  .part-banner {
+    margin: 28px 0 14px 0;
+    padding: 12px 18px;
+    background: var(--navy);
+    color: #fff;
+    border-radius: 3px;
+    page-break-before: always;
+  }
+  .part-banner:first-of-type { page-break-before: auto; }
+  .part-banner .label {
+    font-size: 8.5pt;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.7);
+  }
+  .part-banner .title {
+    font-size: 16pt;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-top: 2px;
+  }
+  .part-banner .subtitle {
+    font-size: 9.5pt;
+    color: rgba(255,255,255,0.85);
+    margin-top: 3px;
+  }
+  ol.steps > li {
+    margin-bottom: 6px;
+  }
+  .step-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-top: 6px;
+  }
+  .step-grid h4 { margin-top: 0; }
+  @media print {
+    .no-print { display: none; }
+    a { color: var(--navy); text-decoration: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="doc-header">
+  <h1>NTM Quoting Tool — Standard Operating Procedure</h1>
+  <div class="sub">How customers use it, how admins run it, and how to update it without touching code.</div>
+  <div class="meta">National Technology Management · trustntm.com · Last updated 2026-05-12</div>
+</div>
+
+<div class="callout no-print">
+  <div class="label">How to save this as a PDF</div>
+  Open this file in Chrome or Edge, then <strong>Print → Destination: Save as PDF → Paper size: Letter → Margins: Default → More settings → Background graphics: ON</strong>. The banners and callouts will render correctly.
+</div>
+
+<div class="toc">
+  <h3>Contents</h3>
+  <ol>
+    <li>What the tool is</li>
+    <li>Part 1 — Customer workflow (what your customers see)</li>
+    <li>Part 2 — Admin workflow (what you do in <code>/admin</code>)</li>
+    <li>Part 3 — How to update content without code</li>
+    <li>Part 4 — When things go wrong</li>
+    <li>Appendix — Quick reference</li>
+  </ol>
+</div>
+
+<h2>1. What the tool is</h2>
+<p>
+The NTM Quoting Tool is the self-service web app at the quoting portal where prospective customers price an NTM managed-IT package, sign a contract, and pay their first month — all in one sitting. When a customer pays, the tool automatically provisions the company in <strong>ConnectWise</strong> (creates the Company, Contact, Opportunity, Agreement with line items, and an onboarding Project), emails the signed contract PDF, and notifies sales.
+</p>
+<p>
+You — the admin — control everything the customer sees and how the back-end behaves, from the <code>/admin</code> portal. You never have to edit code to change a price, a package, a discount, a piece of wording, or the AI assistant's behavior. This document is the playbook for both sides.
+</p>
+
+<div class="part-banner">
+  <div class="label">Part 1 of 4</div>
+  <div class="title">Customer Workflow</div>
+  <div class="subtitle">What a customer sees from the moment they land on the tool to the moment they pay.</div>
+</div>
+
+<h2>2. The customer path, step by step</h2>
+
+<h3>Step 1 — Choose a package</h3>
+<p>
+The customer lands on the package picker. They see only the packages you've made customer-visible (e.g. SafeSecure, SafeSecure Plus). Each card shows the headline per-user price and per-location price, the contract term length (month-to-month, 3-year, or 5-year), and the bundled features.
+</p>
+<p>
+They click the package they want and hit <strong>Build a Quote</strong>.
+</p>
+
+<h3>Step 2 — Service details &amp; contact info</h3>
+<p>
+On the next screen they tell us the size of their team and how to reach them:
+</p>
+<ul>
+  <li><strong>Desktop Users</strong> — staff who need full Microsoft 365 Business Premium. At least one is required.</li>
+  <li><strong>Web Users</strong> — frontline / kiosk / shared-device people who only need email and browser apps (Microsoft 365 F3). Optional.</li>
+  <li><strong>Number of Locations</strong> — physical sites we'll manage.</li>
+  <li><strong>Contact info</strong> — name, business name, email, phone, address.</li>
+  <li><strong>Optional add-ons</strong> — VoIP, Microsoft Teams Phone, eFaxing, Microsoft SaaS Backups, Server Management per VM.</li>
+</ul>
+
+<h3>Step 3 — Summary</h3>
+<p>
+The customer reviews their full quote: package, per-tier user counts, add-ons, the upfront onboarding fee (waived for online portal customers), the first-month charge, and the ongoing monthly recurring amount. If they have a promo code, they apply it here.
+</p>
+
+<h3>Step 4 — Terms &amp; review</h3>
+<p>
+The Terms page shows the full Managed Services Agreement they're agreeing to. The Review page is the final stop before paying: it shows the same numbers plus a <strong>Preview full Quote &amp; Contract</strong> button that opens the complete two-part document (the QUOTE section + the CONTRACT section) in a new tab.
+</p>
+
+<h3>Step 5 — E-sign and pay</h3>
+<p>
+They type their name to e-sign, tick the agreement checkbox, and hit <strong>Pay [amount] &amp; Start Services</strong>. They're redirected to Alternative Payments' secure hosted checkout to complete payment by card or ACH.
+</p>
+
+<h3>Step 6 — Done</h3>
+<p>
+On successful payment, the customer sees the Payment Success page and receives <strong>one email</strong> titled <em>"Your Contract — [Business Name]"</em> with the signed PDF attached. The PDF has two clearly labeled parts:
+</p>
+<ul>
+  <li><strong>Part 1 — QUOTE</strong>: pricing breakdown, add-ons, financial summary, admin notes (if any).</li>
+  <li><strong>Part 2 — CONTRACT</strong>: legal parties, agreement details, terms &amp; conditions, signature block (pre-signed by NTM, signed by the customer).</li>
+</ul>
+<p>
+Recurring invoices ship from CW on the <strong>1st of every month</strong> and are <strong>Net 30</strong>.
+</p>
+
+<h3>The AI chat assistant</h3>
+<p>
+On the package picker, a floating chat button appears in the bottom-right. The first time a customer visits, a small popover offers help. The assistant can:
+</p>
+<ul>
+  <li>Answer questions about packages, prices, and add-ons.</li>
+  <li>Recommend a package based on what the customer describes.</li>
+  <li>Pre-fill form fields with values the customer gives in chat.</li>
+  <li>If a question is outside its knowledge, offer to schedule a follow-up call with a sales rep (opens the GHL booking widget).</li>
+</ul>
+
+<h3>Returning customers — quote lookup</h3>
+<p>
+Below the package cards, customers who already have a quote can click <strong>"Have a quote already? Look it up"</strong> and either paste their quote number (<code>QT-...</code>) or their email to find every quote tied to them.
+</p>
+
+<div class="part-banner">
+  <div class="label">Part 2 of 4</div>
+  <div class="title">Admin Workflow</div>
+  <div class="subtitle">What you, the admin, see and do in /admin. No code involved.</div>
+</div>
+
+<h2>3. Logging in</h2>
+<p>
+Open <code>/admin/login</code>, sign in with your admin email and password. After that you'll see a top navigation bar with these sections:
+</p>
+
+<table>
+  <thead><tr><th>Tab</th><th>What it's for</th></tr></thead>
+  <tbody>
+    <tr><td><strong>Quotes</strong></td><td>List every quote ever created. Open one to edit, retry CW provisioning, or generate an amendment.</td></tr>
+    <tr><td><strong>Logs</strong></td><td>Every CW provisioning step that failed. Click a row to open the affected quote. "Clear all" to wipe resolved issues.</td></tr>
+    <tr><td><strong>Packages</strong></td><td>The plans customers can pick. Set pricing, contract term, CW IDs, whether the package is customer-visible.</td></tr>
+    <tr><td><strong>Add-Ons</strong></td><td>Optional services — VoIP, Teams Phone, eFax, SaaS Backups, Server Management. Set prices and CW product IDs.</td></tr>
+    <tr><td><strong>Promo Codes</strong></td><td>Discount codes. Toggle "Admin-only" for codes customers can't see (e.g. the 5-year discount).</td></tr>
+    <tr><td><strong>Terms</strong></td><td>The legal terms &amp; conditions text that goes into the contract PDF.</td></tr>
+    <tr><td><strong>Site Copy</strong></td><td>The headline, sub-headline, and Desktop-vs-Web explainer text customers see on the picker.</td></tr>
+    <tr><td><strong>Integrations</strong></td><td>API keys: ConnectWise, Alternative Payments, Resend, GoHighLevel, OpenRouter, etc.</td></tr>
+    <tr><td><strong>CW IDs</strong></td><td>The internal ConnectWise IDs the tool uses (company types, opportunity stages, project template, etc.).</td></tr>
+    <tr><td><strong>AI Chat</strong></td><td>Turn the AI assistant on/off, edit its playbook, upload knowledge-base docs, track usage.</td></tr>
+    <tr><td><strong>Contract</strong></td><td>Preview the contract PDF as it would render for any quote.</td></tr>
+    <tr><td><strong>Account</strong></td><td>Change your admin password.</td></tr>
+  </tbody>
+</table>
+
+<h2>4. The day-to-day: managing quotes</h2>
+
+<h3>Finding a quote</h3>
+<p>
+Open <strong>Quotes</strong>. Each row shows quote number, customer, package, totals, status (draft / sent / accepted / checkout_pending / paid), and CW provisioning state. Filter by status and search by customer name, email, or quote number.
+</p>
+
+<h3>The quote detail page</h3>
+<p>
+Click any row to open it. At the top you'll see status badges and a row of action buttons:
+</p>
+<ul>
+  <li><strong>Customer View</strong> — opens the quote as the customer sees it.</li>
+  <li><strong>Contract Preview</strong> — renders the contract PDF preview.</li>
+  <li><strong>Edit Quote</strong> — opens the inline editor for package / sizing / add-ons / pricing / notes.</li>
+  <li><strong>Retry CW</strong> (shows only when a step failed) — re-runs the ConnectWise provisioning from wherever it stopped.</li>
+  <li><strong>Delete Quote</strong> — hard-deletes the quote row plus its generated contracts. Existing CW records are untouched.</li>
+</ul>
+
+<h3>Editing a quote</h3>
+<p>
+Click <strong>Edit Quote</strong>. You'll get a panel where you can:
+</p>
+<ul>
+  <li>Change the selected package (admin-only packages like Essentials appear here even when hidden from customers).</li>
+  <li>Change the contract term (MTM / 3-year / 5-year).</li>
+  <li>Adjust Desktop Users, Web Users, and Locations counts.</li>
+  <li>Override the per-Desktop / per-Web / per-Location prices for <em>this one quote</em> — useful for one-off discounts or custom scoping. The canonical package row stays untouched.</li>
+  <li>Toggle individual add-ons on/off and set quantities.</li>
+  <li>Add free-text <strong>Notes</strong> the customer will see on their review page and in the contract PDF.</li>
+</ul>
+
+<div class="callout">
+  <div class="label">Editing a paid quote</div>
+  If the quote has already been paid, saving the edit doesn't overwrite it — instead, the system creates an <strong>amendment quote</strong> (a new row linked to the original) and a fresh AP invoice for the price delta. The original record stays intact as the audit trail.
+</div>
+
+<h3>Applying an admin-only discount (e.g. the 5-year discount)</h3>
+<p>
+On the quote detail page, scroll to <strong>"Admin-only discounts"</strong>. Active admin-only promo codes are listed there with badges showing the discount and which line they apply to. Click <strong>Apply</strong> to attach the promo to the quote — totals recalc immediately and the discount also appears as a negative-priced line on the ConnectWise agreement when provisioning runs (provided you've set the CW Product ID on the promo).
+</p>
+
+<h3>Custom line items</h3>
+<p>
+The Custom Line Items section at the bottom lets you add one-off charges (recurring or one-time) that aren't in the standard catalog. Use this for custom integration scope, special hardware, etc.
+</p>
+
+<div class="part-banner">
+  <div class="label">Part 3 of 4</div>
+  <div class="title">Updating the Tool</div>
+  <div class="subtitle">How to change prices, packages, copy, AI behavior, and discounts without touching code.</div>
+</div>
+
+<h2>5. Updating packages</h2>
+<p>
+Go to <strong>Packages</strong>. Each package has its own card.
+</p>
+
+<h4>Pricing</h4>
+<p>
+Three per-unit prices:
+</p>
+<ul>
+  <li><strong>Desktop User</strong> — Microsoft 365 Business Premium tier (primary staff).</li>
+  <li><strong>Web User</strong> — F3 / Web &amp; Email Only tier (frontline / kiosk).</li>
+  <li><strong>Per Location</strong> — per physical site.</li>
+</ul>
+
+<h4>Contract Term</h4>
+<p>
+Pick Month-to-month, 3-year, or 5-year from the dropdown. Customers see the label on the package card. Changing it here updates new quotes immediately; quotes already in flight keep the term they were signed under.
+</p>
+
+<h4>"Show on customer page" toggle</h4>
+<p>
+Off = the package is hidden from the customer picker but still usable from the admin Edit Quote panel. This is how Essentials is currently configured.
+</p>
+
+<h4>CW IDs</h4>
+<p>
+Each package needs four ConnectWise IDs filled in so provisioning works:
+</p>
+<ul>
+  <li>CW Agreement Type ID</li>
+  <li>Per-User Product ID (Business Premium)</li>
+  <li>F3 Per-User Product ID (Web &amp; Email Only)</li>
+  <li>Per-Location Product ID</li>
+</ul>
+<p>
+These come from ConnectWise's procurement catalog. The seed file already has the production-correct IDs for the three canonical packages, but if you add a new package or want to swap a SKU, paste the numeric ID here.
+</p>
+
+<p>
+Click <strong>Save All Packages</strong> at the bottom when you're done. Changes are live immediately.
+</p>
+
+<h2>6. Updating add-ons</h2>
+<p>
+Go to <strong>Add-Ons</strong>. Each add-on has a name, description, recurring price, pricing type (recurring-only / one-time-only / both), an active toggle, and a CW Product ID.
+</p>
+<p>
+The CW Product ID is the bookkeeping link. Even if the catalog's default price differs from what you're charging the customer, the tool will post the customer's price to CW so the invoice matches the quote.
+</p>
+
+<h2>7. Updating promo codes</h2>
+<p>
+Go to <strong>Promo Codes</strong>. For each code you set:
+</p>
+<ul>
+  <li><strong>Code</strong> — what the customer types (or what admin applies internally for admin-only).</li>
+  <li><strong>Discount amount</strong> + <strong>discount type</strong> (percentage / fixed).</li>
+  <li><strong>Apply to</strong> — one-time / monthly / onboarding.</li>
+  <li><strong>Active</strong> toggle.</li>
+  <li><strong>Admin-only</strong> toggle — when on, the code is hidden from the customer wizard. Only applicable from the quote detail page.</li>
+  <li><strong>CW Product ID</strong> (optional) — when set, the discount also gets posted as a negative-priced line on the ConnectWise agreement so CW invoices match.</li>
+</ul>
+
+<div class="callout warn">
+  <div class="label">5-Year Discount setup</div>
+  The <code>5YR-DISCOUNT</code> promo ships pre-seeded as admin-only at 15% off monthly. Set its <strong>CW Product ID</strong> to PERUSER0004-MRR's numeric id from CW for the discount to flow through to ConnectWise invoices. Without it, the discount applies only to the quote total + the AP first-month invoice; CW will continue to invoice the full monthly amount.
+</div>
+
+<h2>8. Updating customer-facing copy</h2>
+<p>
+Go to <strong>Site Copy</strong>. You can edit:
+</p>
+<ul>
+  <li><strong>Page heading</strong> — the big title above the package cards.</li>
+  <li><strong>Subheading</strong> — one or two sentences underneath.</li>
+  <li><strong>Explainer popover title</strong> — the title shown in the (i) icon popover on the Service Details page.</li>
+  <li><strong>Explainer body</strong> — the multi-paragraph Desktop-vs-Web User explanation. Blank line = paragraph break.</li>
+</ul>
+<p>
+Changes are live as soon as you click <strong>Save Site Copy</strong>.
+</p>
+
+<h2>9. Updating Terms &amp; Conditions</h2>
+<p>
+Go to <strong>Terms</strong>. The content here is what appears in <em>Part 2 — Contract</em> of every PDF. Versioned: when you update, the previous version is kept on file so historical quotes keep showing the terms they were signed under.
+</p>
+
+<h2>10. Configuring the AI Chat assistant</h2>
+
+<h4>Turning it on</h4>
+<p>
+Open <strong>AI Chat</strong>. In the top-right of the page there's a big <strong>Live for customers / Disabled</strong> toggle — flip it on and it persists immediately. The OpenRouter API key must be set in Integrations first; if it's missing you'll see a banner with a link to fix it.
+</p>
+
+<h4>Editing the assistant's behavior</h4>
+<p>
+Open the <strong>Prompt + Tools</strong> tab. The "Playbook prompt" textarea controls the assistant's persona, conversational tone, and step-by-step flow. Edit freely — what you write here is what the customer's chat session uses.
+</p>
+<p>
+A small banner at the top of that tab reminds you: <strong>guardrails (security and correctness rules) live in code and are always prepended automatically</strong>. You can't disable them from here, and you don't need to repeat them in your playbook — the model already has them. Things like "never invent prices, always quote from the live page snapshot, never agree to terms for the customer" are handled.
+</p>
+
+<h4>Knowledge base</h4>
+<p>
+Open the <strong>Knowledge base</strong> tab. Two ways to add docs:
+</p>
+<ul>
+  <li><strong>Upload file</strong> — drop a PDF, DOCX, TXT, MD, or CSV. The tool extracts the text and stores it as a KB doc you can review or edit.</li>
+  <li><strong>New doc</strong> — paste markdown directly.</li>
+</ul>
+<p>
+Active KB docs are concatenated into every chat turn so the agent can answer specific NTM questions (policies, FAQs, service descriptions) without making things up.
+</p>
+
+<h4>Model, cost caps, rate limits</h4>
+<p>
+The <strong>General</strong> tab lets you switch primary/fallback models, adjust temperature, set per-session and daily USD spend caps, and rate-limit how fast a session can fire messages. Sensible defaults are pre-set.
+</p>
+
+<h2>11. ConnectWise integration setup</h2>
+
+<h4>Credentials</h4>
+<p>
+Go to <strong>Integrations</strong>. CW credentials live here: company id, public key, private key, client id, base URL. You can edit them in the admin portal — no redeploy needed.
+</p>
+
+<h4>Reference IDs</h4>
+<p>
+Go to <strong>CW IDs</strong>. The tool needs CW-side numeric IDs for things like opportunity status, project board, project template, currency, etc. Default values are pre-filled and audited against NTM production. Open the page to confirm or adjust.
+</p>
+
+<h4>Project template auto-discovery</h4>
+<p>
+At the top of the CW IDs page there's a <strong>Project template auto-discovery</strong> card. It looks up the CW project template by name (default: <em>"SafeSecure Pure SaaS (Project Template) v3"</em>) and writes the id back to the config. Click <strong>Find and set template id</strong> once after deploy — every new customer onboarding project will then use that template.
+</p>
+
+<div class="part-banner">
+  <div class="label">Part 4 of 4</div>
+  <div class="title">When Things Go Wrong</div>
+  <div class="subtitle">Where to look and what to do when CW provisioning, email delivery, or payment hits a snag.</div>
+</div>
+
+<h2>12. The Logs tab</h2>
+<p>
+Every time a ConnectWise provisioning step fails, the tool:
+</p>
+<ol>
+  <li>Records the failure to the database (visible on the quote detail page's step list).</li>
+  <li>Writes a structured row to the <strong>Logs</strong> tab.</li>
+  <li>Emails <code>support@trustntm.com</code> from <code>logs@trustntm.com</code> with the quote number, business name, step name, full error, and the CW IDs known so far.</li>
+</ol>
+<p>
+Open the Logs tab to see every failure across all quotes. Click <strong>Details</strong> on a row to expand the CW context. Click <strong>Open quote</strong> to jump to the affected record and hit <strong>Retry CW</strong>.
+</p>
+<p>
+Once you've worked through a batch of issues, hit <strong>Clear all</strong> to wipe the logs. (Doing this doesn't touch the affected quotes or any CW records — it only deletes the audit log rows.)
+</p>
+
+<h2>13. Common scenarios</h2>
+
+<h4>"A customer paid but nothing showed up in CW"</h4>
+<ol class="steps">
+  <li>Open the quote on the Quotes tab.</li>
+  <li>Look at the step list. If a step is failed/partial, the error message is right there.</li>
+  <li>Fix the root cause — usually a missing CW reference ID or product ID. Set it on the appropriate admin page.</li>
+  <li>Click <strong>Retry CW</strong> at the top. The orchestrator resumes from the failed step; successful earlier steps short-circuit.</li>
+</ol>
+
+<h4>"The customer needs a different price than the standard package"</h4>
+<ol class="steps">
+  <li>Open the quote on the Quotes tab.</li>
+  <li>Click <strong>Edit Quote</strong>.</li>
+  <li>Adjust the price-override fields ($/Desktop User, $/Web User, $/Location) for this one quote.</li>
+  <li>Click <strong>Save Changes</strong>. The canonical package stays the same; only this quote uses the new numbers.</li>
+</ol>
+
+<h4>"The customer wants to add a service after they've paid"</h4>
+<ol class="steps">
+  <li>Open the paid quote.</li>
+  <li>Click <strong>Edit Quote</strong>, toggle on the new add-on, set quantity, save.</li>
+  <li>The system creates an <strong>amendment quote</strong> (a new row linked to the original) and a fresh AP invoice for the additional cost. You'll be redirected to the amendment.</li>
+  <li>Forward the amendment's payment link to the customer.</li>
+</ol>
+
+<h4>"The contract PDF is wrong / has stale wording"</h4>
+<p>
+Two places to check: <strong>Terms</strong> (the legal terms text in Part 2) and <strong>Site Copy</strong> (the customer-facing wording on the picker / Service Details — does not appear in the contract). Edit, save, and re-preview from the quote detail page's <strong>Contract Preview</strong> button.
+</p>
+
+<h4>"The AI chat is saying weird things / making things up"</h4>
+<ol class="steps">
+  <li>Open AI Chat → Prompt + Tools.</li>
+  <li>Adjust the playbook prompt to clarify the behavior you want. The system prompt is just text — describe it like you'd describe it to a new sales rep.</li>
+  <li>Click <strong>Save all settings</strong>.</li>
+  <li>If the issue is missing factual info, open the Knowledge base tab and upload or write a KB doc covering it. KB docs are concatenated into every chat turn.</li>
+</ol>
+
+<h4>"I need to look at the contract before sending it"</h4>
+<p>
+Two paths:
+</p>
+<ul>
+  <li>From <strong>Quote Detail → Contract Preview</strong> — renders the same template the signed PDF uses.</li>
+  <li>From the customer side: the <strong>Preview full Quote &amp; Contract</strong> button on the Review page does the same thing.</li>
+</ul>
+<p>
+Either way, the customer's signature line is blank in the preview, and the service-provider side shows the pre-signed countersignature.
+</p>
+
+<h2>Appendix — Quick reference</h2>
+
+<h4>Customer email touchpoints</h4>
+<table>
+  <thead><tr><th>When</th><th>Subject</th><th>Contents</th></tr></thead>
+  <tbody>
+    <tr><td>Quote emailed</td><td>"Your Quote #QT-... - [Business]"</td><td>Pricing recap + a link back to the portal to review &amp; pay.</td></tr>
+    <tr><td>Payment received</td><td>"Your Contract - [Business] ([Quote#])"</td><td>Welcome message + the signed contract PDF attached. (Only one email — no separate "payment received" email.)</td></tr>
+  </tbody>
+</table>
+
+<h4>Status meanings</h4>
+<table>
+  <thead><tr><th>Status</th><th>What it means</th></tr></thead>
+  <tbody>
+    <tr><td><code>draft</code></td><td>Quote auto-created when customer hits the Summary page; haven't signed/paid yet.</td></tr>
+    <tr><td><code>sent</code></td><td>Customer emailed themselves a copy via "Email Quote".</td></tr>
+    <tr><td><code>accepted</code></td><td>Customer e-signed the agreement.</td></tr>
+    <tr><td><code>checkout_pending</code></td><td>Customer redirected to AP checkout but hasn't paid yet.</td></tr>
+    <tr><td><code>paid</code></td><td>Payment captured. CW provisioning + contract email have fired.</td></tr>
+  </tbody>
+</table>
+
+<h4>Provisioning step meanings (on the quote detail page)</h4>
+<table>
+  <thead><tr><th>Step</th><th>What it does</th></tr></thead>
+  <tbody>
+    <tr><td>company</td><td>Creates the CW Company as a Prospect.</td></tr>
+    <tr><td>site</td><td>Sets the tax code on the company's default site.</td></tr>
+    <tr><td>contact</td><td>Creates the primary contact.</td></tr>
+    <tr><td>opportunity</td><td>Creates the CW Opportunity (status Open / stage Quoted).</td></tr>
+    <tr><td>agreement</td><td>(Post-payment) Creates the Agreement as Inactive.</td></tr>
+    <tr><td>additions</td><td>Posts each line item (per-user Business Premium, per-user F3, per-location, add-ons, discounts).</td></tr>
+    <tr><td>activate</td><td>Flips the Agreement from Inactive to Active.</td></tr>
+    <tr><td>project</td><td>Creates the onboarding Project from the configured template.</td></tr>
+    <tr><td>crossref</td><td>Stamps the quote number into CW custom fields for cross-reference.</td></tr>
+    <tr><td>handoff</td><td>Notifies ops + flips provisioning status to "provisioned".</td></tr>
+  </tbody>
+</table>
+
+<h4>What ops emails come from</h4>
+<table>
+  <thead><tr><th>From</th><th>To</th><th>When</th></tr></thead>
+  <tbody>
+    <tr><td><code>quotes@trustntm.com</code></td><td>Customer</td><td>Quote emails + signed contract delivery.</td></tr>
+    <tr><td><code>logs@trustntm.com</code></td><td><code>support@trustntm.com</code></td><td>Every CW provisioning step failure.</td></tr>
+  </tbody>
+</table>
+
+<div class="callout ok">
+  <div class="label">Where to start when in doubt</div>
+  <ol style="margin: 4px 0 0 18px;">
+    <li>For a specific quote issue: <strong>Quotes → click row → look at the step list / errors</strong>.</li>
+    <li>For a pattern of issues across many quotes: <strong>Logs tab</strong>.</li>
+    <li>For pricing or product config: <strong>Packages / Add-Ons / Promo Codes</strong>.</li>
+    <li>For customer-facing wording: <strong>Site Copy</strong> (picker text) or <strong>Terms</strong> (legal terms in the contract).</li>
+    <li>For the AI assistant: <strong>AI Chat → Prompt + Tools / Knowledge base</strong>.</li>
+  </ol>
+</div>
+
+</body>
+</html>
