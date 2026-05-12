@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { Home } from 'lucide-react';
+import { Home, LayoutGrid } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 /**
@@ -32,21 +32,37 @@ export const SiteHeader = () => (
         </div>
       </Link>
 
-      <Button
-        asChild
-        variant="ghost"
-        className="text-muted-foreground hover:text-foreground"
-      >
-        <a
-          href="https://www.trustntm.com"
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="Visit trustntm.com (opens in new tab)"
+      <div className="flex items-center gap-1">
+        {/* Internal: jump back to the package picker so a customer mid-wizard
+            can rethink their plan without losing the rest of the session. */}
+        <Button
+          asChild
+          variant="ghost"
+          className="text-muted-foreground hover:text-foreground"
         >
-          <Home className="w-4 h-4 mr-2" />
-          Home
-        </a>
-      </Button>
+          <Link to="/quote-builder" aria-label="Back to the package picker">
+            <LayoutGrid className="w-4 h-4 mr-2" />
+            Packages
+          </Link>
+        </Button>
+
+        {/* External: marketing site. New tab so the wizard stays put. */}
+        <Button
+          asChild
+          variant="ghost"
+          className="text-muted-foreground hover:text-foreground"
+        >
+          <a
+            href="https://www.trustntm.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Visit trustntm.com (opens in new tab)"
+          >
+            <Home className="w-4 h-4 mr-2" />
+            Home
+          </a>
+        </Button>
+      </div>
     </div>
   </header>
 );
