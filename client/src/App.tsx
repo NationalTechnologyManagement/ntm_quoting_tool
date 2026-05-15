@@ -17,6 +17,7 @@ import PaymentCancelled from "./pages/PaymentCancelled";
 import Login from "./pages/admin/Login";
 import TwoFactorSetup from "./pages/admin/TwoFactorSetup";
 import AcceptInvite from "./pages/admin/AcceptInvite";
+import SsoGhl from "./pages/admin/SsoGhl";
 import Users from "./pages/admin/Users";
 import PackageManagement from "./pages/admin/PackageManagement";
 import AddonManagement from "./pages/admin/AddonManagement";
@@ -59,6 +60,7 @@ const App = () => (
                 <Route path="/admin/login" element={<Login />} />
                 <Route path="/admin/2fa-setup" element={<TwoFactorSetup />} />
                 <Route path="/admin/accept-invite" element={<AcceptInvite />} />
+                <Route path="/sso/ghl" element={<SsoGhl />} />
                 <Route path="/admin/users" element={<Users />} />
                 <Route path="/admin/quotes" element={<QuoteManagement />} />
                 <Route path="/admin/quotes/new" element={<CreateQuote />} />

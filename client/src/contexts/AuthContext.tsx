@@ -26,25 +26,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    const token = localStorage.getItem('adminToken');
-    if (token) {
-      authApi
-        .me()
-        .then((data) => {
-          setIsAuthenticated(true);
-          setUser({
-            id: data.user.userId,
-            email: data.user.email,
-            role: data.user.role,
-            name: null,
-          });
-        })
-        .catch(() => {
-          localStorage.removeItem('adminToken');
-          setIsAuthenticated(false);
-          setUser(null);
+    // Try /me unconditionally. If there's a localStorage token, apiRequest
+    // sends it as Bearer. If there's a cookie session (GHL-embed flow),
+    // the cookie is sent via `credentials: 'include'`. Either path resolves
+    // the same user — we only know we're unauthenticated when /me 401s.
+    authApi
+      .me()
+      .then((data) => {
+        setIsAuthenticated(true);
+        setUser({
+          id: data.user.userId,
+          email: data.user.email,
+          role: data.user.role,
+          name: null,
         });
-    }
+      })
+      .catch(() => {
+        localStorage.removeItem('adminToken');
+        setIsAuthenticated(false);
+        setUser(null);
+      });
   }, []);
 
   const login = async (email: string, password: string): Promise<LoginResponse> => {

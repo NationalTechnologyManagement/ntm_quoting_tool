@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
-import { requireAuth, requireRole } from '../middleware/auth.js';
+import { requireAuth, requireRole, requireFullSession } from '../middleware/auth.js';
 import * as authService from '../services/auth.service.js';
 import * as inviteService from '../services/invite.service.js';
 import * as userService from '../services/user.service.js';
@@ -75,6 +75,7 @@ const changePasswordSchema = z.object({
 router.post(
   '/api/admin/change-password',
   requireAuth,
+  requireFullSession,
   validate(changePasswordSchema),
   async (req, res) => {
     const { currentPassword, newPassword } = req.body as z.infer<typeof changePasswordSchema>;
@@ -137,6 +138,7 @@ const inviteSchema = z.object({
 router.post(
   '/api/admin/users/invite',
   requireAuth,
+  requireFullSession,
   requireRole('admin'),
   validate(inviteSchema),
   async (req, res) => {
@@ -165,6 +167,7 @@ router.get('/api/admin/invites', requireAuth, requireRole('admin'), async (_req,
 router.delete(
   '/api/admin/invites/:id',
   requireAuth,
+  requireFullSession,
   requireRole('admin'),
   async (req, res) => {
     await inviteService.revokeInvite(req.params.id as string);
@@ -176,6 +179,7 @@ const setActiveSchema = z.object({ active: z.boolean() });
 router.patch(
   '/api/admin/users/:id/active',
   requireAuth,
+  requireFullSession,
   requireRole('admin'),
   validate(setActiveSchema),
   async (req, res) => {
@@ -188,6 +192,7 @@ const setRoleSchema = z.object({ role: z.enum(['admin', 'sales_rep']) });
 router.patch(
   '/api/admin/users/:id/role',
   requireAuth,
+  requireFullSession,
   requireRole('admin'),
   validate(setRoleSchema),
   async (req, res) => {
@@ -199,6 +204,7 @@ router.patch(
 router.post(
   '/api/admin/users/:id/reset-2fa',
   requireAuth,
+  requireFullSession,
   requireRole('admin'),
   async (req, res) => {
     await authService.resetUserTwoFactor(req.params.id as string);
@@ -209,6 +215,7 @@ router.post(
 router.delete(
   '/api/admin/users/:id',
   requireAuth,
+  requireFullSession,
   requireRole('admin'),
   async (req, res) => {
     if (!req.admin) {

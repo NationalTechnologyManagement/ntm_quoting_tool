@@ -17,6 +17,11 @@ const envSchema = z.object({
   GHL_API_KEY: z.string().optional(),
   GHL_LOCATION_ID: z.string().optional(),
   GHL_BOOKING_URL: z.string().optional(),
+  // GHL embedded-SSO key. When unset, /sso/ghl returns 503. When set,
+  // requests must include ?k=<this value> exactly. Treat this like a
+  // password — never log, never commit. Rotate by changing both the env
+  // var and the GHL Custom Menu Link URL together.
+  GHL_SSO_KEY: z.string().optional(),
   // Lead-gen mode: skips payment/contract; collects info, applies tags,
   // returns a GHL calendar booking URL instead of running checkout.
   LEAD_GEN_MODE: z

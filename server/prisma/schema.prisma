@@ -270,6 +270,7 @@ model AdminUser {
   invitesSent       Invite[] @relation("InvitedBy")
   quotesAsRep       Quote[]  @relation("QuoteSalesRep")
   emailCodes        EmailLoginCode[]
+  ssoDevices        SsoDevice[]
 
   @@map("admin_users")
 }
@@ -301,12 +302,40 @@ model EmailLoginCode {
   userId    String
   user      AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
   codeHash  String
+  // What this code is valid for. Codes issued by the 2FA flow (purpose="2fa")
+  // can't be redeemed by the GHL-SSO device-enrollment flow (purpose="sso_enroll")
+  // and vice versa. Without this gate, a leaked 2FA code could be used to
+  // enroll an attacker's browser as a long-lived SSO device.
+  purpose   String   @default("2fa")
   expiresAt DateTime
   usedAt    DateTime?
   createdAt DateTime @default(now())
 
   @@index([userId])
   @@map("admin_email_login_codes")
+}
+
+// ── GHL SSO Devices ─────────────────────────────────────────────────
+// One row per browser that has completed the GHL-embed SSO enrollment.
+// The cookie value is a signed JWT carrying this row's id; on each request
+// we verify the signature *and* look up the row to honour revocation. Rows
+// never get deleted on revoke — we set revokedAt so we keep an audit trail
+// of which devices an account had.
+
+model SsoDevice {
+  id           String    @id @default(cuid())
+  userId       String
+  user         AdminUser @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userAgent    String?
+  enrolledIp   String?
+  lastSeenAt   DateTime  @default(now())
+  expiresAt    DateTime
+  revokedAt    DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("admin_sso_devices")
 }
 
 // ── Integration Credentials ──────────────────────────────────────────

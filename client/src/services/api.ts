@@ -31,6 +31,11 @@ async function apiRequest<T>(
   const response = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers,
+    // Send the admin_session + ghl_sso_device cookies on every request. Lets
+    // the GHL-embedded admin portal authenticate from cookies alone — the
+    // iframe origin has no access to the localStorage that the password
+    // login uses.
+    credentials: 'include',
   });
 
   if (response.status === 401) {
@@ -127,6 +132,36 @@ export const authApi = {
       method: 'POST',
       body: JSON.stringify({ name, password }),
     }),
+};
+
+// ── GHL embed SSO ──────────────────────────────────────────────────
+
+type SsoUser = { id: string; email: string; role: string; name: string | null };
+
+export const ssoApi = {
+  check: (loc: string, k: string) =>
+    apiRequest<
+      | { ready: false }
+      | { ready: true; token: string; user: SsoUser }
+    >('/api/sso/ghl/check', {
+      method: 'POST',
+      body: JSON.stringify({ loc, k }),
+    }),
+  start: (loc: string, k: string, email: string) =>
+    apiRequest<{ success: boolean }>('/api/sso/ghl/start', {
+      method: 'POST',
+      body: JSON.stringify({ loc, k, email }),
+    }),
+  verify: (loc: string, k: string, email: string, code: string) =>
+    apiRequest<{ success: boolean; token: string; user: SsoUser }>(
+      '/api/sso/ghl/verify',
+      {
+        method: 'POST',
+        body: JSON.stringify({ loc, k, email, code }),
+      },
+    ),
+  logout: () =>
+    apiRequest<{ success: boolean }>('/api/sso/ghl/logout', { method: 'POST' }),
 };
 
 // ── Users / invites (admin) ─────────────────────────────────────────
