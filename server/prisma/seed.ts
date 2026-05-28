@@ -129,16 +129,26 @@ async function main() {
   console.log(`  ✓ ${defaultPromoCodes.length} promo codes`);
 
   // ── Terms ──
+  // When the source-of-truth version in shared/src/constants.ts changes
+  // (e.g. 1.0 → 2.0 for the Master Services Agreement rewrite), retire
+  // every other "active" row so /api/terms returns exactly one version.
+  // Don't touch admin-edited content of older versions — that's history.
+  await prisma.terms.updateMany({
+    where: { active: true, version: { not: defaultTermsContent.version } },
+    data: { active: false },
+  });
   await prisma.terms.upsert({
     where: { version: defaultTermsContent.version },
-    update: {},
+    // If an admin has edited this version in-place via the UI, leave the
+    // edit alone. The seed only owns the FIRST insertion of a new version.
+    update: { active: true },
     create: {
       version: defaultTermsContent.version,
       content: defaultTermsContent.content,
       active: true,
     },
   });
-  console.log('  ✓ Terms v1.0');
+  console.log(`  ✓ Terms v${defaultTermsContent.version}`);
 
   // ── Admin User ──
   const email = process.env.INITIAL_ADMIN_EMAIL || 'admin@ntm.com';

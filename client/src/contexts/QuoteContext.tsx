@@ -393,66 +393,15 @@ const generateTermsId = (version: string) => {
   return `terms-v${version}-${Date.now()}`;
 };
 
+// Offline fallback only — production data comes from /api/terms which is
+// seeded from shared/src/constants.ts defaultTermsContent. Kept as a stub
+// so the UI doesn't render an empty card before /api/config returns; full
+// MSA text lives server-side.
 const defaultTermsContent: TermsContent = {
-  id: generateTermsId('1.0'),
-  version: '1.0',
-  content: `TERMS AND CONDITIONS
-
-1. SERVICE AGREEMENT
-This Agreement is entered into for a period of 36 months from the date of purchase. By signing this agreement, you commit to maintaining the service for the full 36-month term unless otherwise specified in the cancellation policy.
-
-2. PRICING AND PAYMENT
-- All pricing is as specified in your selected package
-- Prices are per user and/or per location as indicated
-- Monthly subscriptions are billed monthly in advance
-- Annual subscriptions receive a discount and are billed annually in advance
-- One-time fees are due at the time of purchase
-- All prices are in USD and exclude applicable taxes
-
-3. ONBOARDING
-- Standard onboarding is included with all packages
-- Onboarding fees, if applicable, are one-time charges
-- Timeline for onboarding will be communicated upon purchase
-
-4. CANCELLATION POLICY
-- Early termination of the 36-month agreement may result in cancellation fees
-- Written notice of 30 days is required for cancellation
-- Refunds are not provided for unused time on prepaid subscriptions
-- Some services may have minimum commitment periods
-
-5. SERVICE LEVEL
-- We strive to provide 99.9% uptime for all services
-- Support is available during business hours (9 AM - 5 PM EST)
-- Emergency support may be available depending on your package level
-
-6. DATA AND PRIVACY
-- Your data is stored securely and backed up regularly
-- We comply with all applicable data protection regulations
-- You retain ownership of all data you upload to our systems
-- We will never sell or share your data with third parties without consent
-
-7. LIMITATION OF LIABILITY
-- Our liability is limited to the amount paid for services
-- We are not responsible for indirect or consequential damages
-- Service interruptions due to circumstances beyond our control are not grounds for refunds
-
-8. MODIFICATIONS
-- We reserve the right to modify these terms with 30 days notice
-- Continued use of services after modifications constitutes acceptance
-- Material changes will be communicated via email
-
-9. ELECTRONIC SIGNATURE
-By providing your electronic signature and agreeing to these terms, you acknowledge that your electronic signature is legally binding and equivalent to a handwritten signature.
-
-10. CONTACT INFORMATION
-For questions about these terms, please contact us at:
-Email: support@example.com
-Phone: (555) 123-4567
-
-11. GOVERNING LAW
-This agreement is governed by the laws of [Your Jurisdiction] and any disputes will be resolved in the courts of [Your Jurisdiction].
-
-Last Updated: ${new Date().toISOString().split('T')[0]}`,
+  id: generateTermsId('2.0'),
+  version: '2.0',
+  content: `# Terms and Conditions
+> Loading the latest Terms and Conditions…`,
   lastUpdated: new Date().toISOString(),
 };
 

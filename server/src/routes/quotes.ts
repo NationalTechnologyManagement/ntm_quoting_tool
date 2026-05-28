@@ -222,6 +222,15 @@ router.post('/api/quotes/:id/checkout', async (req, res) => {
       signedAt: z.string(),
       ipAddress: z.string(),
       userAgent: z.string(),
+      // Optional rasterized handwritten signature (PNG data URL). Capped
+      // at ~750KB raw — a normal signature canvas runs well under that;
+      // anything larger is almost certainly junk and we reject it before
+      // it lands in the Json column.
+      signatureImage: z
+        .string()
+        .max(1_000_000)
+        .regex(/^data:image\/png;base64,/)
+        .optional(),
     }),
     orderNumber: z.string(),
   });

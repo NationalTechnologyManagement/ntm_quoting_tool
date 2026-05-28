@@ -124,6 +124,10 @@ export interface QuoteAgreement {
   signedAt: string;
   ipAddress: string;
   userAgent: string;
+  // Optional rasterized handwritten signature (PNG data URL). When present
+  // the contract renders this image in the client signature spot instead of
+  // the typed cursive name. `signedBy` is still required (typed legal name).
+  signatureImage?: string;
 }
 
 export interface QuoteSelectedPackage {

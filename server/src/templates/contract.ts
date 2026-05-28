@@ -33,22 +33,128 @@ function formatDateTime(iso: string): string {
   });
 }
 
+function escapeHtmlBasic(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+function renderInline(text: string): string {
+  // Inline **bold** → <strong>. HTML-escape first so the source text can
+  // contain raw <, >, &.
+  return escapeHtmlBasic(text).replace(
+    /\*\*([^*]+)\*\*/g,
+    '<strong>$1</strong>',
+  );
+}
+
+// Parse the markdown-flavored Master Services Agreement text and emit
+// styled HTML for the contract PDF. Recognized line prefixes mirror the
+// client-side renderer (see client/src/lib/terms-renderer.tsx):
+//   `# Title` `## SECTION` `### Subsection` `- bullet` `| a | b |` `> caption`
+// Anything else is a paragraph. Blank lines separate blocks.
 function formatTermsContent(content: string): string {
   if (!content) return '';
-  const sections = content.split('\n\n').filter((s) => s.trim());
-  return sections
-    .map((section) => {
-      const trimmed = section.trim();
-      const numberedMatch = trimmed.match(/^(\d+)\.\s+([A-Z\s&]+)\n(.+)/s);
-      if (numberedMatch) {
-        const [, num, title, body] = numberedMatch;
-        return `<p class="term-clause"><strong>${num}. ${title.trim()}</strong><br>${body.trim().replace(/\n- /g, '<br>- ').replace(/\n/g, ' ')}</p>`;
+  const lines = content.split('\n');
+  const out: string[] = [];
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i].trim();
+    if (!line) {
+      i++;
+      continue;
+    }
+    if (line.startsWith('# ')) {
+      // Document title is already rendered as the "Terms & Conditions"
+      // section header in the parent template — skip the in-text duplicate.
+      i++;
+      continue;
+    }
+    if (line.startsWith('## ')) {
+      out.push(
+        `<div class="term-section">${renderInline(line.slice(3).trim())}</div>`,
+      );
+      i++;
+      continue;
+    }
+    if (line.startsWith('### ')) {
+      out.push(
+        `<div class="term-subsection">${renderInline(line.slice(4).trim())}</div>`,
+      );
+      i++;
+      continue;
+    }
+    if (line.startsWith('> ')) {
+      out.push(
+        `<p class="term-caption">${renderInline(line.slice(2).trim())}</p>`,
+      );
+      i++;
+      continue;
+    }
+    if (line.startsWith('- ')) {
+      const items: string[] = [];
+      while (i < lines.length && lines[i].trim().startsWith('- ')) {
+        items.push(renderInline(lines[i].trim().slice(2).trim()));
+        i++;
       }
-      if (trimmed.match(/^TERMS AND CONDITIONS$/i)) return '';
-      return `<p class="term-clause">${trimmed.replace(/\n/g, ' ')}</p>`;
-    })
-    .filter((s) => s)
-    .join('\n    ');
+      out.push(
+        `<ul class="term-bullets">${items.map((it) => `<li>${it}</li>`).join('')}</ul>`,
+      );
+      continue;
+    }
+    if (line.startsWith('|') && line.endsWith('|')) {
+      const rows: string[][] = [];
+      while (
+        i < lines.length &&
+        lines[i].trim().startsWith('|') &&
+        lines[i].trim().endsWith('|')
+      ) {
+        const cells = lines[i]
+          .trim()
+          .slice(1, -1)
+          .split('|')
+          .map((c) => c.trim());
+        rows.push(cells);
+        i++;
+      }
+      if (rows.length) {
+        const [header, ...body] = rows;
+        out.push(
+          `<table class="term-table"><thead><tr>${header
+            .map((c) => `<th>${renderInline(c)}</th>`)
+            .join('')}</tr></thead><tbody>${body
+            .map(
+              (row) =>
+                `<tr>${row.map((c) => `<td>${renderInline(c)}</td>`).join('')}</tr>`,
+            )
+            .join('')}</tbody></table>`,
+        );
+      }
+      continue;
+    }
+    // Paragraph: collapse a run of plain lines into one block.
+    const para: string[] = [line];
+    i++;
+    while (i < lines.length) {
+      const next = lines[i].trim();
+      if (!next) break;
+      if (
+        next.startsWith('# ') ||
+        next.startsWith('## ') ||
+        next.startsWith('### ') ||
+        next.startsWith('> ') ||
+        next.startsWith('- ') ||
+        (next.startsWith('|') && next.endsWith('|'))
+      ) {
+        break;
+      }
+      para.push(next);
+      i++;
+    }
+    out.push(`<p class="term-paragraph">${renderInline(para.join(' '))}</p>`);
+  }
+  return out.join('\n    ');
 }
 
 export function buildContractHtml(quote: QuoteData): string {
@@ -83,6 +189,10 @@ export function buildContractHtml(quote: QuoteData): string {
   const signedBy = quote.agreement?.signedBy ?? '';
   const signedAt = quote.agreement?.signedAt ?? '';
   const ipAddress = quote.agreement?.ipAddress ?? '';
+  // Optional rasterized handwritten signature (PNG data URL). When present
+  // the client signature spot renders this image instead of the cursive
+  // typed name. We still print the typed legal name underneath for audit.
+  const signatureImage = quote.agreement?.signatureImage ?? '';
 
   const addonsRows = (quote.selectedAddons || [])
     .map(
@@ -374,6 +484,72 @@ export function buildContractHtml(quote: QuoteData): string {
       color: #333;
     }
     .term-clause strong { color: #1a3a5c; }
+    /* Structured Master Services Agreement blocks. Mirrors the source PDF:
+       full-width section banners, orange-styled subsection labels, tight
+       bullet lists, italic captions, and a header-on-banner table. */
+    .term-section {
+      background: #e8521e;
+      color: #ffffff;
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      font-weight: 700;
+      font-size: 10pt;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 8px 14px;
+      margin: 18px 0 10px 0;
+      page-break-after: avoid;
+    }
+    .term-subsection {
+      color: #e8521e;
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      font-weight: 700;
+      font-size: 9.5pt;
+      margin: 12px 0 4px 0;
+      page-break-after: avoid;
+    }
+    .term-bullets {
+      margin: 0 0 8px 22px;
+      padding: 0;
+      font-size: 9pt;
+      line-height: 1.55;
+      color: #333;
+    }
+    .term-bullets li { margin: 2px 0; }
+    .term-paragraph {
+      font-size: 9pt;
+      margin: 0 0 8px 0;
+      line-height: 1.6;
+      color: #333;
+    }
+    .term-caption {
+      font-size: 8.5pt;
+      font-style: italic;
+      color: #666;
+      margin: 0 0 8px 0;
+    }
+    .term-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 8.5pt;
+      margin: 6px 0 12px 0;
+    }
+    .term-table th {
+      background: #e8521e;
+      color: #ffffff;
+      font-family: 'Helvetica Neue', Arial, sans-serif;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      padding: 6px 8px;
+      text-align: left;
+      font-size: 7.5pt;
+    }
+    .term-table td {
+      padding: 6px 8px;
+      border-bottom: 1px solid #eee;
+      vertical-align: top;
+      color: #333;
+    }
 
     /* ── Signature ── */
     .sig-block {
@@ -414,6 +590,11 @@ export function buildContractHtml(quote: QuoteData): string {
       font-family: 'Brush Script MT', 'Segoe Script', cursive;
       font-size: 18pt;
       color: #1a3a5c;
+    }
+    .sig-image {
+      max-height: 60px;
+      max-width: 100%;
+      object-fit: contain;
     }
     .sig-detail {
       font-size: 8pt;
@@ -628,8 +809,14 @@ export function buildContractHtml(quote: QuoteData): string {
     <div class="sig-grid">
       <div class="sig-party">
         <div class="sig-label">Client Signature</div>
-        <div class="sig-line">
-          ${isSigned ? `<div class="sig-name">${signedBy}</div>` : ''}
+        <div class="sig-line" style="${signatureImage ? 'min-height:64px;' : ''}">
+          ${
+            isSigned
+              ? signatureImage
+                ? `<img class="sig-image" src="${signatureImage}" alt="Client signature" />`
+                : `<div class="sig-name">${signedBy}</div>`
+              : ''
+          }
         </div>
         <div class="sig-detail"><strong>Name:</strong> ${isSigned ? signedBy : '&nbsp;'}</div>
         <div class="sig-detail"><strong>Email:</strong> ${isSigned ? quote.customer.email : '&nbsp;'}</div>

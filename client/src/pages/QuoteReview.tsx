@@ -22,10 +22,13 @@ import {
   ChevronDown,
   Tag,
   FileText,
+  Pencil,
+  Type as TypeIcon,
 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SendQuoteDialog } from "@/components/SendQuoteDialog";
+import { SignaturePad } from "@/components/SignaturePad";
 import { formatAmount } from "@/lib/utils";
 import { IS_LEAD_GEN_MODE } from "@/lib/lead-gen";
 
@@ -128,6 +131,13 @@ export default function QuoteReview() {
   const [promoInput, setPromoInput] = useState("");
   const [applyingPromo, setApplyingPromo] = useState(false);
   const [emailDialogOpen, setEmailDialogOpen] = useState(false);
+  // Signature mode: "typed" is the existing digital signature (full legal
+  // name typed in). "drawn" opens a canvas modal where the customer signs
+  // with their mouse. Either is valid; the drawn version still requires a
+  // typed legal name underneath so the captured PNG has audit metadata.
+  const [signatureMode, setSignatureMode] = useState<"typed" | "drawn">("typed");
+  const [drawnSignature, setDrawnSignature] = useState<string>("");
+  const [signaturePadOpen, setSignaturePadOpen] = useState(false);
 
   const handleApplyPromo = async () => {
     if (!promoInput.trim() || !quoteData) return;
@@ -203,6 +213,15 @@ export default function QuoteReview() {
       return;
     }
 
+    if (signatureMode === "drawn" && !drawnSignature) {
+      toast({
+        title: "Signature Required",
+        description: "Please draw your signature before continuing.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!agreedToTerms) {
       toast({
         title: "Terms Required",
@@ -229,6 +248,12 @@ export default function QuoteReview() {
           signedAt: new Date().toISOString(),
           ipAddress: userIpAddress,
           userAgent: navigator.userAgent,
+          // Only send the rasterized signature if the customer chose to
+          // draw one. Typed mode leaves the field undefined and the
+          // contract template falls back to the cursive name.
+          ...(signatureMode === "drawn" && drawnSignature
+            ? { signatureImage: drawnSignature }
+            : {}),
         },
       };
 
@@ -300,6 +325,13 @@ export default function QuoteReview() {
         quoteNumber={quoteData.quoteNumber}
         customerEmail={quoteData.customer.email}
         variant="customer"
+      />
+
+      <SignaturePad
+        open={signaturePadOpen}
+        onOpenChange={setSignaturePadOpen}
+        typedName={signature.trim() || undefined}
+        onConfirm={(dataUrl) => setDrawnSignature(dataUrl)}
       />
 
       <div className="max-w-4xl mx-auto py-12 px-4">
@@ -761,7 +793,10 @@ export default function QuoteReview() {
           <>
 
           <div className="space-y-6">
-            {/* E-Signature */}
+            {/* E-Signature: typed legal name is always required (audit
+                trail). Customer can optionally also draw a handwritten
+                signature; if they do, the contract PDF renders the drawn
+                image and the typed name appears under the signature line. */}
             <div>
               <Label htmlFor="signature">Full Legal Name (E-Signature)</Label>
               <Input
@@ -775,6 +810,84 @@ export default function QuoteReview() {
               <p className="text-xs text-muted-foreground mt-1">
                 By typing your name, you agree this constitutes a legal signature.
               </p>
+            </div>
+
+            <div>
+              <Label>Signature Style</Label>
+              <div className="grid grid-cols-2 gap-2 mt-2">
+                <Button
+                  type="button"
+                  variant={signatureMode === "typed" ? "default" : "outline"}
+                  onClick={() => setSignatureMode("typed")}
+                  disabled={submitting}
+                  className="justify-start"
+                >
+                  <TypeIcon className="w-4 h-4 mr-2" />
+                  Digital (typed)
+                </Button>
+                <Button
+                  type="button"
+                  variant={signatureMode === "drawn" ? "default" : "outline"}
+                  onClick={() => setSignatureMode("drawn")}
+                  disabled={submitting}
+                  className="justify-start"
+                >
+                  <Pencil className="w-4 h-4 mr-2" />
+                  Draw with mouse
+                </Button>
+              </div>
+
+              {signatureMode === "drawn" && (
+                <div className="mt-3 rounded-md border p-3 bg-muted/30">
+                  {drawnSignature ? (
+                    <div className="space-y-2">
+                      <div className="rounded-sm border bg-white p-2 flex items-center justify-center">
+                        <img
+                          src={drawnSignature}
+                          alt="Your drawn signature"
+                          className="max-h-24 max-w-full object-contain"
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setSignaturePadOpen(true)}
+                          disabled={submitting}
+                        >
+                          <Pencil className="w-4 h-4 mr-2" />
+                          Redo signature
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setDrawnSignature("")}
+                          disabled={submitting}
+                        >
+                          Clear
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => setSignaturePadOpen(true)}
+                      disabled={submitting}
+                      className="w-full"
+                    >
+                      <Pencil className="w-4 h-4 mr-2" />
+                      Click to draw your signature
+                    </Button>
+                  )}
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Opens a signature pad. Click once to start, move your
+                    mouse to draw, click again to end the stroke.
+                  </p>
+                </div>
+              )}
             </div>
 
             {/* Terms Checkbox */}
@@ -822,7 +935,12 @@ export default function QuoteReview() {
             {/* Submit Button */}
             <Button
               onClick={handleAcceptQuote}
-              disabled={!signature.trim() || !agreedToTerms || submitting}
+              disabled={
+                !signature.trim() ||
+                !agreedToTerms ||
+                submitting ||
+                (signatureMode === "drawn" && !drawnSignature)
+              }
               className="w-full h-12 text-lg"
             >
               {submitting ? (

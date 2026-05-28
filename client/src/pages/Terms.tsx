@@ -1,10 +1,11 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, AlertCircle } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuote } from "@/contexts/QuoteContext";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { SiteHeader } from "@/components/SiteHeader";
+import { RenderedTerms } from "@/lib/terms-renderer";
 
 const Terms = () => {
   const navigate = useNavigate();
@@ -55,14 +56,13 @@ const Terms = () => {
 
         <Card className="shadow-card">
           <CardHeader>
-            <CardTitle className="text-3xl font-bold">Terms and Conditions</CardTitle>
-            <p className="text-sm text-muted-foreground mt-2">
+            <p className="text-xs uppercase tracking-wider text-muted-foreground">
               Version {displayTerms.version} • Last updated: {lastUpdated}
               {isHistoricalVersion && <span className="ml-2 text-orange-500">(Historical)</span>}
             </p>
           </CardHeader>
-          <CardContent className="prose prose-sm max-w-none dark:prose-invert">
-            <div className="whitespace-pre-wrap">{displayTerms.content}</div>
+          <CardContent>
+            <RenderedTerms content={displayTerms.content} />
           </CardContent>
         </Card>
       </div>
