@@ -46,29 +46,74 @@ export function SignaturePad({
   } | null>(null);
   const [hasInk, setHasInk] = useState(false);
 
-  // Resize the canvas backing store to match its CSS size × devicePixelRatio
-  // so strokes stay crisp on HiDPI displays. Re-run when the dialog opens.
+  // Keep the canvas backing store synced to the LIVE CSS size × DPR.
+  // Radix Dialog opens with a zoom-in animation, so a one-shot resize on
+  // mount measures the wrong (mid-animation) rect and causes a cursor-to-
+  // ink offset. ResizeObserver re-syncs whenever the canvas's actual size
+  // settles, and we snapshot any existing ink so a mid-session resize
+  // (animation completion, window resize) doesn't wipe the drawing.
   useEffect(() => {
     if (!open) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const resize = () => {
+
+    const sync = () => {
       const rect = canvas.getBoundingClientRect();
+      if (rect.width < 1 || rect.height < 1) return;
       const dpr = window.devicePixelRatio || 1;
-      canvas.width = Math.floor(rect.width * dpr);
-      canvas.height = Math.floor(rect.height * dpr);
+      const desiredW = Math.round(rect.width * dpr);
+      const desiredH = Math.round(rect.height * dpr);
+      if (canvas.width === desiredW && canvas.height === desiredH) return;
+
+      // Save current ink to a scratch canvas BEFORE the width assignment
+      // wipes the bitmap. We only bother if the current backing has area.
+      let snapshot: HTMLCanvasElement | null = null;
+      if (canvas.width > 0 && canvas.height > 0) {
+        snapshot = document.createElement('canvas');
+        snapshot.width = canvas.width;
+        snapshot.height = canvas.height;
+        snapshot.getContext('2d')?.drawImage(canvas, 0, 0);
+      }
+
+      canvas.width = desiredW;
+      canvas.height = desiredH;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
+      // Stamp the previous ink onto the new (larger / smaller) backing.
+      if (snapshot) {
+        ctx.drawImage(
+          snapshot,
+          0,
+          0,
+          snapshot.width,
+          snapshot.height,
+          0,
+          0,
+          desiredW,
+          desiredH,
+        );
+      }
       ctx.scale(dpr, dpr);
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
       ctx.lineWidth = 2.4;
       ctx.strokeStyle = '#000000';
     };
-    // Defer one tick so the dialog has rendered and the canvas has a layout
-    // size to measure.
-    const t = setTimeout(resize, 0);
-    return () => clearTimeout(t);
+
+    // Two rAFs so the first paint (and dialog mount) is complete before
+    // we measure. ResizeObserver picks up any later layout shift.
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(sync);
+    });
+    const observer = new ResizeObserver(sync);
+    observer.observe(canvas);
+
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+      observer.disconnect();
+    };
   }, [open]);
 
   // Reset every time the dialog opens so an abandoned attempt doesn't bleed
