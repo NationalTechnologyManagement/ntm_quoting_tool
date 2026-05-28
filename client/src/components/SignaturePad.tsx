@@ -46,27 +46,27 @@ export function SignaturePad({
   } | null>(null);
   const [hasInk, setHasInk] = useState(false);
 
-  // Keep the canvas backing store synced to the LIVE CSS size × DPR.
-  // Radix Dialog opens with a zoom-in animation, so a one-shot resize on
-  // mount measures the wrong (mid-animation) rect and causes a cursor-to-
-  // ink offset. ResizeObserver re-syncs whenever the canvas's actual size
-  // settles, and we snapshot any existing ink so a mid-session resize
-  // (animation completion, window resize) doesn't wipe the drawing.
+  // Size the canvas backing to its LAYOUT box (clientWidth/Height) × DPR.
+  // Using clientWidth — not getBoundingClientRect — sidesteps ancestor CSS
+  // transforms (Radix Dialog's zoom-in animation, modal centering's
+  // translate, etc.) which would otherwise give a mid-animation visual
+  // rect and cause clicks to land off-axis. Ancestor transforms are
+  // handled separately in getPoint() by dividing them out at click time.
   useEffect(() => {
     if (!open) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
 
     const sync = () => {
-      const rect = canvas.getBoundingClientRect();
-      if (rect.width < 1 || rect.height < 1) return;
+      const cssW = canvas.clientWidth;
+      const cssH = canvas.clientHeight;
+      if (cssW < 1 || cssH < 1) return;
       const dpr = window.devicePixelRatio || 1;
-      const desiredW = Math.round(rect.width * dpr);
-      const desiredH = Math.round(rect.height * dpr);
+      const desiredW = Math.round(cssW * dpr);
+      const desiredH = Math.round(cssH * dpr);
       if (canvas.width === desiredW && canvas.height === desiredH) return;
 
-      // Save current ink to a scratch canvas BEFORE the width assignment
-      // wipes the bitmap. We only bother if the current backing has area.
+      // Save current ink BEFORE the width assignment wipes the bitmap.
       let snapshot: HTMLCanvasElement | null = null;
       if (canvas.width > 0 && canvas.height > 0) {
         snapshot = document.createElement('canvas');
@@ -79,7 +79,6 @@ export function SignaturePad({
       canvas.height = desiredH;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
-      // Stamp the previous ink onto the new (larger / smaller) backing.
       if (snapshot) {
         ctx.drawImage(
           snapshot,
@@ -100,12 +99,15 @@ export function SignaturePad({
       ctx.strokeStyle = '#000000';
     };
 
-    // Two rAFs so the first paint (and dialog mount) is complete before
-    // we measure. ResizeObserver picks up any later layout shift.
+    // Initial sync after mount; rAF guards against a 0-width measurement
+    // on a freshly portal-mounted canvas.
     let raf2 = 0;
     const raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(sync);
     });
+    // ResizeObserver covers later layout-box changes (window resize, browser
+    // zoom). It does NOT fire on ancestor transform changes — that's why
+    // we use clientWidth above, which is transform-immune.
     const observer = new ResizeObserver(sync);
     observer.observe(canvas);
 
@@ -131,7 +133,18 @@ export function SignaturePad({
     const canvas = canvasRef.current;
     if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    // clientX/Y are viewport coords reflecting the VISUAL position of the
+    // cursor; rect reflects the canvas's VISUAL box (after any ancestor
+    // transforms). The backing was sized in LAYOUT coords (clientWidth ×
+    // DPR), so divide the visual offset by the live transform scale to
+    // land back in layout space. When no ancestor transform is in play
+    // these ratios are 1, so this is a no-op.
+    const scaleX = rect.width > 0 ? canvas.clientWidth / rect.width : 1;
+    const scaleY = rect.height > 0 ? canvas.clientHeight / rect.height : 1;
+    return {
+      x: (e.clientX - rect.left) * scaleX,
+      y: (e.clientY - rect.top) * scaleY,
+    };
   };
 
   const extendBounds = (x: number, y: number) => {
