@@ -10,10 +10,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Mail, CreditCard, CalendarCheck, ChevronDown, ChevronUp, ArrowLeft, AlertCircle, X } from "lucide-react";
+import { Mail, CreditCard, CalendarCheck, ChevronDown, ChevronUp, ArrowLeft, AlertCircle, X, Pencil, Type as TypeIcon } from "lucide-react";
 import { toast } from "sonner";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SendQuoteDialog } from "@/components/SendQuoteDialog";
+import { SignaturePad } from "@/components/SignaturePad";
 import { formatAmount, formatContractTerm } from "@/lib/utils";
 import { IS_LEAD_GEN_MODE } from "@/lib/lead-gen";
 
@@ -48,6 +49,12 @@ const Summary = () => {
   const [signature, setSignature] = useState("");
   const [userIpAddress, setUserIpAddress] = useState("");
   const [createdQuote, setCreatedQuote] = useState<{ quoteNumber: string } | null>(null);
+  // Signature mode: "typed" (existing digital signature) or "drawn"
+  // (handwritten via SignaturePad). Either is valid; drawn additionally
+  // requires a typed legal name for audit metadata.
+  const [signatureMode, setSignatureMode] = useState<"typed" | "drawn">("typed");
+  const [drawnSignature, setDrawnSignature] = useState<string>("");
+  const [signaturePadOpen, setSignaturePadOpen] = useState(false);
 
   // Fetch user's IP address
   useEffect(() => {
@@ -409,6 +416,11 @@ const Summary = () => {
       return;
     }
 
+    if (signatureMode === "drawn" && !drawnSignature) {
+      toast.error("Please draw your signature before continuing");
+      return;
+    }
+
     // VALIDATE ADDON DATA INTEGRITY before sending to webhook
     const invalidAddons = selectedAddons.filter(addon => {
       // Check for missing pricing
@@ -456,6 +468,12 @@ const Summary = () => {
           signedAt: new Date().toISOString(),
           ipAddress: userIpAddress,
           userAgent: navigator.userAgent,
+          // Only attach the rasterized signature if the customer drew one.
+          // Typed mode leaves this off and the contract PDF falls back to
+          // the cursive typed name.
+          ...(signatureMode === "drawn" && drawnSignature
+            ? { signatureImage: drawnSignature }
+            : {}),
         },
         orderNumber,
       });
@@ -485,6 +503,13 @@ const Summary = () => {
           variant="customer"
         />
       )}
+
+      <SignaturePad
+        open={signaturePadOpen}
+        onOpenChange={setSignaturePadOpen}
+        typedName={signature.trim() || undefined}
+        onConfirm={(dataUrl) => setDrawnSignature(dataUrl)}
+      />
       <div className="max-w-6xl mx-auto py-12 px-4">
         {/* Back button */}
         <Button variant="ghost" onClick={() => navigate("/quote-builder")} className="mb-6">
@@ -733,7 +758,9 @@ const Summary = () => {
                   </Label>
                 </div>
 
-                {/* Signature Field */}
+                {/* Signature Field — typed legal name is always required
+                    for the audit trail. Drawn signature is optional and
+                    overrides the cursive rendering in the contract PDF. */}
                 <div className="space-y-2">
                   <Label htmlFor="signature" className="text-sm font-medium">
                     Electronic Signature
@@ -749,6 +776,79 @@ const Summary = () => {
                   <p className="text-xs text-muted-foreground">
                     By typing your name, you are providing an electronic signature that is legally binding.
                   </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Signature Style</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      type="button"
+                      variant={signatureMode === "typed" ? "default" : "outline"}
+                      onClick={() => setSignatureMode("typed")}
+                      className="justify-start"
+                    >
+                      <TypeIcon className="w-4 h-4 mr-2" />
+                      Digital (typed)
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={signatureMode === "drawn" ? "default" : "outline"}
+                      onClick={() => setSignatureMode("drawn")}
+                      className="justify-start"
+                    >
+                      <Pencil className="w-4 h-4 mr-2" />
+                      Draw with mouse
+                    </Button>
+                  </div>
+
+                  {signatureMode === "drawn" && (
+                    <div className="mt-2 rounded-md border p-3 bg-muted/30">
+                      {drawnSignature ? (
+                        <div className="space-y-2">
+                          <div className="rounded-sm border bg-white p-2 flex items-center justify-center">
+                            <img
+                              src={drawnSignature}
+                              alt="Your drawn signature"
+                              className="max-h-24 max-w-full object-contain"
+                            />
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setSignaturePadOpen(true)}
+                            >
+                              <Pencil className="w-4 h-4 mr-2" />
+                              Redo signature
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setDrawnSignature("")}
+                            >
+                              Clear
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={() => setSignaturePadOpen(true)}
+                          className="w-full"
+                        >
+                          <Pencil className="w-4 h-4 mr-2" />
+                          Click to draw your signature
+                        </Button>
+                      )}
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Opens a signature pad. Click once to start, move your
+                        mouse to draw, click again to end the stroke.
+                      </p>
+                    </div>
+                  )}
                 </div>
               </div>
             </Card>
@@ -1007,7 +1107,13 @@ const Summary = () => {
                       size="lg"
                       className="w-full"
                       onClick={handlePurchase}
-                      disabled={loading !== null || !agreedToTerms || !signature || signature.trim().length < 3}
+                      disabled={
+                        loading !== null ||
+                        !agreedToTerms ||
+                        !signature ||
+                        signature.trim().length < 3 ||
+                        (signatureMode === "drawn" && !drawnSignature)
+                      }
                     >
                       {loading === "purchase" ? (
                         "Processing..."
@@ -1023,6 +1129,14 @@ const Summary = () => {
                         Please agree to terms and provide your signature to continue
                       </p>
                     )}
+                    {agreedToTerms &&
+                      signature.trim().length >= 3 &&
+                      signatureMode === "drawn" &&
+                      !drawnSignature && (
+                        <p className="text-xs text-muted-foreground text-center">
+                          Please draw your signature to continue
+                        </p>
+                      )}
                   </>
                 )}
               </div>
