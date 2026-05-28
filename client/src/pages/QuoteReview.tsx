@@ -204,7 +204,11 @@ export default function QuoteReview() {
   const handleAcceptQuote = async () => {
     if (!quoteData) return;
 
-    if (signature.trim().length < 3) {
+    // Typed mode requires the typed legal name. Drawn mode requires the
+    // canvas signature — typed name is optional and we fall back to the
+    // customer's name from the quote so signedBy + contract "Name:" stay
+    // populated for audit.
+    if (signatureMode === "typed" && signature.trim().length < 3) {
       toast({
         title: "Invalid Signature",
         description: "Please enter your full legal name (minimum 3 characters)",
@@ -235,10 +239,18 @@ export default function QuoteReview() {
       setSubmitting(true);
       const userIpAddress = await fetchUserIp();
 
+      // signedBy: typed mode → what they typed. Drawn mode → typed name
+      // if they provided one, otherwise fall back to the customer name
+      // already captured on the quote. Either way, the backend audit field
+      // and the contract "Name:" line stay populated.
+      const signedByValue =
+        signature.trim() ||
+        (signatureMode === "drawn" ? quoteData.customer.name.trim() : "");
+
       const checkoutPayload = {
         orderNumber: generateOrderNumber(),
         agreement: {
-          signedBy: signature.trim(),
+          signedBy: signedByValue,
           email: quoteData.customer.email,
           agreedToTerms: true as const,
           termsVersion: quoteData.termsVersion || quoteData.terms?.version || '1.0',
@@ -798,17 +810,30 @@ export default function QuoteReview() {
                 signature; if they do, the contract PDF renders the drawn
                 image and the typed name appears under the signature line. */}
             <div>
-              <Label htmlFor="signature">Full Legal Name (E-Signature)</Label>
+              <Label htmlFor="signature">
+                Full Legal Name
+                {signatureMode === "drawn" ? (
+                  <span className="text-muted-foreground font-normal"> (optional)</span>
+                ) : (
+                  <span className="text-muted-foreground font-normal"> (E-Signature)</span>
+                )}
+              </Label>
               <Input
                 id="signature"
-                placeholder="Enter your full legal name"
+                placeholder={
+                  signatureMode === "drawn"
+                    ? `Defaults to ${quoteData.customer.name}`
+                    : "Enter your full legal name"
+                }
                 value={signature}
                 onChange={(e) => setSignature(e.target.value)}
                 className="mt-2"
                 disabled={submitting}
               />
               <p className="text-xs text-muted-foreground mt-1">
-                By typing your name, you agree this constitutes a legal signature.
+                {signatureMode === "drawn"
+                  ? "Used as your printed name underneath the signature. Leave blank to use the name on this quote."
+                  : "By typing your name, you agree this constitutes a legal signature."}
               </p>
             </div>
 
@@ -932,14 +957,17 @@ export default function QuoteReview() {
               Preview full Quote &amp; Contract
             </Button>
 
-            {/* Submit Button */}
+            {/* Submit Button — Typed mode needs the typed legal name.
+                Drawn mode just needs a captured signature; typed name is
+                optional and falls back to the quote's customer name. */}
             <Button
               onClick={handleAcceptQuote}
               disabled={
-                !signature.trim() ||
                 !agreedToTerms ||
                 submitting ||
-                (signatureMode === "drawn" && !drawnSignature)
+                (signatureMode === "typed"
+                  ? signature.trim().length < 3
+                  : !drawnSignature)
               }
               className="w-full h-12 text-lg"
             >

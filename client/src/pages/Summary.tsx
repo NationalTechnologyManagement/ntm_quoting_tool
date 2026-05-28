@@ -411,7 +411,11 @@ const Summary = () => {
       return;
     }
 
-    if (!signature || signature.trim().length < 3) {
+    // Typed mode requires the typed legal name. Drawn mode requires the
+    // canvas signature; the typed name is optional and falls back to the
+    // customer's name from the quote so the contract's "Name:" line + the
+    // backend audit field stay populated.
+    if (signatureMode === "typed" && (!signature || signature.trim().length < 3)) {
       toast.error("Please provide your full name as a signature");
       return;
     }
@@ -456,9 +460,15 @@ const Summary = () => {
       const quote = await getOrCreateQuote();
       const orderNumber = generateQuoteNumber("order");
 
+      // signedBy: typed mode → what they typed. Drawn mode → typed name
+      // if provided, otherwise the customer's name from the quote info.
+      const signedByValue =
+        signature.trim() ||
+        (signatureMode === "drawn" ? customerInfo.name.trim() : "");
+
       const checkoutData = await quoteApi.checkout(quote.quoteNumber, {
         agreement: {
-          signedBy: signature.trim(),
+          signedBy: signedByValue,
           email: customerInfo.email,
           agreedToTerms: true,
           termsVersion: termsContent.version,
@@ -758,23 +768,32 @@ const Summary = () => {
                   </Label>
                 </div>
 
-                {/* Signature Field — typed legal name is always required
-                    for the audit trail. Drawn signature is optional and
-                    overrides the cursive rendering in the contract PDF. */}
+                {/* Signature Field — required in Typed mode. Optional in
+                    Drawn mode (used as the printed name under the
+                    handwritten signature; defaults to the customer name
+                    captured earlier in the quote flow). */}
                 <div className="space-y-2">
                   <Label htmlFor="signature" className="text-sm font-medium">
-                    Electronic Signature
+                    {signatureMode === "drawn"
+                      ? "Printed Name (optional)"
+                      : "Electronic Signature"}
                   </Label>
                   <Input
                     id="signature"
                     type="text"
-                    placeholder="Type your full name to sign"
+                    placeholder={
+                      signatureMode === "drawn"
+                        ? `Defaults to ${customerInfo.name || "the name on this quote"}`
+                        : "Type your full name to sign"
+                    }
                     value={signature}
                     onChange={(e) => setSignature(e.target.value)}
                     className="font-serif text-lg"
                   />
                   <p className="text-xs text-muted-foreground">
-                    By typing your name, you are providing an electronic signature that is legally binding.
+                    {signatureMode === "drawn"
+                      ? "Printed under your handwritten signature on the contract. Leave blank to use the name on this quote."
+                      : "By typing your name, you are providing an electronic signature that is legally binding."}
                   </p>
                 </div>
 
@@ -1110,9 +1129,9 @@ const Summary = () => {
                       disabled={
                         loading !== null ||
                         !agreedToTerms ||
-                        !signature ||
-                        signature.trim().length < 3 ||
-                        (signatureMode === "drawn" && !drawnSignature)
+                        (signatureMode === "typed"
+                          ? signature.trim().length < 3
+                          : !drawnSignature)
                       }
                     >
                       {loading === "purchase" ? (
@@ -1124,19 +1143,24 @@ const Summary = () => {
                         </>
                       )}
                     </Button>
-                    {(!agreedToTerms || !signature || signature.trim().length < 3) && (
-                      <p className="text-xs text-muted-foreground text-center">
-                        Please agree to terms and provide your signature to continue
-                      </p>
-                    )}
-                    {agreedToTerms &&
-                      signature.trim().length >= 3 &&
-                      signatureMode === "drawn" &&
-                      !drawnSignature && (
-                        <p className="text-xs text-muted-foreground text-center">
-                          Please draw your signature to continue
-                        </p>
-                      )}
+                    {(() => {
+                      const missingSig =
+                        signatureMode === "typed"
+                          ? signature.trim().length < 3
+                          : !drawnSignature;
+                      if (!agreedToTerms || missingSig) {
+                        return (
+                          <p className="text-xs text-muted-foreground text-center">
+                            {!agreedToTerms
+                              ? "Please agree to the terms and conditions to continue"
+                              : signatureMode === "typed"
+                                ? "Please type your full name to sign and continue"
+                                : "Please draw your signature to continue"}
+                          </p>
+                        );
+                      }
+                      return null;
+                    })()}
                   </>
                 )}
               </div>
