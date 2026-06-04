@@ -349,7 +349,7 @@ export default function QuoteReview() {
       <div className="max-w-4xl mx-auto py-12 px-4">
         {/* Header Section */}
         <div className="text-center mb-8 animate-fade-in">
-          <h1 className="text-4xl font-bold mb-2">Quote Review & Acceptance</h1>
+          <h1 className="text-3xl sm:text-4xl font-bold mb-2">Quote Review & Acceptance</h1>
           <p className="text-muted-foreground mt-2">Review your quote and proceed to payment</p>
 
           <div className="flex items-center justify-center gap-4 mt-4 flex-wrap">
@@ -751,13 +751,13 @@ export default function QuoteReview() {
           </div>
 
           {/* Due Today - Full Width */}
-          <Card className="p-8 bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-950/30 dark:to-emerald-900/30 border-green-200 dark:border-green-800">
+          <Card className="p-6 sm:p-8 bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-950/30 dark:to-emerald-900/30 border-green-200 dark:border-green-800">
             <div className="text-center">
               <p className="text-xs font-semibold text-green-700 dark:text-green-300 uppercase tracking-wider mb-2">
                 To Start Services
               </p>
               <h3 className="text-2xl font-semibold text-green-900 dark:text-green-100 mb-2">Pay Today</h3>
-              <div className="text-5xl font-bold text-green-900 dark:text-green-100 mb-3">
+              <div className="text-4xl sm:text-5xl font-bold text-green-900 dark:text-green-100 mb-3 break-words">
                 ${formatAmount(quoteData.totals.onboardingCost + quoteData.totals.oneTimeCosts + quoteData.totals.recurringCosts)}
               </div>
               <p className="text-sm text-green-700 dark:text-green-300">
@@ -777,7 +777,7 @@ export default function QuoteReview() {
         </div>
 
         {/* Acceptance Section */}
-        <Card className="p-8 mb-8 animate-fade-in">
+        <Card className="p-6 sm:p-8 mb-8 animate-fade-in">
           <h3 className="text-xl font-semibold mb-6">Accept Quote & Proceed</h3>
 
           {IS_LEAD_GEN_MODE ? (

@@ -154,7 +154,9 @@ export const AiChatWidget = () => {
           aria-modal="true"
           aria-label="AI assistant"
           className="fixed inset-x-0 bottom-0 z-50 sm:inset-x-auto sm:right-4 sm:bottom-4 sm:w-[380px] flex flex-col rounded-t-xl sm:rounded-xl bg-card border border-border shadow-2xl"
-          style={{ maxHeight: 'min(85vh, 720px)' }}
+          // Fixed height (not max-height) so the panel opens at full chat-widget
+          // size even when the transcript is just the greeting.
+          style={{ height: 'min(85dvh, 640px)' }}
         >
           {/* Header */}
           <div className="flex items-center gap-2 p-3 border-b border-border bg-card rounded-t-xl">

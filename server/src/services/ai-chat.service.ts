@@ -195,19 +195,33 @@ export interface StreamMessage {
   name?: string;
 }
 
+export interface TurnInfo {
+  fullText: string;
+  toolCalls: Array<{ id: string; name: string; arguments: string }>;
+  tokensIn: number;
+  tokensOut: number;
+  model: string;
+  fallback: boolean;
+  finishReason: string;
+}
+
 export interface StreamCallbacks {
   onText: (delta: string) => void;
   onToolCall: (call: { id: string; name: string; arguments: string }) => void;
-  onDone: (info: {
-    fullText: string;
-    toolCalls: Array<{ id: string; name: string; arguments: string }>;
-    tokensIn: number;
-    tokensOut: number;
-    model: string;
-    fallback: boolean;
-    finishReason: string;
-  }) => void;
+  onDone: (info: TurnInfo) => void;
   onError: (err: Error) => void;
+}
+
+/** We persist tool calls as flat {id,name,arguments}; the OpenAI wire format
+ *  the API expects is {id,type:'function',function:{name,arguments}}. Accepts
+ *  either shape so old rows replay correctly. */
+export function toWireToolCalls(stored: unknown): StreamMessage['tool_calls'] {
+  if (!Array.isArray(stored) || !stored.length) return undefined;
+  return stored.map((c: any) =>
+    c?.function
+      ? c
+      : { id: c.id, type: 'function' as const, function: { name: c.name, arguments: c.arguments } },
+  );
 }
 
 interface StreamArgs {
@@ -390,17 +404,63 @@ export async function persistAssistantTurn(input: {
   ]);
 }
 
+/** Persist the synthetic tool-result messages we feed back to the model so
+ *  reloaded history replays as a protocol-valid conversation. toolName holds
+ *  the tool_call_id (that's what the wire format needs to pair result→call). */
+export async function persistToolResults(
+  sessionId: string,
+  results: Array<{ toolCallId: string; content: string }>,
+): Promise<void> {
+  if (!results.length) return;
+  await prisma.chatMessage.createMany({
+    data: results.map((r) => ({
+      sessionId,
+      role: 'tool',
+      content: r.content,
+      toolName: r.toolCallId,
+    })),
+  });
+}
+
 export async function getMessageHistory(sessionId: string, limit = 50): Promise<StreamMessage[]> {
+  // Most-recent N — a long session must keep its newest turns (including the
+  // message just sent), not its oldest.
   const rows = await prisma.chatMessage.findMany({
     where: { sessionId },
-    orderBy: { createdAt: 'asc' },
+    orderBy: { createdAt: 'desc' },
     take: limit,
   });
-  return rows.map((r) => ({
+  rows.reverse();
+  // The window can open mid-turn: drop tool rows whose assistant tool_calls
+  // message fell outside it.
+  while (rows.length && rows[0].role === 'tool') rows.shift();
+
+  const mapped: StreamMessage[] = rows.map((r) => ({
     role: r.role as StreamMessage['role'],
     content: r.content,
-    tool_calls: (r.toolCalls as unknown as StreamMessage['tool_calls']) || undefined,
-    tool_call_id: r.toolName || undefined,
-    name: r.toolName || undefined,
+    tool_calls: toWireToolCalls(r.toolCalls),
+    tool_call_id: r.role === 'tool' ? r.toolName || undefined : undefined,
   }));
+
+  // Every assistant tool_call must be answered by a tool message or the
+  // provider rejects the conversation. Rows persisted before the tool loop
+  // existed have no results — synthesize them.
+  const out: StreamMessage[] = [];
+  for (let i = 0; i < mapped.length; i++) {
+    const m = mapped[i];
+    out.push(m);
+    if (m.role === 'assistant' && m.tool_calls?.length) {
+      const answered = new Set<string>();
+      for (let j = i + 1; j < mapped.length && mapped[j].role === 'tool'; j++) {
+        const id = mapped[j].tool_call_id;
+        if (id) answered.add(id);
+      }
+      for (const c of m.tool_calls) {
+        if (!answered.has(c.id)) {
+          out.push({ role: 'tool', content: 'ok — applied.', tool_call_id: c.id });
+        }
+      }
+    }
+  }
+  return out;
 }

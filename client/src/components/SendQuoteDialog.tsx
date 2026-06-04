@@ -95,7 +95,7 @@ export function SendQuoteDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-lg">
         <DialogHeader>
           <DialogTitle>{isCustomer ? 'Email this quote' : 'Send Quote via Email'}</DialogTitle>
           <DialogDescription>

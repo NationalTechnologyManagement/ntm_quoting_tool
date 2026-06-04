@@ -529,7 +529,7 @@ const Summary = () => {
 
         {/* Header */}
         <div className="text-center mb-8 animate-fade-in">
-          <h1 className="text-4xl font-bold text-foreground mb-2">Your Quote Summary</h1>
+          <h1 className="text-3xl sm:text-4xl font-bold text-foreground mb-2">Your Quote Summary</h1>
           <p className="text-muted-foreground">Review your selection and complete your order</p>
         </div>
 

@@ -250,7 +250,7 @@ const QuoteInfo = () => {
                 className="w-16 h-16 md:w-20 md:h-20 drop-shadow-[0_0_20px_rgba(232,127,55,0.2)]"
               />
             </div>
-            <h1 className="text-4xl font-bold text-foreground">Tell us about your business</h1>
+            <h1 className="text-3xl sm:text-4xl font-bold text-foreground">Tell us about your business</h1>
             <p className="text-muted-foreground">
               You picked <span className="text-primary font-semibold">{selectedPackage.name}</span>. A few details and we'll generate your quote.
             </p>
@@ -360,7 +360,7 @@ const QuoteInfo = () => {
                       <Info className="w-4 h-4" />
                     </button>
                   </PopoverTrigger>
-                  <PopoverContent className="max-w-md text-sm space-y-2">
+                  <PopoverContent className="w-[calc(100vw-2rem)] max-w-md text-sm space-y-2">
                     <p className="font-semibold">
                       {siteContent.quoteBuilderExplainerTitle}
                     </p>
@@ -533,7 +533,7 @@ const QuoteInfo = () => {
             size="lg"
             onClick={handleContinue}
             disabled={!isFormValid() || isSubmitting}
-            className="px-12 h-12 text-lg shadow-card hover:shadow-card-hover hover:-translate-y-0.5 transition-all"
+            className="w-full sm:w-auto px-6 sm:px-12 h-12 text-base sm:text-lg shadow-card hover:shadow-card-hover hover:-translate-y-0.5 transition-all"
           >
             {isSubmitting ? 'Processing...' : 'Continue to Summary'}
           </Button>

@@ -136,7 +136,7 @@ const IntegrationSettings = () => {
       <AdminNav />
 
       <div className="max-w-4xl mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
           <div>
             <h2 className="text-3xl font-bold">Integrations</h2>
             <p className="text-muted-foreground mt-1">
@@ -448,7 +448,7 @@ function CredentialsEditor() {
 
   return (
     <div className="mt-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h3 className="text-xl font-semibold">Credentials</h3>
           <p className="text-sm text-muted-foreground">
@@ -468,9 +468,9 @@ function CredentialsEditor() {
             {items.map((r) => {
               const dirty = (draft[r.key] ?? '') !== (r.masked ? '' : r.value);
               return (
-                <div key={r.key} className="grid grid-cols-12 gap-3 items-center">
-                  <div className="col-span-4">
-                    <code className="text-sm font-mono text-foreground">{r.key}</code>
+                <div key={r.key} className="grid grid-cols-1 sm:grid-cols-12 gap-3 sm:items-center">
+                  <div className="sm:col-span-4">
+                    <code className="text-sm font-mono text-foreground break-all">{r.key}</code>
                     <Badge
                       variant="secondary"
                       className={`ml-2 text-xs ${
@@ -484,7 +484,7 @@ function CredentialsEditor() {
                       {r.source === 'db' ? 'overridden' : r.source === 'env' ? 'from env' : 'unset'}
                     </Badge>
                   </div>
-                  <div className="col-span-7">
+                  <div className="sm:col-span-7">
                     <Input
                       value={draft[r.key] ?? ''}
                       onChange={(e) => setDraft((d) => ({ ...d, [r.key]: e.target.value }))}
@@ -493,7 +493,7 @@ function CredentialsEditor() {
                       className="font-mono"
                     />
                   </div>
-                  <div className="col-span-1">
+                  <div className="sm:col-span-1">
                     <Button
                       size="sm"
                       variant={dirty ? 'default' : 'outline'}

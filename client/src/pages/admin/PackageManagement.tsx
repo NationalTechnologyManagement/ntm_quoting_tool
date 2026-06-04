@@ -159,7 +159,7 @@ const PackageManagement = () => {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-8">
-        <div className="mb-6 flex items-center justify-between">
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h2 className="text-3xl font-bold text-foreground">Package Management</h2>
             <p className="text-muted-foreground mt-1">Configure your pricing packages</p>

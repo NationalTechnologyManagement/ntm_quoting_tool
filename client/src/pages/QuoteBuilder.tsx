@@ -48,10 +48,10 @@ const QuoteBuilder = () => {
               className="w-20 h-20 md:w-24 md:h-24 drop-shadow-[0_0_24px_rgba(232,127,55,0.25)]"
             />
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold text-foreground">
+          <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-foreground">
             {siteContent.quoteBuilderHeading}
           </h1>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+          <p className="text-base sm:text-lg text-muted-foreground max-w-2xl mx-auto">
             {siteContent.quoteBuilderSubheading}
           </p>
         </div>
@@ -221,7 +221,7 @@ const QuoteBuilder = () => {
             onClick={handleBuildQuote}
             disabled={!selectedPackage}
             className={[
-              'px-12 h-14 text-lg font-semibold',
+              'w-full sm:w-auto px-6 sm:px-12 h-14 text-base sm:text-lg font-semibold',
               'shadow-card hover:shadow-card-hover',
               'transition-all duration-300 group',
               selectedPackage ? 'hover:-translate-y-0.5 hover:scale-[1.02]' : '',

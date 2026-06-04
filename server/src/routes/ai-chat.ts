@@ -31,8 +31,11 @@ import {
   estimateUsdCost,
   persistUserMessage,
   persistAssistantTurn,
+  persistToolResults,
   getMessageHistory,
+  toWireToolCalls,
   type StreamMessage,
+  type TurnInfo,
 } from '../services/ai-chat.service.js';
 import { redact } from '../services/ai-redaction.js';
 import { prisma } from '../config/prisma.js';
@@ -207,62 +210,112 @@ router.post(
       try { res.end(); } catch { /* already closed */ }
     };
 
-    await new Promise<void>((resolve) => {
-      streamChat(
-        { messages, signal: onClientAbort.signal },
-        {
-          onText: (delta) => {
-            if (finished) return;
-            send('token', { text: delta });
+    // ── Agentic tool loop ────────────────────────────────────────────
+    // When the model emits tool calls it STOPS generating (finish_reason
+    // "tool_calls") and waits for role:"tool" result messages. The tools
+    // execute client-side (we echo them over SSE and the page applies
+    // them), so we answer each call with a synthetic success result and
+    // call the model again — that follow-up round is what produces the
+    // "done — here's what happened, what's next?" text. Loop until a
+    // round comes back as plain text, with a cap so a tool-happy model
+    // can't spin forever.
+    const MAX_TOOL_ROUNDS = 4;
+    const convo: StreamMessage[] = [...messages];
+    let totalUsd = 0;
+    let lastInfo: TurnInfo | null = null;
+
+    const runRound = () =>
+      new Promise<TurnInfo | null>((resolve) => {
+        streamChat(
+          { messages: convo, signal: onClientAbort.signal },
+          {
+            onText: (delta) => {
+              if (finished) return;
+              send('token', { text: delta });
+            },
+            onToolCall: (call) => {
+              if (finished) return;
+              send('tool', { id: call.id, name: call.name, arguments: call.arguments });
+            },
+            onDone: resolve,
+            onError: (err) => {
+              if (!finished) send('error', { message: redact(err?.message || 'AI request failed') });
+              resolve(null);
+            },
           },
-          onToolCall: (call) => {
-            if (finished) return;
-            send('tool', { id: call.id, name: call.name, arguments: call.arguments });
-          },
-          onDone: (info) => {
-            // Persist + touch outside the streamChat call so a DB failure
-            // can't crash the worker. Worst case we reply but don't log.
-            (async () => {
-              const usdCost = estimateUsdCost(info.model, info.tokensIn, info.tokensOut);
-              try {
-                await persistAssistantTurn({
-                  sessionId: session.id,
-                  content: info.fullText,
-                  toolCalls: info.toolCalls,
-                  model: info.model,
-                  tokensIn: info.tokensIn,
-                  tokensOut: info.tokensOut,
-                  usdCost,
-                  fallback: info.fallback,
-                });
-                await touchSession(session.id);
-              } catch (err) {
-                console.error('[ai-chat] persist failed', err);
-              }
-              if (!finished) {
-                send('done', {
-                  model: info.model,
-                  fallback: info.fallback,
-                  usdCost,
-                  finishReason: info.finishReason,
-                });
-              }
-              finish();
-              resolve();
-            })();
-          },
-          onError: (err) => {
-            if (!finished) send('error', { message: redact(err?.message || 'AI request failed') });
-            finish();
-            resolve();
-          },
-        },
-      ).catch((err: any) => {
-        if (!finished) send('error', { message: redact(err?.message || 'AI request failed') });
-        finish();
-        resolve();
+        ).catch((err: any) => {
+          if (!finished) send('error', { message: redact(err?.message || 'AI request failed') });
+          resolve(null);
+        });
       });
-    });
+
+    for (let round = 0; ; round++) {
+      const info = await runRound();
+      if (!info) break; // error already sent to client
+
+      const usdCost = estimateUsdCost(info.model, info.tokensIn, info.tokensOut);
+      totalUsd += usdCost;
+      lastInfo = info;
+      // Persist outside streamChat so a DB failure can't crash the worker.
+      // Worst case we reply but don't log.
+      try {
+        await persistAssistantTurn({
+          sessionId: session.id,
+          content: info.fullText,
+          toolCalls: info.toolCalls,
+          model: info.model,
+          tokensIn: info.tokensIn,
+          tokensOut: info.tokensOut,
+          usdCost,
+          fallback: info.fallback,
+        });
+      } catch (err) {
+        console.error('[ai-chat] persist failed', err);
+      }
+
+      if (!info.toolCalls.length) break; // plain-text turn — conversation point reached
+
+      // Answer every tool call so the model can keep talking.
+      const results = info.toolCalls.map((tc) => {
+        const stale =
+          tc.name === 'navigate' || tc.name === 'suggest_package'
+            ? ' The page changed, so the page snapshot in your context is now stale — rely on the conversation; the next customer message carries a fresh snapshot.'
+            : '';
+        return {
+          toolCallId: tc.id,
+          content: `ok — ${tc.name} was applied on the customer's page.${stale} Briefly confirm to the customer what just happened, then ask the next question.`,
+        };
+      });
+      convo.push(
+        { role: 'assistant', content: info.fullText, tool_calls: toWireToolCalls(info.toolCalls) },
+        ...results.map<StreamMessage>((r) => ({ role: 'tool', content: r.content, tool_call_id: r.toolCallId })),
+      );
+      try {
+        await persistToolResults(session.id, results);
+      } catch (err) {
+        console.error('[ai-chat] tool-result persist failed', err);
+      }
+
+      if (round >= MAX_TOOL_ROUNDS) break; // model is stuck calling tools — stop here
+      // Separator so this round's text doesn't mash into the follow-up text
+      // in the client's single assistant bubble.
+      if (info.fullText && !finished) send('token', { text: '\n\n' });
+    }
+
+    try {
+      await touchSession(session.id);
+    } catch (err) {
+      console.error('[ai-chat] touch failed', err);
+    }
+    if (lastInfo && !finished) {
+      send('done', {
+        model: lastInfo.model,
+        fallback: lastInfo.fallback,
+        usdCost: totalUsd,
+        finishReason: lastInfo.finishReason,
+      });
+    }
+    finish();
   },
 );
 

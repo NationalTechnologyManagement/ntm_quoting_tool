@@ -141,16 +141,16 @@ const CwReferenceData = () => {
                   const dirty =
                     draft[r.key]?.value !== r.value || (draft[r.key]?.notes ?? '') !== (r.notes ?? '');
                   return (
-                    <div key={r.key} className="grid grid-cols-12 gap-3 items-start">
-                      <div className="col-span-4">
+                    <div key={r.key} className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start">
+                      <div className="sm:col-span-4">
                         <div className="flex items-center gap-2">
-                          <code className="text-sm font-mono text-foreground">{r.key}</code>
+                          <code className="text-sm font-mono text-foreground break-all">{r.key}</code>
                           {isRequired && (
                             <Badge variant="secondary" className="text-xs">required</Badge>
                           )}
                         </div>
                       </div>
-                      <div className="col-span-3">
+                      <div className="sm:col-span-3">
                         <Input
                           value={draft[r.key]?.value ?? ''}
                           onChange={(e) =>
@@ -162,7 +162,7 @@ const CwReferenceData = () => {
                           className="font-mono"
                         />
                       </div>
-                      <div className="col-span-4">
+                      <div className="sm:col-span-4">
                         <Input
                           placeholder="Notes (optional)"
                           value={draft[r.key]?.notes ?? ''}
@@ -174,7 +174,7 @@ const CwReferenceData = () => {
                           }
                         />
                       </div>
-                      <div className="col-span-1">
+                      <div className="sm:col-span-1">
                         <Button
                           size="sm"
                           variant={dirty ? 'default' : 'outline'}

@@ -221,8 +221,8 @@ const QuoteManagement = () => {
           </Card>
         ) : (
           <>
-            <div className="border rounded-lg overflow-hidden">
-              <table className="w-full">
+            <div className="border rounded-lg overflow-x-auto">
+              <table className="w-full min-w-[900px]">
                 <thead>
                   <tr className="bg-muted/50 border-b">
                     <th className="text-left p-3 text-sm font-medium">Quote #</th>

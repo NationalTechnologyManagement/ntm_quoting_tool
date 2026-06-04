@@ -72,7 +72,7 @@ export default function QuoteLookup() {
       <SiteHeader />
       <div className="max-w-2xl mx-auto py-12 px-4">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold mb-2">Find Your Quote</h1>
+          <h1 className="text-3xl sm:text-4xl font-bold mb-2">Find Your Quote</h1>
           <p className="text-muted-foreground">
             Enter the email address used when your quote was created to view your quotes.
           </p>
@@ -125,16 +125,16 @@ export default function QuoteLookup() {
                 const statusInfo = STATUS_LABELS[q.status] || { label: q.status, color: '' };
                 return (
                   <Card key={q.quoteNumber} className="p-5 hover:shadow-md transition-shadow">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <span className="font-mono font-semibold">{q.quoteNumber}</span>
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-2">
+                          <span className="font-mono font-semibold break-all">{q.quoteNumber}</span>
                           <Badge className={statusInfo.color} variant="secondary">
                             {statusInfo.label}
                           </Badge>
                         </div>
                         <p className="text-sm text-muted-foreground">{q.businessName}</p>
-                        <div className="flex gap-4 mt-2 text-sm">
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-sm">
                           <span>
                             <span className="text-muted-foreground">Package:</span>{' '}
                             <span className="font-medium">{q.packageName}</span>
@@ -150,7 +150,7 @@ export default function QuoteLookup() {
                           })}
                         </p>
                       </div>
-                      <Button asChild variant="outline" size="sm">
+                      <Button asChild variant="outline" size="sm" className="w-full sm:w-auto flex-shrink-0">
                         <Link to={`/quote-review?id=${q.quoteNumber}`}>
                           View <ArrowRight className="w-4 h-4 ml-1" />
                         </Link>

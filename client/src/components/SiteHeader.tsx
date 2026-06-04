@@ -13,36 +13,38 @@ import { Button } from '@/components/ui/button';
  */
 export const SiteHeader = () => (
   <header className="sticky top-0 z-40 w-full border-b border-border bg-background/80 backdrop-blur-md">
-    <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+    <div className="container mx-auto px-4 h-16 flex items-center justify-between gap-2">
       <Link
         to="/"
-        className="flex items-center gap-3 group"
+        className="flex items-center gap-2 sm:gap-3 group min-w-0"
         aria-label="National Technology Management — quoting portal home"
       >
         <img
           src="/ntm-logo.png"
           alt=""
-          className="w-10 h-10 drop-shadow-md transition-transform group-hover:scale-105"
+          className="w-9 h-9 sm:w-10 sm:h-10 flex-shrink-0 drop-shadow-md transition-transform group-hover:scale-105"
         />
-        <div className="flex flex-col leading-tight">
-          <span className="text-sm font-bold text-foreground tracking-wide">
+        <div className="flex flex-col leading-tight min-w-0">
+          <span className="text-xs sm:text-sm font-bold text-foreground tracking-wide truncate">
             National Technology Management
           </span>
           <span className="text-xs text-muted-foreground">Quoting Portal</span>
         </div>
       </Link>
 
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-1 flex-shrink-0">
         {/* Internal: jump back to the package picker so a customer mid-wizard
-            can rethink their plan without losing the rest of the session. */}
+            can rethink their plan without losing the rest of the session.
+            Labels collapse to icon-only below sm so the header never overflows. */}
         <Button
           asChild
           variant="ghost"
-          className="text-muted-foreground hover:text-foreground"
+          size="sm"
+          className="text-muted-foreground hover:text-foreground px-2 sm:px-3"
         >
           <Link to="/quote-builder" aria-label="Back to the package picker">
-            <LayoutGrid className="w-4 h-4 mr-2" />
-            Packages
+            <LayoutGrid className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">Packages</span>
           </Link>
         </Button>
 
@@ -50,7 +52,8 @@ export const SiteHeader = () => (
         <Button
           asChild
           variant="ghost"
-          className="text-muted-foreground hover:text-foreground"
+          size="sm"
+          className="text-muted-foreground hover:text-foreground px-2 sm:px-3"
         >
           <a
             href="https://www.trustntm.com"
@@ -58,8 +61,8 @@ export const SiteHeader = () => (
             rel="noopener noreferrer"
             aria-label="Visit trustntm.com (opens in new tab)"
           >
-            <Home className="w-4 h-4 mr-2" />
-            Home
+            <Home className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">Home</span>
           </a>
         </Button>
       </div>

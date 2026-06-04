@@ -218,7 +218,7 @@ const Users = () => {
       </Dialog>
 
       <div className="max-w-6xl mx-auto px-4 py-8 space-y-6">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold">Users</h1>
             <p className="text-sm text-muted-foreground">
@@ -236,8 +236,8 @@ const Users = () => {
           </div>
         ) : (
           <>
-            <Card className="p-0 overflow-hidden">
-              <table className="w-full text-sm">
+            <Card className="p-0 overflow-x-auto">
+              <table className="w-full min-w-[640px] text-sm">
                 <thead className="bg-muted/50">
                   <tr className="text-left">
                     <th className="px-4 py-2 font-medium">Email</th>
@@ -334,7 +334,8 @@ const Users = () => {
                   No pending invites. Click "Invite teammate" to send one.
                 </div>
               ) : (
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto">
+                <table className="w-full min-w-[640px] text-sm">
                   <thead className="bg-muted/50">
                     <tr className="text-left">
                       <th className="px-4 py-2 font-medium">Email</th>
@@ -372,6 +373,7 @@ const Users = () => {
                       ))}
                   </tbody>
                 </table>
+                </div>
               )}
             </Card>
           </>

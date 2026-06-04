@@ -258,7 +258,7 @@ export function SignaturePad({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-2xl">
         <DialogHeader>
           <DialogTitle>Draw your signature</DialogTitle>
           <DialogDescription>
@@ -281,7 +281,7 @@ export function SignaturePad({
           />
         </div>
 
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs text-muted-foreground">
           <span>
             {hasInk
               ? 'Looking good — sign again to add another stroke, or confirm below.'
@@ -290,26 +290,33 @@ export function SignaturePad({
           {typedName ? <span className="italic">For: {typedName}</span> : null}
         </div>
 
-        <DialogFooter className="flex-row justify-between sm:justify-between gap-2">
+        <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-between">
           <Button
             type="button"
             variant="outline"
             onClick={handleClear}
             disabled={!hasInk}
+            className="w-full sm:w-auto"
           >
             <RotateCcw className="w-4 h-4 mr-2" />
             Redo
           </Button>
-          <div className="flex gap-2">
+          <div className="flex flex-col-reverse sm:flex-row gap-2">
             <Button
               type="button"
               variant="ghost"
               onClick={() => onOpenChange(false)}
+              className="w-full sm:w-auto"
             >
               <X className="w-4 h-4 mr-2" />
               Cancel
             </Button>
-            <Button type="button" onClick={handleConfirm} disabled={!hasInk}>
+            <Button
+              type="button"
+              onClick={handleConfirm}
+              disabled={!hasInk}
+              className="w-full sm:w-auto"
+            >
               <Check className="w-4 h-4 mr-2" />
               Confirm Signature
             </Button>
