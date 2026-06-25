@@ -390,7 +390,7 @@ model AiAgentConfig {
   ratePerMin          Int      @default(20)        // messages/min/session
   // Tool allowlist — comma-separated names. UI tools only; no DB-write tools.
   // Defaults: highlight_field, prefill_field, navigate, suggest_addon, suggest_package.
-  allowedTools        String   @default("highlight_field,prefill_field,navigate,suggest_addon,suggest_package,request_followup,collect_contact,set_sizing,go_to_checkout")
+  allowedTools        String   @default("highlight_field,prefill_field,navigate,suggest_addon,suggest_package,request_followup,collect_contact,collect_sizing,set_sizing,go_to_checkout")
   updatedAt           DateTime @updatedAt
 
   @@map("ai_agent_config")

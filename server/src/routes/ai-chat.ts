@@ -280,11 +280,12 @@ router.post(
         // The contact form is async — the customer fills it out on their own
         // time. Tell the model to wait instead of barrelling into the next
         // question; the submitted details arrive in a later snapshot.
-        if (tc.name === 'collect_contact') {
+        if (tc.name === 'collect_contact' || tc.name === 'collect_sizing') {
+          const which = tc.name === 'collect_contact' ? 'contact' : 'sizing';
           return {
             toolCallId: tc.id,
             content:
-              "ok — the contact form is now showing in the chat. Tell the customer to fill it out (one short line), then STOP. Do NOT ask the next question or call any other tool yet; wait for them to submit it.",
+              `ok — the ${which} form is now showing in the chat. Tell the customer to fill it out (one short line), then STOP. Do NOT ask the next question or call any other tool yet; wait for them to submit it.`,
           };
         }
         // go_to_checkout can be refused client-side (no package / no sizing
@@ -317,11 +318,11 @@ router.post(
         console.error('[ai-chat] tool-result persist failed', err);
       }
 
-      // collect_contact is an async wait — the customer fills the form on
-      // their own time. Stop the loop here regardless of what the model might
-      // do next; their submission starts a fresh turn. This hard-enforces the
+      // The in-chat forms are async waits — the customer fills them on their
+      // own time. Stop the loop here regardless of what the model might do
+      // next; their submission starts a fresh turn. This hard-enforces the
       // "wait" so the model can't barrel into the next question.
-      if (info.toolCalls.some((tc) => tc.name === 'collect_contact')) break;
+      if (info.toolCalls.some((tc) => tc.name === 'collect_contact' || tc.name === 'collect_sizing')) break;
 
       if (round >= MAX_TOOL_ROUNDS) break; // model is stuck calling tools — stop here
       // Separator so this round's text doesn't mash into the follow-up text

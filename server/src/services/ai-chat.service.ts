@@ -155,6 +155,20 @@ const ALL_TOOLS: ToolDef[] = [
   {
     type: 'function',
     function: {
+      name: 'collect_sizing',
+      description:
+        "Show a short sizing form inside the chat with three number fields: desktop users, web users, and locations (each field explains itself). Call this to gather sizing instead of asking the three questions one at a time. After you call it, tell the customer to fill it out, then STOP and wait; their numbers arrive in the next turn's page snapshot.",
+      parameters: {
+        type: 'object',
+        properties: {
+          reason: { type: 'string', description: 'Optional one-line reason for the user.' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'set_sizing',
       description:
         'Save the quote sizing the customer told you, straight into the quote. Pass only the values you have learned; omit the rest. desktopUsers = people with Microsoft apps installed on their computer; webUsers = people using those apps in a browser; locations = sites needing network management. Values must be whole numbers 0 or greater.',

@@ -35,6 +35,13 @@ export interface ContactFormValues {
   address: string;
 }
 
+// Counts collected by the in-chat sizing form (collect_sizing tool).
+export interface SizingFormValues {
+  desktopUsers: number;
+  webUsers: number;
+  locations: number;
+}
+
 // ── Types ─────────────────────────────────────────────────────────────
 
 export type ChatRole = 'user' | 'assistant' | 'system' | 'tool';
@@ -77,6 +84,9 @@ interface AiChatContextValue {
   // in-chat contact form (driven by the collect_contact tool)
   showContactForm: boolean;
   submitContactForm: (values: ContactFormValues) => void;
+  // in-chat sizing form (driven by the collect_sizing tool)
+  showSizingForm: boolean;
+  submitSizingForm: (values: SizingFormValues) => void;
 }
 
 const AiChatContext = createContext<AiChatContextValue | null>(null);
@@ -98,6 +108,7 @@ export const AiChatProvider = ({ children }: { children: ReactNode }) => {
   const [fallbackActive, setFallbackActive] = useState(false);
   const [highlightedFieldId, setHighlightedFieldId] = useState<string | null>(null);
   const [showContactForm, setShowContactForm] = useState(false);
+  const [showSizingForm, setShowSizingForm] = useState(false);
 
   const fieldRegistry = useRef<Map<string, FieldRegistration>>(new Map());
   const abortRef = useRef<AbortController | null>(null);
@@ -111,6 +122,7 @@ export const AiChatProvider = ({ children }: { children: ReactNode }) => {
   const customerInfoRef = useRef(quote.customerInfo);
   const selectedPackageRef = useRef(quote.selectedPackage);
   const contactCapturedRef = useRef(false);
+  const sizingCapturedRef = useRef(false);
   useEffect(() => {
     customerInfoRef.current = quote.customerInfo;
   }, [quote.customerInfo]);
@@ -352,6 +364,15 @@ export const AiChatProvider = ({ children }: { children: ReactNode }) => {
           setShowContactForm(true);
           return { applied: true, note: 'showed contact form' };
         }
+        case 'collect_sizing': {
+          // Render the inline sizing form (desktop users, web users,
+          // locations). Submitted via submitSizingForm.
+          if (sizingCapturedRef.current) {
+            return { applied: false, note: 'sizing already captured — do not ask again, continue the flow' };
+          }
+          setShowSizingForm(true);
+          return { applied: true, note: 'showed sizing form' };
+        }
         case 'set_sizing': {
           // Write the sizing straight into shared quote state so it survives
           // regardless of which page is mounted — the chat flow never visits
@@ -526,6 +547,26 @@ export const AiChatProvider = ({ children }: { children: ReactNode }) => {
     [quote, send],
   );
 
+  // ── In-chat sizing form submit ──────────────────────────────────────
+  // Writes the counts into shared quote state (same ref-sync as set_sizing)
+  // and nudges the agent to continue toward package + checkout.
+  const submitSizingForm = useCallback(
+    (values: SizingFormValues) => {
+      const merged = {
+        ...customerInfoRef.current,
+        userCount: Math.max(0, Math.floor(values.desktopUsers || 0)),
+        webUserCount: Math.max(0, Math.floor(values.webUsers || 0)),
+        locationCount: Math.max(0, Math.floor(values.locations || 0)),
+      };
+      customerInfoRef.current = merged;
+      sizingCapturedRef.current = true;
+      quote.setCustomerInfo(merged);
+      setShowSizingForm(false);
+      void send("I've filled out my sizing details.");
+    },
+    [quote, send],
+  );
+
   const reset = useCallback(async () => {
     abortRef.current?.abort();
     try { await aiChatApi.endSession(); } catch { /* ignore */ }
@@ -533,7 +574,9 @@ export const AiChatProvider = ({ children }: { children: ReactNode }) => {
     setMessages([]);
     setFallbackActive(false);
     setShowContactForm(false);
+    setShowSizingForm(false);
     contactCapturedRef.current = false;
+    sizingCapturedRef.current = false;
     setStatus('idle');
   }, []);
 
@@ -563,8 +606,10 @@ export const AiChatProvider = ({ children }: { children: ReactNode }) => {
       highlightedFieldId,
       showContactForm,
       submitContactForm,
+      showSizingForm,
+      submitSizingForm,
     }),
-    [enabled, session, status, open, messages, send, reset, primeGreeting, fallbackActive, registerField, highlightedFieldId, showContactForm, submitContactForm],
+    [enabled, session, status, open, messages, send, reset, primeGreeting, fallbackActive, registerField, highlightedFieldId, showContactForm, submitContactForm, showSizingForm, submitSizingForm],
   );
 
   return <AiChatContext.Provider value={value}>{children}</AiChatContext.Provider>;

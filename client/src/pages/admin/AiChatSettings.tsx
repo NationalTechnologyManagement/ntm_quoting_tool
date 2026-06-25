@@ -22,6 +22,7 @@ const ALL_TOOLS = [
   'suggest_package',
   'request_followup',
   'collect_contact',
+  'collect_sizing',
   'set_sizing',
   'go_to_checkout',
 ];
@@ -421,6 +422,7 @@ const TOOL_DESCRIPTIONS: Record<string, string> = {
   suggest_addon: 'Recommend one of the visible add-ons.',
   request_followup: 'Open the GHL booking page so a sales rep can follow up.',
   collect_contact: 'Show an inline contact form in the chat (name, business, email, phone, address).',
+  collect_sizing: 'Show an inline sizing form in the chat (desktop users, web users, locations).',
   set_sizing: 'Save desktop/web user counts and locations the customer gave in chat.',
   go_to_checkout: 'Send the customer to the summary page to review, sign, and pay.',
 };

@@ -10,12 +10,31 @@ import { Bot, X, Send, AlertTriangle, RefreshCcw, Sparkles, MessageCircle } from
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useAiChat, type ContactFormValues } from '@/contexts/AiChatContext';
+import { useAiChat, type ContactFormValues, type SizingFormValues } from '@/contexts/AiChatContext';
+
+// The assistant must reply in plain text — no markdown. Models still emit
+// **bold**, ## headings, bullet markers, and en/em dashes despite the prompt,
+// and the bubble renders raw text, so we strip those artifacts before display
+// as a hard guarantee (prompt instructions alone are unreliable).
+function toPlainText(s: string): string {
+  return s
+    .replace(/`+/g, '')                    // code ticks
+    .replace(/^[ \t]*[*\-•][ \t]+/gm, '')  // bullet markers (*, -, •) at line start
+    .replace(/\*\*([^*]+?)\*\*/g, '$1')    // **bold** -> text
+    .replace(/\*{2,}/g, '')                // any leftover ** run (forbidden, never legit)
+    .replace(/__([^_]+?)__/g, '$1')        // __bold__ -> text
+    .replace(/^[ \t]*#+[ \t]*/gm, '')      // ATX headings (any #-count) at line start
+    .replace(/#{2,}/g, '')                 // stray ## runs anywhere (mid-line too)
+    .replace(/[–—]/g, '-')                 // en/em dash -> hyphen
+    .replace(/[ \t]{2,}/g, ' ');           // collapse double spaces left by removals
+  // Note: a lone '*' (e.g. "3 * 4") and single '#' (e.g. "C#", "#1") are kept
+  // on purpose — only the forbidden markdown runs (**, ##) are stripped.
+}
 
 const INTRO_DISMISSED_KEY = 'ntm_ai_chat_intro_seen';
 
 export const AiChatWidget = () => {
-  const { enabled, open, setOpen, messages, send, status, fallbackActive, reset, session, primeGreeting, showContactForm, submitContactForm } = useAiChat();
+  const { enabled, open, setOpen, messages, send, status, fallbackActive, reset, session, primeGreeting, showContactForm, submitContactForm, showSizingForm, submitSizingForm } = useAiChat();
   const [input, setInput] = useState('');
   const [showIntro, setShowIntro] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -202,6 +221,7 @@ export const AiChatWidget = () => {
               <MessageBubble key={m.id} role={m.role} content={m.content} fallback={m.fallback} />
             ))}
             {showContactForm && <ContactForm onSubmit={submitContactForm} />}
+            {showSizingForm && <SizingForm onSubmit={submitSizingForm} />}
             {status === 'streaming' && messages[messages.length - 1]?.role !== 'assistant' && (
               <div className="text-xs text-muted-foreground">…thinking</div>
             )}
@@ -265,10 +285,11 @@ function MessageBubble({ role, content }: BubbleProps) {
     );
   }
   if (role === 'assistant') {
+    const clean = toPlainText(content);
     return (
       <div className="flex justify-start">
         <div className="max-w-[85%] rounded-lg rounded-bl-sm bg-card border border-border px-3 py-2 text-sm whitespace-pre-wrap break-words">
-          {content || <span className="text-muted-foreground">…</span>}
+          {clean || <span className="text-muted-foreground">…</span>}
         </div>
       </div>
     );
@@ -333,6 +354,79 @@ function ContactForm({ onSubmit }: { onSubmit: (values: ContactFormValues) => vo
         onClick={() => {
           if (!valid) return;
           onSubmit(values);
+        }}
+      >
+        Submit
+      </Button>
+    </div>
+  );
+}
+
+// Inline sizing form rendered when the agent calls collect_sizing. Three
+// counts; at least one must be above zero (matches the server's "at least one
+// sizing dimension" rule).
+function SizingForm({ onSubmit }: { onSubmit: (values: SizingFormValues) => void }) {
+  const [values, setValues] = useState<{ desktopUsers: string; webUsers: string; locations: string }>({
+    desktopUsers: '',
+    webUsers: '',
+    locations: '',
+  });
+
+  const set = (k: 'desktopUsers' | 'webUsers' | 'locations') => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setValues((v) => ({ ...v, [k]: e.target.value }));
+
+  const n = (s: string) => Math.max(0, parseInt(s, 10) || 0);
+  const valid = n(values.desktopUsers) > 0 || n(values.webUsers) > 0 || n(values.locations) > 0;
+
+  const fields: Array<{ k: 'desktopUsers' | 'webUsers' | 'locations'; label: string; helper: string }> = [
+    {
+      k: 'desktopUsers',
+      label: 'Desktop users',
+      helper: 'People with Microsoft apps installed on their computer (Word, Excel, Outlook).',
+    },
+    {
+      k: 'webUsers',
+      label: 'Web users',
+      helper: 'Frontline or kiosk staff who only use apps in a browser or on mobile, nothing installed.',
+    },
+    {
+      k: 'locations',
+      label: 'Locations',
+      helper: 'Sites where we manage your firewall, switching, and network monitoring.',
+    },
+  ];
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-3 space-y-2.5 shadow-sm">
+      <p className="text-xs font-medium text-foreground">How many of each?</p>
+      {fields.map((f) => (
+        <div key={f.k} className="space-y-1">
+          <Label htmlFor={`sf-${f.k}`} className="text-xs">
+            {f.label}
+          </Label>
+          <Input
+            id={`sf-${f.k}`}
+            type="number"
+            min="0"
+            value={values[f.k]}
+            onChange={set(f.k)}
+            placeholder="0"
+            className="h-9 text-sm"
+          />
+          <p className="text-[11px] text-muted-foreground">{f.helper}</p>
+        </div>
+      ))}
+      <Button
+        size="sm"
+        className="w-full mt-1"
+        disabled={!valid}
+        onClick={() => {
+          if (!valid) return;
+          onSubmit({
+            desktopUsers: n(values.desktopUsers),
+            webUsers: n(values.webUsers),
+            locations: n(values.locations),
+          });
         }}
       >
         Submit
