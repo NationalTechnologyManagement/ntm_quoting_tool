@@ -437,7 +437,9 @@ async function createOpportunity(
         `Quote: ${quote.quoteNumber}`,
         `Package: ${quote.selectedPackage.name}`,
         `Users: ${quote.customer.userCount}`,
-        `Locations: ${quote.customer.locationCount}`,
+        quote.customer.locationCount > 0
+          ? `Locations: ${quote.customer.locationCount}`
+          : `Locations: none (no managed site)`,
         `Recurring: $${quote.totals.recurringCosts.toFixed(2)}/${quote.totals.recurringFrequency}`,
         `One-time: $${(quote.totals.onboardingCost + quote.totals.oneTimeCosts).toFixed(2)}`,
         `Addons: ${quote.selectedAddons.map((a) => a.name).join(', ') || 'None'}`,
@@ -761,7 +763,11 @@ async function createProject(
   const referrer = (quote.customer as any).referrerCode;
   const description = [
     `Package: ${quote.selectedPackage.name}`,
-    `Sizing: ${quote.customer.userCount} user(s), ${quote.customer.locationCount} location(s)`,
+    `Sizing: ${quote.customer.userCount} user(s), ${
+      quote.customer.locationCount > 0
+        ? `${quote.customer.locationCount} location(s)`
+        : 'no managed location'
+    }`,
     `Recurring: ${fmtMoney(quote.totals.recurringCosts)}/${quote.totals.recurringFrequency}`,
     `One-time: ${fmtMoney(quote.totals.onboardingCost + quote.totals.oneTimeCosts)} (onboarding ${fmtMoney(quote.totals.onboardingCost)} + addons ${fmtMoney(quote.totals.oneTimeCosts)})`,
     '',

@@ -274,7 +274,7 @@ const editSelectedAddonSchema = z.object({
 const editQuoteSchema = z.object({
   userCount: z.number().int().min(1).optional(),
   webUserCount: z.number().int().min(0).optional(),
-  locationCount: z.number().int().min(1).optional(),
+  locationCount: z.number().int().min(0).optional(),
   selectedPackage: editSelectedPackageSchema.optional(),
   selectedAddons: z.array(editSelectedAddonSchema).optional(),
   // Admin can also flip the contract term on the snapshotted package

@@ -22,7 +22,9 @@ const createQuoteSchema = z.object({
     userCount: z.number().int().min(1),
     // Web (F3) user count. Optional; 0 if the customer has no F3 users.
     webUserCount: z.number().int().min(0).optional().default(0),
-    locationCount: z.number().int().min(1),
+    // Locations are optional — 0 means the customer has no site for us to
+    // manage. A 0-location quote skips the per-location CW agreement line.
+    locationCount: z.number().int().min(0),
     referrerCode: z.string().nullable().optional(),
   }),
   selectedPackage: z.object({

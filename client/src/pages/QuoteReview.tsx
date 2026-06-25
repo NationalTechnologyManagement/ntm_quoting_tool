@@ -466,11 +466,13 @@ export default function QuoteReview() {
                       )}
                     </p>
                   )}
-                  <p>
-                    ${formatAmount(quoteData.selectedPackage.pricePerLocation)}/location ×{" "}
-                    {quoteData.customer.locationCount} = $
-                    {formatAmount(quoteData.selectedPackage.pricePerLocation * quoteData.customer.locationCount)}
-                  </p>
+                  {quoteData.customer.locationCount > 0 && (
+                    <p>
+                      ${formatAmount(quoteData.selectedPackage.pricePerLocation)}/location ×{" "}
+                      {quoteData.customer.locationCount} = $
+                      {formatAmount(quoteData.selectedPackage.pricePerLocation * quoteData.customer.locationCount)}
+                    </p>
+                  )}
                   <p className="font-semibold text-primary pt-1">
                     Package Total: ${formatAmount(quoteData.selectedPackage.calculatedPrice)}/
                     {quoteData.selectedPackage.frequency}

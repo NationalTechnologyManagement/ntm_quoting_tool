@@ -119,7 +119,7 @@ export function buildQuoteEmailHtml(
         <div class="cost-card recurring">
           <div class="cost-label">${quote.selectedPackage.name}</div>
           <div class="cost-detail">${quote.customer.userCount} users &times; ${formatCurrency(quote.selectedPackage.pricePerUser)}/user</div>
-          <div class="cost-detail">${quote.customer.locationCount} locations &times; ${formatCurrency(quote.selectedPackage.pricePerLocation)}/location</div>
+          ${quote.customer.locationCount > 0 ? `<div class="cost-detail">${quote.customer.locationCount} locations &times; ${formatCurrency(quote.selectedPackage.pricePerLocation)}/location</div>` : ''}
           <div class="cost-amount">${formatCurrency(firstMonth)}<span style="font-size:16px;opacity:0.8;">/${quote.totals.recurringFrequency}</span></div>
         </div>
       </div>

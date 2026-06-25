@@ -149,7 +149,8 @@ const CreateQuote = () => {
     phone.trim() &&
     address.trim() &&
     userCount >= 1 &&
-    locationCount >= 1 &&
+    // Locations are optional — a customer with no site to manage can have 0.
+    locationCount >= 0 &&
     pkg &&
     totals;
 
@@ -384,14 +385,15 @@ const CreateQuote = () => {
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="loc">Locations *</Label>
+              <Label htmlFor="loc">Locations</Label>
               <Input
                 id="loc"
                 type="number"
-                min={1}
-                value={locationCount || ''}
-                onChange={(e) => setLocationCount(Math.max(1, parseInt(e.target.value) || 1))}
+                min={0}
+                value={locationCount ?? ''}
+                onChange={(e) => setLocationCount(Math.max(0, parseInt(e.target.value) || 0))}
               />
+              <p className="text-xs text-muted-foreground">Enter 0 if there's no location to manage.</p>
             </div>
           </div>
 

@@ -702,13 +702,13 @@ const QuoteDetail = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="edit-locations">Location count</Label>
+                <Label htmlFor="edit-locations">Location count (0 if none)</Label>
                 <Input
                   id="edit-locations"
                   type="number"
-                  min={1}
+                  min={0}
                   value={editLocationCount}
-                  onChange={(e) => setEditLocationCount(Math.max(1, parseInt(e.target.value) || 1))}
+                  onChange={(e) => setEditLocationCount(Math.max(0, parseInt(e.target.value) || 0))}
                 />
               </div>
             </div>

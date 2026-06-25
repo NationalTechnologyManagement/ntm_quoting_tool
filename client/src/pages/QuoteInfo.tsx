@@ -118,7 +118,9 @@ const QuoteInfo = () => {
   }, []);
   const setNumericField = useCallback((field: 'userCount' | 'locationCount') => (v: string) => {
     const n = parseInt(v, 10);
-    setFormData((prev) => ({ ...prev, [field]: Number.isFinite(n) && n > 0 ? n : prev[field] }));
+    // Desktop users must be >= 1; locations are optional so 0 is allowed.
+    const min = field === 'locationCount' ? 0 : 1;
+    setFormData((prev) => ({ ...prev, [field]: Number.isFinite(n) && n >= min ? n : prev[field] }));
   }, []);
 
   const nameHighlighted = useChatField('name', 'Full name', setStringField('name'));
@@ -137,9 +139,14 @@ const QuoteInfo = () => {
       const cleaned = typeof value === 'string' ? value.replace(/\D/g, '') : '';
       return cleaned.length === 10;
     }
-    if (field === 'userCount' || field === 'locationCount') {
+    if (field === 'userCount') {
       const n = Number(value);
       return n > 0 && Number.isInteger(n);
+    }
+    // Locations are optional — 0 is valid for customers with no site to manage.
+    if (field === 'locationCount') {
+      const n = Number(value);
+      return n >= 0 && Number.isInteger(n);
     }
     return typeof value === 'string' && value.trim().length > 0;
   };
@@ -422,22 +429,24 @@ const QuoteInfo = () => {
               }`}
             >
               <div className="flex items-center gap-2 h-6">
-                <Label htmlFor="locationCount">Number of Locations *</Label>
+                <Label htmlFor="locationCount">Number of Locations</Label>
               </div>
               <div className="relative">
                 <Input
                   id="locationCount"
                   type="number"
-                  min="1"
-                  value={formData.locationCount || ''}
-                  onChange={(e) => handleInputChange('locationCount', parseInt(e.target.value) || 0)}
+                  min="0"
+                  // 0 is a real value here ("no locations"), so use ?? not || —
+                  // a deliberate 0 must stay visible instead of blanking out.
+                  value={formData.locationCount ?? ''}
+                  onChange={(e) => handleInputChange('locationCount', Math.max(0, parseInt(e.target.value) || 0))}
                   placeholder="e.g., 1"
                   className="pr-10"
                 />
-                {isFieldValid('locationCount') && <Check className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-primary" />}
+                {formData.locationCount > 0 && <Check className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-primary" />}
               </div>
               <p className="text-xs text-muted-foreground min-h-[2rem]">
-                Total number of physical locations.
+                Total number of physical locations. Enter 0 if none.
               </p>
             </div>
           </div>

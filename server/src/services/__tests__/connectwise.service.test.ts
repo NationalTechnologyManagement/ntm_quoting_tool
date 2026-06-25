@@ -88,6 +88,14 @@ vi.mock('../../config/prisma.js', () => {
       id: where.id,
       name: 'Protect',
       cwAgreementTypeId: 36,
+      // Real CW catalog product ids so postAdditions actually attempts the
+      // per-user and per-location lines. The 0-location test relies on the
+      // per-location id being present, so a skipped location line is a
+      // genuine guard, not a no-op from a missing product id.
+      pricePerUserF3: 0,
+      cwPerUserProductId: 1100,
+      cwPerUserF3ProductId: 1101,
+      cwPerLocationProductId: 1102,
     })),
   };
 
@@ -281,6 +289,50 @@ describe('CW orchestrator', () => {
     expect(agreementPosts.length).toBe(0);
     const projectPosts = calls.filter((c) => c.path === '/project/projects' && c.method === 'POST');
     expect(projectPosts.length).toBe(1);
+  });
+
+  it('skips the per-location agreement addition when locationCount is 0', async () => {
+    // A 0-location quote (customer with no managed site) must still push the
+    // desktop-user line + add-ons, but NOT a per-location Addition — even
+    // though the package carries a per-location price and CW product id.
+    const zeroLocationQuote: QuoteData = {
+      ...baseQuote,
+      customer: { ...(baseQuote.customer as any), locationCount: 0, webUserCount: 0 },
+    };
+
+    setupFetchMock([
+      { match: (p, i) => p === '/sales/opportunities/777' && i.method === 'PATCH', respond: () => jsonResponse({}) },
+      { match: (p) => p === '/sales/opportunities/777/notes', respond: () => jsonResponse({}) },
+      { match: (p, i) => p === '/company/companies/999' && i.method === 'PATCH', respond: () => jsonResponse({}) },
+      { match: (p, i) => p === '/finance/agreements' && i.method === 'POST', respond: () => jsonResponse({ id: 5001 }) },
+      // billStartDate lookup (wrapped in try/catch in the service)
+      { match: (p) => p.startsWith('/finance/agreements/5001') && p.includes('billStartDate'), respond: () => jsonResponse({ billStartDate: '2026-07-01T00:00:00Z' }) },
+      // dedupe pre-fetch: nothing existing yet
+      { match: (p, i) => p.startsWith('/finance/agreements/5001/additions') && (i.method ?? 'GET') === 'GET', respond: () => jsonResponse([]) },
+      // additions POST: succeed
+      { match: (p, i) => p.startsWith('/finance/agreements/5001/additions') && i.method === 'POST', respond: () => jsonResponse({ id: 7000 }) },
+      // activate agreement
+      { match: (p, i) => p === '/finance/agreements/5001' && i.method === 'PATCH', respond: () => jsonResponse({}) },
+      { match: (p) => p === '/project/projects', respond: () => jsonResponse({ id: 6001 }) },
+    ]);
+
+    const { onPaymentCompleted } = await import('../connectwise.service.js');
+    await onPaymentCompleted(zeroLocationQuote);
+
+    const additionPosts = calls.filter(
+      (c) => c.method === 'POST' && /^\/finance\/agreements\/5001\/additions/.test(c.path),
+    );
+    // No per-location line (product 1102 / "Per Location" description) posted.
+    expect(additionPosts.some((c) => c.body?.product?.id === 1102)).toBe(false);
+    expect(additionPosts.some((c) => /per location/i.test(c.body?.description ?? ''))).toBe(false);
+    // The desktop-user line DID post — proving additions ran and only the
+    // location line was suppressed (not the whole step skipped).
+    expect(additionPosts.some((c) => c.body?.product?.id === 1100)).toBe(true);
+    // Agreement still activated, i.e. the additions step succeeded.
+    const activateCalls = calls.filter(
+      (c) => c.method === 'PATCH' && /^\/finance\/agreements\/5001$/.test(c.path),
+    );
+    expect(activateCalls.length).toBe(1);
   });
 
   it('additions failure leaves agreement Inactive (no activate PATCH)', async () => {

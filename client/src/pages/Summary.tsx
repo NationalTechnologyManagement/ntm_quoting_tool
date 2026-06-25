@@ -620,10 +620,12 @@ const Summary = () => {
                           )}
                         </p>
                       )}
-                      <p>
-                        ${selectedPackage.pricePerLocation}/location × {customerInfo.locationCount} = $
-                        {formatAmount(selectedPackage.pricePerLocation * customerInfo.locationCount)}
-                      </p>
+                      {customerInfo.locationCount > 0 && (
+                        <p>
+                          ${selectedPackage.pricePerLocation}/location × {customerInfo.locationCount} = $
+                          {formatAmount(selectedPackage.pricePerLocation * customerInfo.locationCount)}
+                        </p>
+                      )}
                       <p className="font-semibold text-primary">
                         Package Total: ${formatAmount(packageCost)}/{selectedPackage.frequency}
                       </p>
