@@ -14,7 +14,17 @@ import { toast } from 'sonner';
 import { adminApi } from '@/services/api';
 import AdminNav from '@/components/admin/AdminNav';
 
-const ALL_TOOLS = ['highlight_field', 'prefill_field', 'navigate', 'suggest_addon', 'suggest_package'];
+const ALL_TOOLS = [
+  'highlight_field',
+  'prefill_field',
+  'navigate',
+  'suggest_addon',
+  'suggest_package',
+  'request_followup',
+  'collect_contact',
+  'set_sizing',
+  'go_to_checkout',
+];
 
 const MODEL_PRESETS = [
   { value: 'anthropic/claude-sonnet-4-5', label: 'Claude Sonnet 4.5 (recommended)' },
@@ -409,6 +419,10 @@ const TOOL_DESCRIPTIONS: Record<string, string> = {
   navigate: 'Suggest moving to next/previous wizard step. User has to confirm.',
   suggest_package: 'Recommend one of the visible packages.',
   suggest_addon: 'Recommend one of the visible add-ons.',
+  request_followup: 'Open the GHL booking page so a sales rep can follow up.',
+  collect_contact: 'Show an inline contact form in the chat (name, business, email, phone, address).',
+  set_sizing: 'Save desktop/web user counts and locations the customer gave in chat.',
+  go_to_checkout: 'Send the customer to the summary page to review, sign, and pay.',
 };
 
 function ModelInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {

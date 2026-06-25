@@ -141,6 +141,50 @@ const ALL_TOOLS: ToolDef[] = [
   {
     type: 'function',
     function: {
+      name: 'collect_contact',
+      description:
+        "Show a short contact form (name, business, email, phone, address) right inside the chat for the customer to fill out. Call this FIRST when the customer wants help building a quote — instead of asking for each detail one at a time. After you call it, tell the customer to fill it out, then STOP and wait; their submitted details arrive in the next turn's page snapshot.",
+      parameters: {
+        type: 'object',
+        properties: {
+          reason: { type: 'string', description: 'Optional one-line reason for the user.' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'set_sizing',
+      description:
+        'Save the quote sizing the customer told you, straight into the quote. Pass only the values you have learned; omit the rest. desktopUsers = people with Microsoft apps installed on their computer; webUsers = people using those apps in a browser; locations = sites needing network management. Values must be whole numbers 0 or greater.',
+      parameters: {
+        type: 'object',
+        properties: {
+          desktopUsers: { type: 'integer', minimum: 0 },
+          webUsers: { type: 'integer', minimum: 0 },
+          locations: { type: 'integer', minimum: 0 },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'go_to_checkout',
+      description:
+        'Send the customer to the summary page where they review, sign, and pay. Call this ONLY after contact info is submitted, sizing is set (at least one of desktop users, web users, or locations is above zero), and a package is selected. If a package has not been selected yet, recommend one and call suggest_package first.',
+      parameters: {
+        type: 'object',
+        properties: {
+          reason: { type: 'string', description: 'Optional one-line reason for the user.' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'request_followup',
       description:
         "Offer the customer a scheduled call with an NTM sales rep. Use this when the customer's question isn't answerable from the page snapshot or knowledge base, when they want a human to review their setup, or when they ask for something that goes beyond the standard packages/add-ons. Always include a friendly text reply alongside this call.",

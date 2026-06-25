@@ -277,6 +277,27 @@ router.post(
 
       // Answer every tool call so the model can keep talking.
       const results = info.toolCalls.map((tc) => {
+        // The contact form is async — the customer fills it out on their own
+        // time. Tell the model to wait instead of barrelling into the next
+        // question; the submitted details arrive in a later snapshot.
+        if (tc.name === 'collect_contact') {
+          return {
+            toolCallId: tc.id,
+            content:
+              "ok — the contact form is now showing in the chat. Tell the customer to fill it out (one short line), then STOP. Do NOT ask the next question or call any other tool yet; wait for them to submit it.",
+          };
+        }
+        // go_to_checkout can be refused client-side (no package / no sizing
+        // yet), and we have no client→server result channel, so don't assert
+        // success. Tell the model to verify via the next snapshot's route
+        // before promising the customer they're on the pay page.
+        if (tc.name === 'go_to_checkout') {
+          return {
+            toolCallId: tc.id,
+            content:
+              "ok — go_to_checkout was requested. If a package and sizing were already set, the customer is now on the summary page to sign and pay; confirm that in one short line. If either was missing it did NOT move them — in that case gather what's missing instead. The next customer message carries a fresh snapshot with the real route, so don't over-promise.",
+          };
+        }
         const stale =
           tc.name === 'navigate' || tc.name === 'suggest_package'
             ? ' The page changed, so the page snapshot in your context is now stale — rely on the conversation; the next customer message carries a fresh snapshot.'
@@ -295,6 +316,12 @@ router.post(
       } catch (err) {
         console.error('[ai-chat] tool-result persist failed', err);
       }
+
+      // collect_contact is an async wait — the customer fills the form on
+      // their own time. Stop the loop here regardless of what the model might
+      // do next; their submission starts a fresh turn. This hard-enforces the
+      // "wait" so the model can't barrel into the next question.
+      if (info.toolCalls.some((tc) => tc.name === 'collect_contact')) break;
 
       if (round >= MAX_TOOL_ROUNDS) break; // model is stuck calling tools — stop here
       // Separator so this round's text doesn't mash into the follow-up text

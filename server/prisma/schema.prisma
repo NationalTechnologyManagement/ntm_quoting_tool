@@ -381,7 +381,7 @@ model AiAgentConfig {
   maxTokens           Int      @default(1024)
   requestTimeoutMs    Int      @default(30000)
   systemPrompt        String   @default("")
-  greeting            String   @default("Hi! 👋 I'm here to help you build your quote — I can answer questions, recommend a package, and even fill out fields for you. What can I help you with first?")
+  greeting            String   @default("Hi, I'm here to help you build your quote. I can answer questions, recommend a package, and fill things out for you. What can I help with first?")
   disclaimer          String   @default("AI assistant — may make mistakes. You make the final decisions.")
   perSessionUsdCap    Float    @default(10)
   dailyUsdCap         Float    @default(50)
@@ -390,7 +390,7 @@ model AiAgentConfig {
   ratePerMin          Int      @default(20)        // messages/min/session
   // Tool allowlist — comma-separated names. UI tools only; no DB-write tools.
   // Defaults: highlight_field, prefill_field, navigate, suggest_addon, suggest_package.
-  allowedTools        String   @default("highlight_field,prefill_field,navigate,suggest_addon,suggest_package,request_followup")
+  allowedTools        String   @default("highlight_field,prefill_field,navigate,suggest_addon,suggest_package,request_followup,collect_contact,set_sizing,go_to_checkout")
   updatedAt           DateTime @updatedAt
 
   @@map("ai_agent_config")

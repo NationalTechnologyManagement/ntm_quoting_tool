@@ -8,12 +8,14 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Bot, X, Send, AlertTriangle, RefreshCcw, Sparkles, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useAiChat } from '@/contexts/AiChatContext';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { useAiChat, type ContactFormValues } from '@/contexts/AiChatContext';
 
 const INTRO_DISMISSED_KEY = 'ntm_ai_chat_intro_seen';
 
 export const AiChatWidget = () => {
-  const { enabled, open, setOpen, messages, send, status, fallbackActive, reset, session, primeGreeting } = useAiChat();
+  const { enabled, open, setOpen, messages, send, status, fallbackActive, reset, session, primeGreeting, showContactForm, submitContactForm } = useAiChat();
   const [input, setInput] = useState('');
   const [showIntro, setShowIntro] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -197,8 +199,9 @@ export const AiChatWidget = () => {
               </div>
             )}
             {messages.map((m) => (
-              <MessageBubble key={m.id} role={m.role} content={m.content} fallback={m.fallback} toolCalls={m.toolCalls} />
+              <MessageBubble key={m.id} role={m.role} content={m.content} fallback={m.fallback} />
             ))}
+            {showContactForm && <ContactForm onSubmit={submitContactForm} />}
             {status === 'streaming' && messages[messages.length - 1]?.role !== 'assistant' && (
               <div className="text-xs text-muted-foreground">…thinking</div>
             )}
@@ -246,10 +249,12 @@ interface BubbleProps {
   role: 'user' | 'assistant' | 'system' | 'tool';
   content: string;
   fallback?: boolean;
-  toolCalls?: Array<{ id: string; name: string; arguments: string; applied: boolean; note?: string }>;
 }
 
-function MessageBubble({ role, content, toolCalls }: BubbleProps) {
+// Tool calls are intentionally NOT rendered — the assistant works the form
+// behind the scenes; the customer only sees its plain-text replies (and the
+// inline contact form when one is requested).
+function MessageBubble({ role, content }: BubbleProps) {
   if (role === 'user') {
     return (
       <div className="flex justify-end">
@@ -264,27 +269,76 @@ function MessageBubble({ role, content, toolCalls }: BubbleProps) {
       <div className="flex justify-start">
         <div className="max-w-[85%] rounded-lg rounded-bl-sm bg-card border border-border px-3 py-2 text-sm whitespace-pre-wrap break-words">
           {content || <span className="text-muted-foreground">…</span>}
-          {toolCalls && toolCalls.length > 0 && (
-            <div className="mt-2 space-y-1">
-              {toolCalls.map((c) => (
-                <div
-                  key={c.id || c.name}
-                  className={`text-[11px] px-2 py-1 rounded ${
-                    c.applied
-                      ? 'bg-primary/10 text-primary border border-primary/20'
-                      : 'bg-muted text-muted-foreground border border-border'
-                  }`}
-                >
-                  {c.applied ? '✓' : '–'} {c.name}{c.note ? ` — ${c.note}` : ''}
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       </div>
     );
   }
   return null;
+}
+
+// Inline contact form rendered in the transcript when the agent calls
+// collect_contact. On submit, the context saves the details, pushes the lead
+// to GHL, and nudges the agent to continue with sizing questions.
+function ContactForm({ onSubmit }: { onSubmit: (values: ContactFormValues) => void }) {
+  const [values, setValues] = useState<ContactFormValues>({
+    name: '',
+    businessName: '',
+    email: '',
+    phone: '',
+    address: '',
+  });
+
+  const set = (k: keyof ContactFormValues) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setValues((v) => ({ ...v, [k]: e.target.value }));
+
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email);
+  const phoneOk = values.phone.replace(/\D/g, '').length >= 10;
+  const valid =
+    values.name.trim().length > 0 &&
+    values.businessName.trim().length > 0 &&
+    emailOk &&
+    phoneOk &&
+    values.address.trim().length > 0;
+
+  const fields: Array<{ k: keyof ContactFormValues; label: string; type?: string; placeholder: string }> = [
+    { k: 'name', label: 'Full name', placeholder: 'John Doe' },
+    { k: 'businessName', label: 'Business name', placeholder: 'Acme Corp' },
+    { k: 'email', label: 'Email', type: 'email', placeholder: 'john@example.com' },
+    { k: 'phone', label: 'Phone', type: 'tel', placeholder: '(555) 555-5555' },
+    { k: 'address', label: 'Business address', placeholder: '123 Main St, City, State ZIP' },
+  ];
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-3 space-y-2.5 shadow-sm">
+      <p className="text-xs font-medium text-foreground">Your contact details</p>
+      {fields.map((f) => (
+        <div key={f.k} className="space-y-1">
+          <Label htmlFor={`cf-${f.k}`} className="text-xs">
+            {f.label}
+          </Label>
+          <Input
+            id={`cf-${f.k}`}
+            type={f.type || 'text'}
+            value={values[f.k]}
+            onChange={set(f.k)}
+            placeholder={f.placeholder}
+            className="h-9 text-sm"
+          />
+        </div>
+      ))}
+      <Button
+        size="sm"
+        className="w-full mt-1"
+        disabled={!valid}
+        onClick={() => {
+          if (!valid) return;
+          onSubmit(values);
+        }}
+      >
+        Submit
+      </Button>
+    </div>
+  );
 }
 
 export default AiChatWidget;

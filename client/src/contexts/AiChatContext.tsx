@@ -23,7 +23,17 @@ import {
 } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { aiChatApi, streamMessage, type SessionInfo } from '@/services/ai-chat.client';
-import { useQuote } from './QuoteContext';
+import { leadApi } from '@/services/api';
+import { useQuote, type CustomerInfo } from './QuoteContext';
+
+// Fields collected by the in-chat contact form (collect_contact tool).
+export interface ContactFormValues {
+  name: string;
+  businessName: string;
+  email: string;
+  phone: string;
+  address: string;
+}
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -64,6 +74,9 @@ interface AiChatContextValue {
   // field registry — pages call registerField on mount, unregister on unmount
   registerField: (reg: FieldRegistration) => () => void;
   highlightedFieldId: string | null;
+  // in-chat contact form (driven by the collect_contact tool)
+  showContactForm: boolean;
+  submitContactForm: (values: ContactFormValues) => void;
 }
 
 const AiChatContext = createContext<AiChatContextValue | null>(null);
@@ -84,9 +97,26 @@ export const AiChatProvider = ({ children }: { children: ReactNode }) => {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [fallbackActive, setFallbackActive] = useState(false);
   const [highlightedFieldId, setHighlightedFieldId] = useState<string | null>(null);
+  const [showContactForm, setShowContactForm] = useState(false);
 
   const fieldRegistry = useRef<Map<string, FieldRegistration>>(new Map());
   const abortRef = useRef<AbortController | null>(null);
+
+  // Live mirrors of quote state. Tool calls within a single agentic turn run
+  // synchronously off one captured closure, so reading quote.* directly would
+  // see render-time (stale) values and chained tools (set_sizing →
+  // go_to_checkout, or the contact-form submit → continuation send) would
+  // miss each other's writes. The writing tools update these refs
+  // synchronously; an effect keeps them in sync with external (page) edits.
+  const customerInfoRef = useRef(quote.customerInfo);
+  const selectedPackageRef = useRef(quote.selectedPackage);
+  const contactCapturedRef = useRef(false);
+  useEffect(() => {
+    customerInfoRef.current = quote.customerInfo;
+  }, [quote.customerInfo]);
+  useEffect(() => {
+    selectedPackageRef.current = quote.selectedPackage;
+  }, [quote.selectedPackage]);
 
   // ── Field registry ──────────────────────────────────────────────────
   const registerField = useCallback((reg: FieldRegistration) => {
@@ -221,11 +251,14 @@ export const AiChatProvider = ({ children }: { children: ReactNode }) => {
           pricingType: a.pricingType,
         })),
       selection: {
-        selectedPackageId: quote.selectedPackage?.id ?? null,
-        selectedPackageName: quote.selectedPackage?.name ?? null,
+        // Read from the live mirrors so a package/sizing just set by a tool
+        // earlier in this same turn (or the contact-form submit) is reflected
+        // here, not the stale render-time value.
+        selectedPackageId: selectedPackageRef.current?.id ?? null,
+        selectedPackageName: selectedPackageRef.current?.name ?? null,
         selectedAddonIds: quote.selectedAddons.map((a) => a.id),
       },
-      customer: quote.customerInfo,
+      customer: customerInfoRef.current,
       appliedPromoCodes: quote.appliedPromoCodes.map((p) => p.code),
     };
   }, [location.pathname, quote]);
@@ -282,6 +315,7 @@ export const AiChatProvider = ({ children }: { children: ReactNode }) => {
           const pkgId = String(parsed.packageId || '');
           const pkg = quote.packages.find((p) => p.id === pkgId);
           if (!pkg) return { applied: false, note: `unknown package "${pkgId}"` };
+          selectedPackageRef.current = pkg; // sync so a same-turn go_to_checkout sees it
           quote.setSelectedPackage(pkg);
           const here = location.pathname;
           if (here === '/' || here === '/quote-builder') {
@@ -306,6 +340,62 @@ export const AiChatProvider = ({ children }: { children: ReactNode }) => {
             { ...addon, quantity: 1 },
           ]);
           return { applied: true, note: `added ${addon.name}` };
+        }
+        case 'collect_contact': {
+          // Render the inline contact form in the transcript. The customer
+          // fills it out and submits on their own time (submitContactForm).
+          // Guard against a second call re-showing a blank form (and inviting
+          // a duplicate GHL capture) once contact is already captured.
+          if (contactCapturedRef.current) {
+            return { applied: false, note: 'contact already captured — do not ask again, continue the flow' };
+          }
+          setShowContactForm(true);
+          return { applied: true, note: 'showed contact form' };
+        }
+        case 'set_sizing': {
+          // Write the sizing straight into shared quote state so it survives
+          // regardless of which page is mounted — the chat flow never visits
+          // the sizing page. Only the provided counts are touched. Merge off
+          // the live ref so repeated set_sizing calls in one turn accumulate.
+          const patch: Partial<CustomerInfo> = {};
+          const num = (v: unknown) => {
+            const n = Number(v);
+            return Number.isFinite(n) && n >= 0 ? Math.floor(n) : undefined;
+          };
+          const d = num(parsed.desktopUsers);
+          const w = num(parsed.webUsers);
+          const l = num(parsed.locations);
+          if (d !== undefined) patch.userCount = d;
+          if (w !== undefined) patch.webUserCount = w;
+          if (l !== undefined) patch.locationCount = l;
+          if (Object.keys(patch).length === 0) {
+            return { applied: false, note: 'no sizing values provided' };
+          }
+          const merged = { ...customerInfoRef.current, ...patch };
+          customerInfoRef.current = merged; // sync so a same-turn go_to_checkout / 2nd set_sizing sees it
+          quote.setCustomerInfo(merged);
+          const bits = [
+            patch.userCount !== undefined ? `${patch.userCount} desktop` : null,
+            patch.webUserCount !== undefined ? `${patch.webUserCount} web` : null,
+            patch.locationCount !== undefined ? `${patch.locationCount} location(s)` : null,
+          ].filter(Boolean);
+          return { applied: true, note: `set ${bits.join(', ')}` };
+        }
+        case 'go_to_checkout': {
+          // Final hop to the sign-and-pay page. Read the live mirrors (not the
+          // stale render-time quote) so a package/sizing set earlier in this
+          // same turn counts. Guard so we never land on a summary that would
+          // just bounce back for a missing package/sizing.
+          if (!selectedPackageRef.current) {
+            return { applied: false, note: 'no package selected yet — recommend one and call suggest_package first' };
+          }
+          const c = customerInfoRef.current;
+          const hasSizing = (c.userCount ?? 0) > 0 || (c.webUserCount ?? 0) > 0 || (c.locationCount ?? 0) > 0;
+          if (!hasSizing) {
+            return { applied: false, note: 'no sizing set yet — ask for users/locations first' };
+          }
+          navigate('/summary');
+          return { applied: true, note: 'sent to sign-and-pay' };
         }
         case 'request_followup': {
           // The agent has offered to set the customer up with a sales rep.
@@ -402,12 +492,48 @@ export const AiChatProvider = ({ children }: { children: ReactNode }) => {
     [applyTool, buildPageSnapshot, ensureSession],
   );
 
+  // ── In-chat contact form submit ─────────────────────────────────────
+  // Persist the contact details into shared quote state, push the lead to
+  // GHL immediately (fire-and-forget — we don't block on it), then nudge the
+  // agent to continue. The agent reads the saved details from the next
+  // turn's page snapshot, so the continuation message stays generic.
+  const submitContactForm = useCallback(
+    (values: ContactFormValues) => {
+      const merged = { ...customerInfoRef.current, ...values };
+      customerInfoRef.current = merged; // sync so the continuation send()'s snapshot carries it
+      contactCapturedRef.current = true;
+      quote.setCustomerInfo(merged);
+      setShowContactForm(false);
+
+      leadApi
+        .capture({
+          customer: {
+            name: merged.name || merged.email,
+            email: merged.email,
+            phone: merged.phone || '',
+            businessName: merged.businessName || '',
+            address: merged.address || '',
+            userCount: merged.userCount || 0,
+            webUserCount: merged.webUserCount ?? 0,
+            locationCount: merged.locationCount || 0,
+            referrerCode: merged.referrerCode || null,
+          },
+        })
+        .catch((err) => console.error('Chat contact capture failed:', err));
+
+      void send("I've filled out my contact details.");
+    },
+    [quote, send],
+  );
+
   const reset = useCallback(async () => {
     abortRef.current?.abort();
     try { await aiChatApi.endSession(); } catch { /* ignore */ }
     setSession(null);
     setMessages([]);
     setFallbackActive(false);
+    setShowContactForm(false);
+    contactCapturedRef.current = false;
     setStatus('idle');
   }, []);
 
@@ -435,8 +561,10 @@ export const AiChatProvider = ({ children }: { children: ReactNode }) => {
       fallbackActive,
       registerField,
       highlightedFieldId,
+      showContactForm,
+      submitContactForm,
     }),
-    [enabled, session, status, open, messages, send, reset, primeGreeting, fallbackActive, registerField, highlightedFieldId],
+    [enabled, session, status, open, messages, send, reset, primeGreeting, fallbackActive, registerField, highlightedFieldId, showContactForm, submitContactForm],
   );
 
   return <AiChatContext.Provider value={value}>{children}</AiChatContext.Provider>;
