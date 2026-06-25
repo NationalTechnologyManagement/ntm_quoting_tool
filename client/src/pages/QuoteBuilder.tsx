@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuote } from '@/contexts/QuoteContext';
 import { Button } from '@/components/ui/button';
@@ -19,6 +19,23 @@ const QuoteBuilder = () => {
   // Collapsed view shows category headers + top 2 items per category so the
   // three cards still fit comfortably; "Show more" reveals everything.
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
+
+  // Newsletter visitor tracker — scoped to this pricing page ONLY. We inject
+  // it into <head> on mount and remove it on unmount rather than putting it in
+  // index.html, since this is an SPA and index.html would load it on every
+  // route. Guarded against duplicate injection (StrictMode / revisits).
+  useEffect(() => {
+    const SRC = 'https://ntm-newsletter-production.up.railway.app/static/tracker.js';
+    if (document.querySelector(`script[src="${SRC}"]`)) return;
+    const script = document.createElement('script');
+    script.src = SRC;
+    script.async = true;
+    script.dataset.tenant = 'pricing';
+    document.head.appendChild(script);
+    return () => {
+      script.remove();
+    };
+  }, []);
 
   const handleLookup = () => {
     const v = quoteSearch.trim();
