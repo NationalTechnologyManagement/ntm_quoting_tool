@@ -118,7 +118,8 @@ export function buildQuoteEmailHtml(
         <div class="section-title">Monthly Service</div>
         <div class="cost-card recurring">
           <div class="cost-label">${quote.selectedPackage.name}</div>
-          <div class="cost-detail">${quote.customer.userCount} users &times; ${formatCurrency(quote.selectedPackage.pricePerUser)}/user</div>
+          ${quote.customer.userCount > 0 ? `<div class="cost-detail">${quote.customer.userCount} desktop users &times; ${formatCurrency(quote.selectedPackage.pricePerUser)}/user</div>` : ''}
+          ${(quote.customer.webUserCount ?? 0) > 0 ? `<div class="cost-detail">${quote.customer.webUserCount} web users &times; ${formatCurrency(quote.selectedPackage.pricePerUserF3 ?? 0)}/user</div>` : ''}
           ${quote.customer.locationCount > 0 ? `<div class="cost-detail">${quote.customer.locationCount} locations &times; ${formatCurrency(quote.selectedPackage.pricePerLocation)}/location</div>` : ''}
           <div class="cost-amount">${formatCurrency(firstMonth)}<span style="font-size:16px;opacity:0.8;">/${quote.totals.recurringFrequency}</span></div>
         </div>

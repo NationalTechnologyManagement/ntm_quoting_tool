@@ -291,7 +291,10 @@ async function recalcAndSaveQuote(quote: any, promos: any[]): Promise<any> {
   const baseOneTime = selectedAddons
     .filter((a: any) => a.pricingType === 'one-time-only' || a.pricingType === 'both')
     .reduce((sum: number, a: any) => sum + (a.setupPrice || 0) * a.quantity, 0);
-  const packageCost = (pkg.pricePerUser * customer.userCount) + (pkg.pricePerLocation * customer.locationCount);
+  const packageCost =
+    (pkg.pricePerUser * customer.userCount) +
+    ((pkg.pricePerUserF3 ?? 0) * (customer.webUserCount ?? 0)) +
+    (pkg.pricePerLocation * customer.locationCount);
   const addonRecurring = selectedAddons
     .filter((a: any) => a.pricingType === 'recurring-only' || a.pricingType === 'both')
     .reduce((sum: number, a: any) => sum + (a.recurringPrice || 0) * a.quantity, 0);

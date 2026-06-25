@@ -112,9 +112,9 @@ export interface SiteContent {
 }
 
 const defaultSiteContent: SiteContent = {
-  quoteBuilderHeading: 'Choose Your Package',
+  quoteBuilderHeading: 'Build a quote',
   quoteBuilderSubheading:
-    "Pick the plan that fits. We'll size the quote to your team on the next step.",
+    'Build your quote and see exact pricing — tax and fees included.',
   quoteBuilderExplainerTitle: 'Desktop User vs Web User',
   quoteBuilderExplainerBody:
     'Desktop User — full Microsoft 365 Business Premium. Use this for your primary staff who need the full desktop apps, Teams calls, and offline access.\n\nWeb User — Microsoft 365 F3 (Web & Email Only). Use this for frontline, warehouse, kiosk, or shared-device employees who only need email and browser-based apps. Costs less per user.',
@@ -413,9 +413,11 @@ export const QuoteProvider = ({ children }: { children: ReactNode }) => {
     phone: '',
     businessName: '',
     address: '',
-    userCount: 1,
+    // All sizing fields start empty. The customer must enter at least one of
+    // Desktop Users / Web Users / Locations to advance (enforced in QuoteInfo).
+    userCount: 0,
     webUserCount: 0,
-    locationCount: 1,
+    locationCount: 0,
     referrerCode: '',
   });
   const [selectedPackage, setSelectedPackage] = useState<Package | null>(null);

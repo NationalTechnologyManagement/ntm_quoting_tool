@@ -180,14 +180,16 @@ export const AiChatProvider = ({ children }: { children: ReactNode }) => {
       route === '/' || route === '/quote-builder'
         ? 'choose_package'
         : route === '/quote-info'
-          ? 'customer_info_and_addons'
-          : route === '/summary'
-            ? 'summary_and_promo'
-            : route === '/terms'
-              ? 'review_terms'
-              : route === '/quote-review'
-                ? 'review_and_pay'
-                : 'unknown';
+          ? 'size_quote_and_addons'
+          : route === '/quote-contact'
+            ? 'customer_contact_info'
+            : route === '/summary'
+              ? 'summary_and_promo'
+              : route === '/terms'
+                ? 'review_terms'
+                : route === '/quote-review'
+                  ? 'review_and_pay'
+                  : 'unknown';
 
     return {
       route,
@@ -262,7 +264,7 @@ export const AiChatProvider = ({ children }: { children: ReactNode }) => {
         case 'navigate': {
           const dir = parsed.direction === 'back' ? 'back' : 'next';
           const route = location.pathname;
-          const order = ['/', '/quote-builder', '/quote-info', '/summary', '/terms', '/quote-review'];
+          const order = ['/', '/quote-builder', '/quote-info', '/quote-contact', '/summary', '/terms', '/quote-review'];
           const i = order.indexOf(route);
           if (i < 0) return { applied: false, note: 'unknown current step' };
           const target = dir === 'next' ? order[i + 1] : order[i - 1];

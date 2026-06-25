@@ -11,22 +11,32 @@ import * as ghlService from '../services/crm.service.js';
 const router = Router();
 
 const createQuoteSchema = z.object({
-  customer: z.object({
-    name: z.string().min(1),
-    email: z.string().email(),
-    phone: z.string().min(1),
-    businessName: z.string().min(1),
-    address: z.string().min(1),
-    // Desktop (Business Premium) user count. The flow requires at least one,
-    // enforced UI-side too.
-    userCount: z.number().int().min(1),
-    // Web (F3) user count. Optional; 0 if the customer has no F3 users.
-    webUserCount: z.number().int().min(0).optional().default(0),
-    // Locations are optional — 0 means the customer has no site for us to
-    // manage. A 0-location quote skips the per-location CW agreement line.
-    locationCount: z.number().int().min(0),
-    referrerCode: z.string().nullable().optional(),
-  }),
+  customer: z
+    .object({
+      name: z.string().min(1),
+      email: z.string().email(),
+      phone: z.string().min(1),
+      businessName: z.string().min(1),
+      address: z.string().min(1),
+      // Desktop (Business Premium) user count. Optional — a quote may be sized
+      // on Web Users or Locations alone (see refine below).
+      userCount: z.number().int().min(0),
+      // Web (F3) user count. Optional; 0 if the customer has no F3 users.
+      webUserCount: z.number().int().min(0).optional().default(0),
+      // Locations are optional — 0 means the customer has no site for us to
+      // manage. A 0-location quote skips the per-location CW agreement line.
+      locationCount: z.number().int().min(0),
+      referrerCode: z.string().nullable().optional(),
+    })
+    // At least one sizing dimension must be non-zero — otherwise there's
+    // nothing to quote. Mirrors the UI gate on the sizing step.
+    .refine(
+      (c) => c.userCount > 0 || (c.webUserCount ?? 0) > 0 || c.locationCount > 0,
+      {
+        message: 'At least one of Desktop Users, Web Users, or Locations is required.',
+        path: ['userCount'],
+      },
+    ),
   selectedPackage: z.object({
     id: z.string(),
     name: z.string(),

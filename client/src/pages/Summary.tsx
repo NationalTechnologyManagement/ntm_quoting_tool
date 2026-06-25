@@ -56,6 +56,13 @@ const Summary = () => {
   const [drawnSignature, setDrawnSignature] = useState<string>("");
   const [signaturePadOpen, setSignaturePadOpen] = useState(false);
 
+  // At least one sizing dimension must be set, or there's nothing to quote and
+  // the server rejects the draft-create (leaving the page stuck "Generating…").
+  const hasSizing =
+    (customerInfo.userCount ?? 0) > 0 ||
+    (customerInfo.webUserCount ?? 0) > 0 ||
+    (customerInfo.locationCount ?? 0) > 0;
+
   // Fetch user's IP address
   useEffect(() => {
     fetch("https://api.ipify.org?format=json")
@@ -66,7 +73,7 @@ const Summary = () => {
 
   // Auto-create quote as draft on page load to capture tire kickers
   useEffect(() => {
-    if (createdQuote || !selectedPackage) return;
+    if (createdQuote || !selectedPackage || !hasSizing) return;
 
     const createDraftQuote = async () => {
       try {
@@ -181,6 +188,13 @@ const Summary = () => {
   // Redirect if no package selected
   if (!selectedPackage) {
     navigate("/quote-builder");
+    return null;
+  }
+
+  // Package picked but never sized (e.g. deep link / AI set the package) —
+  // send them to the sizing step rather than auto-creating an invalid draft.
+  if (!hasSizing) {
+    navigate("/quote-info");
     return null;
   }
 
@@ -522,9 +536,9 @@ const Summary = () => {
       />
       <div className="max-w-6xl mx-auto py-12 px-4">
         {/* Back button */}
-        <Button variant="ghost" onClick={() => navigate("/quote-builder")} className="mb-6">
+        <Button variant="ghost" onClick={() => navigate("/quote-contact")} className="mb-6">
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Back to Quote Builder
+          Back
         </Button>
 
         {/* Header */}
@@ -550,7 +564,7 @@ const Summary = () => {
             <Card className="p-6 shadow-card animate-slide-up">
               <div className="flex items-start justify-between mb-4">
                 <h2 className="text-xl font-semibold text-foreground">Customer Information</h2>
-                <Button variant="link" size="sm" onClick={() => navigate("/quote-builder")} className="text-primary">
+                <Button variant="link" size="sm" onClick={() => navigate("/quote-contact")} className="text-primary">
                   Edit
                 </Button>
               </div>

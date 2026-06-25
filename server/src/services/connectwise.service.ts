@@ -436,7 +436,8 @@ async function createOpportunity(
       notes: [
         `Quote: ${quote.quoteNumber}`,
         `Package: ${quote.selectedPackage.name}`,
-        `Users: ${quote.customer.userCount}`,
+        `Desktop Users: ${quote.customer.userCount}`,
+        `Web Users: ${(quote.customer as any).webUserCount ?? 0}`,
         quote.customer.locationCount > 0
           ? `Locations: ${quote.customer.locationCount}`
           : `Locations: none (no managed site)`,
@@ -763,7 +764,9 @@ async function createProject(
   const referrer = (quote.customer as any).referrerCode;
   const description = [
     `Package: ${quote.selectedPackage.name}`,
-    `Sizing: ${quote.customer.userCount} user(s), ${
+    `Sizing: ${quote.customer.userCount} desktop user(s), ${
+      (quote.customer as any).webUserCount ?? 0
+    } web user(s), ${
       quote.customer.locationCount > 0
         ? `${quote.customer.locationCount} location(s)`
         : 'no managed location'

@@ -9,6 +9,7 @@ import { AiChatProvider } from "./contexts/AiChatContext";
 import { AiChatWidget } from "./components/AiChatWidget";
 import QuoteBuilder from "./pages/QuoteBuilder";
 import QuoteInfo from "./pages/QuoteInfo";
+import QuoteContact from "./pages/QuoteContact";
 import Summary from "./pages/Summary";
 import Terms from "./pages/Terms";
 import QuoteReview from "./pages/QuoteReview";
@@ -51,6 +52,7 @@ const App = () => (
                 <Route path="/" element={<Navigate to="/quote-builder" replace />} />
                 <Route path="/quote-builder" element={<QuoteBuilder />} />
                 <Route path="/quote-info" element={<QuoteInfo />} />
+                <Route path="/quote-contact" element={<QuoteContact />} />
                 <Route path="/summary" element={<Summary />} />
                 <Route path="/terms" element={<Terms />} />
                 <Route path="/quote-review" element={<QuoteReview />} />

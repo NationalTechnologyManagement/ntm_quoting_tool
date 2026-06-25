@@ -272,7 +272,8 @@ const editSelectedAddonSchema = z.object({
 });
 
 const editQuoteSchema = z.object({
-  userCount: z.number().int().min(1).optional(),
+  // 0 allowed — a quote may be sized on Web Users or Locations alone.
+  userCount: z.number().int().min(0).optional(),
   webUserCount: z.number().int().min(0).optional(),
   locationCount: z.number().int().min(0).optional(),
   selectedPackage: editSelectedPackageSchema.optional(),
@@ -386,9 +387,12 @@ router.post('/api/admin/quotes/:id/refresh-package', requireAuth, async (req, re
     return;
   }
   const customer = quote.customer as any;
-  const userCount = Number(customer?.userCount ?? 1);
+  // Default a missing key to 0 (not 1) — 0 is the valid empty state now that a
+  // quote can be sized on Web Users or Locations alone. Avoids inventing a
+  // per-user/per-location charge for legacy rows that lack the key.
+  const userCount = Number(customer?.userCount ?? 0);
   const webUserCount = Number(customer?.webUserCount ?? 0);
-  const locationCount = Number(customer?.locationCount ?? 1);
+  const locationCount = Number(customer?.locationCount ?? 0);
   const editedPkg = {
     ...snapshotPkg,
     name: live.name,
@@ -454,9 +458,10 @@ router.put(
     const currentPkg = quote.selectedPackage as any;
     const currentAddons = (quote.selectedAddons as any[]) ?? [];
 
-    const userCount = body.userCount ?? customer?.userCount ?? 1;
+    // 0 is the valid empty state — don't fall back to 1 for a missing key.
+    const userCount = body.userCount ?? customer?.userCount ?? 0;
     const webUserCount = body.webUserCount ?? customer?.webUserCount ?? 0;
-    const locationCount = body.locationCount ?? customer?.locationCount ?? 1;
+    const locationCount = body.locationCount ?? customer?.locationCount ?? 0;
 
     const editedPkg = body.selectedPackage
       ? { ...body.selectedPackage }
