@@ -4,17 +4,14 @@ import { useQuote, Addon, computeOnboardingFee, Package, SelectedAddon } from '@
 import { useChatField } from '@/contexts/AiChatContext';
 import { IS_LEAD_GEN_MODE } from '@/lib/lead-gen';
 import { formatAmount, formatContractTerm } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Check, ChevronDown, ChevronUp, ArrowLeft, ArrowRight, Info, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Info } from 'lucide-react';
 import { SiteHeader } from '@/components/SiteHeader';
+import { SiteFooter } from '@/components/SiteFooter';
+import { StepIndicator } from '@/components/StepIndicator';
 
-// Field-level explainers shown in the (i) popover above each sizing input.
+// Field-level explainers shown in the (i) popover next to each sizing input.
 const SIZING_INFO = {
   desktop: {
     title: 'Desktop Users',
@@ -34,23 +31,17 @@ const QuoteInfo = () => {
   const navigate = useNavigate();
   const { customerInfo, setCustomerInfo, selectedPackage, selectedAddons, setSelectedAddons, addons } = useQuote();
 
-  // Only the sizing fields live on this page now. Contact details moved to
-  // their own step (/quote-contact).
   const [userCount, setUserCount] = useState<number>(customerInfo.userCount ?? 0);
   const [webUserCount, setWebUserCount] = useState<number>(customerInfo.webUserCount ?? 0);
   const [locationCount, setLocationCount] = useState<number>(customerInfo.locationCount ?? 0);
   const [showAddons, setShowAddons] = useState(false);
-  // Surfaced as a red error only after the customer tries to advance without
-  // sizing anything. Stays red until they enter at least one.
   const [attemptedAdvance, setAttemptedAdvance] = useState(false);
 
   const activeAddons = addons.filter((addon) => addon.active);
 
-  // At least one sizing dimension must be set to have something to quote.
   const hasSizing = userCount > 0 || webUserCount > 0 || locationCount > 0;
   const showSizingError = attemptedAdvance && !hasSizing;
 
-  // If they navigated here without picking a package, send them back.
   useEffect(() => {
     if (!selectedPackage) navigate('/quote-builder');
   }, [selectedPackage, navigate]);
@@ -93,158 +84,133 @@ const QuoteInfo = () => {
   if (!selectedPackage) return null;
 
   return (
-    <div className="min-h-screen bg-background">
-      <SiteHeader />
-      <div className="max-w-6xl mx-auto space-y-8 py-12 px-4">
-        {/* Header with back button + selected package summary */}
-        <div className="space-y-4 animate-fade-in">
-          <Button
-            variant="ghost"
-            onClick={() => navigate('/quote-builder')}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Packages
-          </Button>
+    <div className="min-h-screen flex flex-col bg-[#FBFAF8]">
+      <SiteHeader variant="minimal" />
 
-          <div className="text-center space-y-3">
-            <div className="flex justify-center">
-              <img
-                src="/ntm-logo.png"
-                alt="NTM"
-                className="w-16 h-16 md:w-20 md:h-20 drop-shadow-[0_0_20px_rgba(232,127,55,0.2)]"
-              />
-            </div>
-            <h1 className="text-3xl sm:text-4xl font-bold text-foreground">Size your quote</h1>
-            <p className="text-muted-foreground">
-              You picked <span className="text-primary font-semibold">{selectedPackage.name}</span>. Tell us how many
-              of each, and watch your price update live.
-            </p>
-          </div>
+      <div className="flex-1 max-w-[1080px] w-full mx-auto px-6">
+        <StepIndicator current={2} />
+
+        {/* Title + back link */}
+        <div className="text-center pt-[22px] pb-[30px] animate-rise">
+          <button
+            type="button"
+            onClick={() => navigate('/quote-builder')}
+            className="inline-flex items-center gap-1.5 text-[13.5px] font-semibold text-[#7A8595] mb-3.5 hover:text-[#16243F] transition-colors"
+          >
+            ← Back to Packages
+          </button>
+          <h1 className="font-heading font-extrabold text-[34px] tracking-[-0.02em] text-[#16243F] mb-2">
+            Size your quote
+          </h1>
+          <p className="text-base text-[#5A6575] m-0">
+            You picked <span className="text-[#D96626] font-semibold">{selectedPackage.name}</span>. Tell us how many
+            of each, and watch your price update live.
+          </p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-          {/* Left: sizing inputs + add-ons */}
-          <div className="lg:col-span-2 space-y-6">
-            <Card className="p-6 md:p-8 bg-card border-border shadow-card animate-slide-up">
-              <h2 className="text-2xl font-semibold mb-2 text-foreground">Service Details</h2>
-              <p className="text-sm text-muted-foreground mb-6">
-                Tell us how many of each user type and how many sites we'll cover. At least one of these is
-                required.
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-7 items-start pb-16">
+          {/* Left: sizing + add-ons */}
+          <div className="flex flex-col gap-6 min-w-0">
+            {/* Service Details */}
+            <div className="bg-white border border-[#E9E7E2] rounded-2xl p-[30px] shadow-[0_1px_2px_rgba(22,36,63,0.04)]">
+              <h2 className="font-heading font-bold text-xl text-[#16243F] mb-1">Service Details</h2>
+              <p className="text-sm text-[#6B7686] mb-6">
+                Tell us how many of each user type and how many sites we'll cover. At least one of these is required.
               </p>
-              {/* Three matching columns. Label row, input row, and helper row
-                  each get a fixed min-height so the (i) icons and helper text
-                  stay aligned across columns. */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                <SizingField
-                  id="userCount"
-                  label="Desktop Users"
-                  info={SIZING_INFO.desktop}
-                  value={userCount}
-                  onChange={setUserCount}
-                  placeholder="e.g., 10"
-                  helper="Full Microsoft 365 — primary office staff."
-                  highlighted={userCountHighlighted}
-                  invalid={showSizingError}
-                />
-                <SizingField
-                  id="webUserCount"
-                  label="Web Users"
-                  info={SIZING_INFO.web}
-                  value={webUserCount}
-                  onChange={setWebUserCount}
-                  placeholder="e.g., 5"
-                  helper="Web & email only — frontline or kiosk users."
-                  highlighted={webUserCountHighlighted}
-                  invalid={showSizingError}
-                />
-                <SizingField
-                  id="locationCount"
-                  label="Locations"
-                  info={SIZING_INFO.location}
-                  value={locationCount}
-                  onChange={setLocationCount}
-                  placeholder="e.g., 1"
-                  helper="Sites with networking gear to manage. 0 if none."
-                  highlighted={locationCountHighlighted}
-                  invalid={showSizingError}
-                />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-[18px]">
+                <SizingField id="userCount" label="Desktop Users" info={SIZING_INFO.desktop} value={userCount} onChange={setUserCount} placeholder="e.g., 10" helper="Full Microsoft 365 — primary office staff." highlighted={userCountHighlighted} invalid={showSizingError} />
+                <SizingField id="webUserCount" label="Web Users" info={SIZING_INFO.web} value={webUserCount} onChange={setWebUserCount} placeholder="e.g., 5" helper="Web & email only — frontline or kiosk users." highlighted={webUserCountHighlighted} invalid={showSizingError} />
+                <SizingField id="locationCount" label="Locations" info={SIZING_INFO.location} value={locationCount} onChange={setLocationCount} placeholder="e.g., 1" helper="Sites with networking gear to manage. 0 if none." highlighted={locationCountHighlighted} invalid={showSizingError} />
               </div>
 
               {showSizingError && (
-                <div className="mt-4 flex items-center gap-2 text-sm text-destructive">
-                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                <div className="mt-4 flex items-center gap-2 text-[13.5px] text-[#C6402B]">
+                  <span className="font-bold">!</span>
                   <span>Enter at least one Desktop User, Web User, or Location to continue.</span>
                 </div>
               )}
-            </Card>
+            </div>
 
             {/* Add-ons */}
             {activeAddons.length > 0 && (
-              <div className="space-y-4 animate-slide-up" style={{ animationDelay: '0.1s' }}>
-                <Button
-                  variant="outline"
-                  className="w-full justify-between bg-card border-border hover:bg-secondary/60"
+              <div className="bg-white border border-[#E9E7E2] rounded-2xl shadow-[0_1px_2px_rgba(22,36,63,0.04)] overflow-hidden">
+                <button
+                  type="button"
                   onClick={() => setShowAddons(!showAddons)}
+                  className="w-full flex items-center justify-between gap-3 px-[30px] py-[22px] bg-transparent border-none cursor-pointer text-left"
                 >
-                  <span>Want to add premium features?</span>
-                  {showAddons ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-                </Button>
+                  <span>
+                    <span className="block font-heading font-bold text-[17px] text-[#16243F]">
+                      Want to add premium features?
+                    </span>
+                    <span className="block text-[13.5px] text-[#6B7686] mt-0.5">
+                      Phones, faxing, backups and more. Optional.
+                    </span>
+                  </span>
+                  <span className="text-[#D96626] text-base flex-shrink-0">{showAddons ? '▲' : '▼'}</span>
+                </button>
                 {showAddons && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                  <div className="px-[30px] pb-7 pt-1 grid grid-cols-1 md:grid-cols-2 gap-3.5">
                     {activeAddons.map((addon) => {
                       const selectedAddon = selectedAddons.find((a) => a.id === addon.id);
                       const isSelected = !!selectedAddon;
                       const quantity = selectedAddon?.quantity || 1;
                       return (
-                        <Card
+                        <div
                           key={addon.id}
-                          className={`p-4 bg-card border-border shadow-card transition-all duration-300 hover:shadow-card-hover hover:-translate-y-0.5 ${
-                            isSelected ? 'ring-2 ring-primary border-primary/40' : ''
-                          }`}
+                          onClick={() => toggleAddon(addon)}
+                          className="relative rounded-xl p-4 cursor-pointer border-[1.5px] transition-colors"
+                          style={{
+                            borderColor: isSelected ? '#E9A877' : '#EAE8E2',
+                            background: isSelected ? '#FDF1E9' : '#FFFFFF',
+                          }}
                         >
-                          <div className="flex gap-3">
-                            <Checkbox checked={isSelected} onCheckedChange={() => toggleAddon(addon)} className="mt-1" />
-                            <div className="flex-1 space-y-2">
-                              <div className="flex items-start justify-between gap-2">
-                                <h4 className="font-semibold text-foreground">{addon.name}</h4>
-                                <div className="text-right">
-                                  {addon.pricingType === 'both' ? (
-                                    <>
-                                      <span className="text-sm font-semibold text-primary block">
-                                        ${addon.recurringPrice}/{addon.recurringFrequency}
-                                      </span>
-                                      <span className="text-xs text-muted-foreground block">+ ${addon.setupPrice} setup</span>
-                                    </>
-                                  ) : addon.pricingType === 'recurring-only' ? (
-                                    <span className="text-sm font-semibold text-primary">
-                                      ${addon.recurringPrice}/{addon.recurringFrequency}
-                                    </span>
-                                  ) : (
-                                    <span className="text-sm font-semibold text-primary">${addon.setupPrice} one-time</span>
-                                  )}
-                                </div>
+                          <div className="flex items-start justify-between gap-2.5">
+                            <div className="flex items-start gap-2.5">
+                              <span
+                                className="w-5 h-5 rounded-[5px] border-[1.5px] text-white text-xs font-bold inline-flex items-center justify-center flex-shrink-0 mt-px"
+                                style={{
+                                  borderColor: isSelected ? '#D96626' : '#CBD0D8',
+                                  background: isSelected ? '#D96626' : '#FFFFFF',
+                                }}
+                              >
+                                {isSelected ? '✓' : ''}
+                              </span>
+                              <div>
+                                <p className="font-heading font-semibold text-[14.5px] text-[#16243F] mb-0.5">{addon.name}</p>
+                                <p className="text-[12.5px] leading-[1.45] text-[#6B7686] m-0">{addon.description}</p>
                               </div>
-                              <p className="text-sm text-muted-foreground">{addon.description}</p>
-                              {isSelected && (
-                                <div className="flex items-center gap-3 pt-2">
-                                  <Label htmlFor={`quantity-${addon.id}`} className="text-sm">
-                                    Quantity:
-                                  </Label>
-                                  <Input
-                                    id={`quantity-${addon.id}`}
-                                    type="number"
-                                    min="1"
-                                    max="999"
-                                    value={quantity}
-                                    onChange={(e) => updateAddonQuantity(addon.id, parseInt(e.target.value) || 1)}
-                                    className="w-20 h-8"
-                                    onClick={(e) => e.stopPropagation()}
-                                  />
-                                </div>
-                              )}
                             </div>
+                            <span className="font-heading font-bold text-[13px] text-[#D96626] whitespace-nowrap flex-shrink-0 text-right">
+                              {addon.pricingType === 'both' ? (
+                                <>
+                                  ${addon.recurringPrice}/{addon.recurringFrequency}
+                                  <span className="block text-[11px] font-normal text-[#8A94A3]">+ ${addon.setupPrice} setup</span>
+                                </>
+                              ) : addon.pricingType === 'recurring-only' ? (
+                                <>${addon.recurringPrice}/{addon.recurringFrequency}</>
+                              ) : (
+                                <>${addon.setupPrice} one-time</>
+                              )}
+                            </span>
                           </div>
-                        </Card>
+                          {isSelected && (
+                            <div className="flex items-center gap-2.5 pt-3 mt-3 border-t border-[#F0E4D6]" onClick={(e) => e.stopPropagation()}>
+                              <label htmlFor={`quantity-${addon.id}`} className="text-[13px] font-medium text-[#16243F]">
+                                Quantity:
+                              </label>
+                              <input
+                                id={`quantity-${addon.id}`}
+                                type="number"
+                                min="1"
+                                max="999"
+                                value={quantity}
+                                onChange={(e) => updateAddonQuantity(addon.id, parseInt(e.target.value) || 1)}
+                                className="w-20 h-8 px-2 rounded-lg border-[1.5px] border-[#DCD9D2] bg-white text-[#16243F] text-sm outline-none focus:border-[#D96626]"
+                              />
+                            </div>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
@@ -253,8 +219,8 @@ const QuoteInfo = () => {
             )}
           </div>
 
-          {/* Right: live price preview */}
-          <div className="lg:col-span-1">
+          {/* Right: live price */}
+          <div className="lg:sticky lg:top-[88px]">
             <PriceWidget
               pkg={selectedPackage}
               userCount={userCount}
@@ -267,6 +233,8 @@ const QuoteInfo = () => {
           </div>
         </div>
       </div>
+
+      <SiteFooter />
     </div>
   );
 };
@@ -285,44 +253,35 @@ interface SizingFieldProps {
 
 function SizingField({ id, label, info, value, onChange, placeholder, helper, highlighted, invalid }: SizingFieldProps) {
   return (
-    <div
-      className={`space-y-2 ${
-        highlighted ? 'rounded-md ring-2 ring-primary ring-offset-2 ring-offset-background transition-shadow' : ''
-      }`}
-    >
-      <div className="flex items-center gap-2 h-6">
-        <Label htmlFor={id}>{label}</Label>
+    <div className={highlighted ? 'rounded-[10px] ring-2 ring-[#D96626] ring-offset-2 ring-offset-[#FBFAF8] transition-shadow' : ''}>
+      <div className="flex items-center gap-2 mb-2 h-5">
+        <label htmlFor={id} className="text-[13.5px] font-semibold text-[#16243F]">{label}</label>
         <Popover>
           <PopoverTrigger asChild>
-            <button
-              type="button"
-              className="text-muted-foreground hover:text-foreground"
-              aria-label={`What is a ${label.replace(/s$/, '')}?`}
-            >
+            <button type="button" className="text-[#8A94A3] hover:text-[#16243F]" aria-label={`What is a ${label.replace(/s$/, '')}?`}>
               <Info className="w-4 h-4" />
             </button>
           </PopoverTrigger>
           <PopoverContent className="w-[calc(100vw-2rem)] max-w-sm text-sm space-y-2">
-            <p className="font-semibold">{info.title}</p>
-            <p className="text-muted-foreground">{info.body}</p>
+            <p className="font-semibold text-[#16243F]">{info.title}</p>
+            <p className="text-[#6B7686]">{info.body}</p>
           </PopoverContent>
         </Popover>
       </div>
       <div className="relative">
-        <Input
+        <input
           id={id}
           type="number"
           min="0"
-          // 0 is a real value, so render empty (not "0") when unset and use
-          // Math.max to keep negatives out.
           value={value > 0 ? value : ''}
           onChange={(e) => onChange(Math.max(0, parseInt(e.target.value) || 0))}
           placeholder={placeholder}
-          className={['pr-10', invalid ? 'border-destructive focus-visible:ring-destructive' : ''].join(' ')}
+          className="w-full h-12 pl-3.5 pr-10 rounded-[10px] border-[1.5px] bg-[#FBFAF8] text-[#16243F] text-[15px] outline-none transition-colors placeholder:text-[#A9B0BC]"
+          style={{ borderColor: invalid ? '#E0A99B' : '#DCD9D2' }}
         />
-        {value > 0 && <Check className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-primary" />}
+        {value > 0 && <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#D96626] font-bold">✓</span>}
       </div>
-      <p className="text-xs text-muted-foreground min-h-[2rem]">{helper}</p>
+      <p className="text-xs leading-[1.4] text-[#8A94A3] mt-2 min-h-[2.1rem]">{helper}</p>
     </div>
   );
 }
@@ -337,8 +296,8 @@ interface PriceWidgetProps {
   canContinue: boolean;
 }
 
-// Live cost preview shown beside the sizing inputs. Mirrors the math in
-// Summary.tsx so the number the customer sees here matches checkout.
+// Live cost preview beside the sizing inputs. Mirrors the math in Summary.tsx
+// so the number the customer sees here matches checkout.
 function PriceWidget({ pkg, userCount, webUserCount, locationCount, selectedAddons, onContinue, canContinue }: PriceWidgetProps) {
   const pricePerUserF3 = pkg.pricePerUserF3 ?? 0;
   const desktopLine = pkg.pricePerUser * userCount;
@@ -362,90 +321,84 @@ function PriceWidget({ pkg, userCount, webUserCount, locationCount, selectedAddo
   const dueToday = onboarding.final + addonSetup + monthlyTotal;
 
   return (
-    <Card className="p-6 shadow-card sticky top-6 animate-slide-up" style={{ animationDelay: '0.05s' }}>
-      <h2 className="text-lg font-semibold text-foreground">Your quote so far</h2>
-      <p className="text-sm text-muted-foreground">
+    <div className="bg-white border border-[#E9E7E2] rounded-2xl p-[26px] shadow-[0_8px_24px_-14px_rgba(22,36,63,0.18)]">
+      <h2 className="font-heading font-bold text-[17px] text-[#16243F] mb-0.5">Your quote so far</h2>
+      <p className="text-[13px] text-[#8A94A3] mb-[18px]">
         {pkg.name} · {formatContractTerm(pkg.agreementMonths)}
       </p>
 
       {!canContinue ? (
-        <p className="mt-6 text-sm text-muted-foreground">
-          Enter your team size to see live pricing.
-        </p>
+        <p className="text-sm text-[#8A94A3] my-5">Enter your team size to see live pricing.</p>
       ) : (
-        <div className="mt-5 space-y-4">
-          <div className="space-y-1.5 text-sm">
-            {userCount > 0 && (
-              <Line label={`Desktop · ${userCount} × $${formatAmount(pkg.pricePerUser)}`} value={desktopLine} />
-            )}
-            {webUserCount > 0 && (
-              <Line label={`Web · ${webUserCount} × $${formatAmount(pricePerUserF3)}`} value={webLine} />
-            )}
-            {locationCount > 0 && (
-              <Line label={`Locations · ${locationCount} × $${formatAmount(pkg.pricePerLocation)}`} value={locationLine} />
-            )}
+        <>
+          <div className="flex flex-col gap-2.5 text-[13.5px]">
+            {userCount > 0 && <Line label={`Desktop · ${userCount} × $${formatAmount(pkg.pricePerUser)}`} value={desktopLine} />}
+            {webUserCount > 0 && <Line label={`Web · ${webUserCount} × $${formatAmount(pricePerUserF3)}`} value={webLine} />}
+            {locationCount > 0 && <Line label={`Locations · ${locationCount} × $${formatAmount(pkg.pricePerLocation)}`} value={locationLine} />}
             {addonRecurring > 0 && <Line label="Add-ons (recurring)" value={addonRecurring} />}
           </div>
 
-          <div className="pt-3 border-t border-border flex items-center justify-between">
-            <span className="text-sm font-medium text-foreground">Monthly recurring</span>
-            <span className="text-xl font-bold text-primary">
+          <div className="mt-4 pt-3.5 border-t border-[#EFEDE8] flex items-center justify-between">
+            <span className="text-sm font-semibold text-[#16243F]">Monthly recurring</span>
+            <span className="font-heading font-extrabold text-[22px] text-[#D96626]">
               ${formatAmount(monthlyTotal)}
-              <span className="text-sm font-normal text-muted-foreground">/{pkg.frequency}</span>
+              <span className="text-[13px] font-normal text-[#8A94A3]">/{pkg.frequency}</span>
             </span>
           </div>
 
-          <div className="rounded-lg bg-primary/5 border border-primary/15 p-3 space-y-1.5 text-sm">
+          <div className="mt-4 rounded-xl bg-[#FDF1E9] border border-[#F6DCC7] p-3.5 text-[13.5px]">
             <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Onboarding fee</span>
-              <span className={onboarding.waived ? 'line-through text-muted-foreground' : 'text-foreground'}>
+              <span className="text-[#6B7686]">Onboarding fee</span>
+              <span className={onboarding.waived ? 'line-through text-[#8A94A3]' : 'text-[#16243F]'}>
                 ${formatAmount(onboarding.base)}
               </span>
             </div>
             {onboarding.waived && (
-              <div className="flex items-center justify-between text-green-700 dark:text-green-400 font-medium">
+              <div className="flex items-center justify-between mt-1.5 text-[#1F8A4C] font-semibold">
                 <span>✓ Waived (online signup)</span>
                 <span>$0.00</span>
               </div>
             )}
             {addonSetup > 0 && (
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">One-time add-on setup</span>
-                <span className="text-foreground">${formatAmount(addonSetup)}</span>
+              <div className="flex items-center justify-between mt-1.5">
+                <span className="text-[#6B7686]">One-time add-on setup</span>
+                <span className="text-[#16243F]">${formatAmount(addonSetup)}</span>
               </div>
             )}
           </div>
 
-          <div className="pt-3 border-t border-border">
+          <div className="mt-4 pt-3.5 border-t border-[#EFEDE8]">
             <div className="flex items-baseline justify-between">
-              <span className="text-sm text-muted-foreground">Due today (est.)</span>
-              <span className="text-2xl font-bold text-foreground">${formatAmount(dueToday)}</span>
+              <span className="text-[13.5px] text-[#8A94A3]">Due today (est.)</span>
+              <span className="font-heading font-extrabold text-2xl text-[#16243F]">${formatAmount(dueToday)}</span>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-[11.5px] leading-[1.4] text-[#9AA3B1] mt-1.5">
               First month + onboarding{addonSetup > 0 ? ' + setup' : ''}. Sales tax is applied at invoice time.
             </p>
           </div>
-        </div>
+        </>
       )}
 
-      <Button
-        size="lg"
+      <button
+        type="button"
         onClick={onContinue}
         disabled={!canContinue}
-        className="w-full mt-6 shadow-card hover:shadow-card-hover hover:-translate-y-0.5 transition-all"
+        className={[
+          'w-full h-[50px] mt-5 rounded-[11px] font-heading font-semibold text-[15px] transition-colors',
+          canContinue ? 'bg-[#D96626] text-white hover:bg-[#C25A20] cursor-pointer' : 'bg-[#E7E4DE] text-white cursor-not-allowed',
+        ].join(' ')}
       >
-        Continue to Contact Info
-        <ArrowRight className="ml-2 w-4 h-4" />
-      </Button>
-    </Card>
+        Continue to Contact Info →
+      </button>
+    </div>
   );
 }
 
 function Line({ label, value }: { label: string; value: number }) {
   return (
     <div className="flex items-center justify-between">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="text-foreground">${formatAmount(value)}</span>
+      <span className="text-[#6B7686]">{label}</span>
+      <span className="text-[#16243F]">${formatAmount(value)}</span>
     </div>
   );
 }

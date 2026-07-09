@@ -4,13 +4,10 @@ import { useQuote, CustomerInfo } from '@/contexts/QuoteContext';
 import { useChatField } from '@/contexts/AiChatContext';
 import { leadApi } from '@/services/api';
 import { IS_LEAD_GEN_MODE } from '@/lib/lead-gen';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Card } from '@/components/ui/card';
-import { Check, ArrowLeft, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { SiteHeader } from '@/components/SiteHeader';
+import { SiteFooter } from '@/components/SiteFooter';
+import { StepIndicator } from '@/components/StepIndicator';
 
 const QuoteContact = () => {
   const navigate = useNavigate();
@@ -32,9 +29,8 @@ const QuoteContact = () => {
   }, [selectedPackage, hasSizing, navigate]);
 
   // Lite quoting tool: lazy lead capture. As soon as the form has a valid
-  // email, fire-and-forget to GHL — don't make the user click submit. We
-  // debounce so we send one request per pause, not per keystroke. The
-  // server-side upsert dedupes by email, so re-firing is cheap.
+  // email, fire-and-forget to GHL — debounced so we send one request per
+  // pause. Server-side upsert dedupes by email, so re-firing is cheap.
   const lastCapturedRef = useRef<string>('');
   useEffect(() => {
     if (!IS_LEAD_GEN_MODE) return;
@@ -201,117 +197,62 @@ const QuoteContact = () => {
 
   if (!selectedPackage) return null;
 
-  return (
-    <div className="min-h-screen bg-background">
-      <SiteHeader />
-      <div className="max-w-3xl mx-auto space-y-8 py-12 px-4">
-        {/* Header with back button */}
-        <div className="space-y-4 animate-fade-in">
-          <Button
-            variant="ghost"
-            onClick={() => navigate('/quote-info')}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" /> Back to Sizing
-          </Button>
+  const valid = isFormValid();
 
-          <div className="text-center space-y-3">
-            <div className="flex justify-center">
-              <img
-                src="/ntm-logo.png"
-                alt="NTM"
-                className="w-16 h-16 md:w-20 md:h-20 drop-shadow-[0_0_20px_rgba(232,127,55,0.2)]"
-              />
-            </div>
-            <h1 className="text-3xl sm:text-4xl font-bold text-foreground">Tell us about your business</h1>
-            <p className="text-muted-foreground">A few contact details and we'll generate your quote.</p>
-          </div>
+  return (
+    <div className="min-h-screen flex flex-col bg-[#FBFAF8]">
+      <SiteHeader variant="minimal" />
+
+      <div className="flex-1 max-w-[760px] w-full mx-auto px-6">
+        <StepIndicator current={3} />
+
+        {/* Title + back link */}
+        <div className="text-center pt-[22px] pb-[30px] animate-rise">
+          <button
+            type="button"
+            onClick={() => navigate('/quote-info')}
+            className="inline-flex items-center gap-1.5 text-[13.5px] font-semibold text-[#7A8595] mb-3.5 hover:text-[#16243F] transition-colors"
+          >
+            ← Back to Sizing
+          </button>
+          <h1 className="font-heading font-extrabold text-[34px] tracking-[-0.02em] text-[#16243F] mb-2">
+            Tell us about your business
+          </h1>
+          <p className="text-base text-[#5A6575] m-0">A few contact details and we'll generate your quote.</p>
         </div>
 
-        {/* Customer Information */}
-        <Card className="p-6 md:p-8 bg-card border-border shadow-card animate-slide-up">
-          <h2 className="text-2xl font-semibold mb-6 text-foreground">Customer Information</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <FormField
-              id="name"
-              label="Full Name *"
-              value={formData.name}
-              valid={isFieldValid('name')}
-              onChange={(v) => handleInputChange('name', v)}
-              placeholder="John Doe"
-              highlighted={nameHighlighted}
-            />
-            <FormField
-              id="businessName"
-              label="Business Name *"
-              value={formData.businessName}
-              valid={isFieldValid('businessName')}
-              onChange={(v) => handleInputChange('businessName', v)}
-              placeholder="Acme Corp"
-              highlighted={businessHighlighted}
-            />
-            <FormField
-              id="email"
-              label="Email Address *"
-              type="email"
-              value={formData.email}
-              valid={isFieldValid('email')}
-              onChange={(v) => handleInputChange('email', v)}
-              placeholder="john@example.com"
-              highlighted={emailHighlighted}
-            />
-            <FormField
-              id="phone"
-              label="Phone Number *"
-              type="tel"
-              value={formData.phone}
-              valid={isFieldValid('phone')}
-              onChange={(v) => handleInputChange('phone', v)}
-              placeholder="(555) 555-5555"
-              highlighted={phoneHighlighted}
-            />
-            <div className="md:col-span-2">
-              <FormField
-                id="address"
-                label="Business Address *"
-                value={formData.address}
-                valid={isFieldValid('address')}
-                onChange={(v) => handleInputChange('address', v)}
-                placeholder="123 Main St, City, State, ZIP"
-                highlighted={addressHighlighted}
-              />
-            </div>
-            <div
-              className={`space-y-2 md:col-span-2 ${
-                referrerHighlighted ? 'rounded-md ring-2 ring-primary ring-offset-2 ring-offset-background transition-shadow' : ''
-              }`}
-            >
-              <Label htmlFor="referrerCode">Referrer Code (Optional)</Label>
-              <Input
-                id="referrerCode"
-                value={formData.referrerCode || ''}
-                onChange={(e) => handleInputChange('referrerCode', e.target.value.toUpperCase())}
-                placeholder="Enter code if you were referred"
-                className="uppercase font-mono"
-                maxLength={20}
-              />
-            </div>
+        {/* Form card */}
+        <div className="bg-white border border-[#E9E7E2] rounded-2xl p-8 shadow-[0_1px_2px_rgba(22,36,63,0.04)] animate-rise">
+          <h2 className="font-heading font-bold text-xl text-[#16243F] mb-[22px]">Customer Information</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-[18px]">
+            <FormField id="name" label="Full Name *" value={formData.name} valid={isFieldValid('name')} onChange={(v) => handleInputChange('name', v)} placeholder="John Doe" highlighted={nameHighlighted} />
+            <FormField id="businessName" label="Business Name *" value={formData.businessName} valid={isFieldValid('businessName')} onChange={(v) => handleInputChange('businessName', v)} placeholder="Acme Corp" highlighted={businessHighlighted} />
+            <FormField id="email" label="Email Address *" type="email" value={formData.email} valid={isFieldValid('email')} onChange={(v) => handleInputChange('email', v)} placeholder="john@example.com" highlighted={emailHighlighted} />
+            <FormField id="phone" label="Phone Number *" type="tel" value={formData.phone} valid={isFieldValid('phone')} onChange={(v) => handleInputChange('phone', v)} placeholder="(555) 555-5555" highlighted={phoneHighlighted} />
+            <FormField className="md:col-span-2" id="address" label="Business Address *" value={formData.address} valid={isFieldValid('address')} onChange={(v) => handleInputChange('address', v)} placeholder="123 Main St, City, State, ZIP" highlighted={addressHighlighted} />
+            <FormField className="md:col-span-2" id="referrerCode" label="Referrer Code (Optional)" value={formData.referrerCode || ''} valid={false} onChange={(v) => handleInputChange('referrerCode', v.toUpperCase())} placeholder="Enter code if you were referred" highlighted={referrerHighlighted} inputClassName="uppercase font-mono" maxLength={20} />
           </div>
-        </Card>
+        </div>
 
         {/* Continue */}
-        <div className="flex justify-center pt-2">
-          <Button
-            size="lg"
+        <div className="flex justify-center pt-7 pb-16">
+          <button
+            type="button"
             onClick={handleContinue}
-            disabled={!isFormValid() || isSubmitting}
-            className="w-full sm:w-auto px-6 sm:px-12 h-12 text-base sm:text-lg shadow-card hover:shadow-card-hover hover:-translate-y-0.5 transition-all"
+            disabled={!valid || isSubmitting}
+            className={[
+              'inline-flex items-center gap-2.5 h-[54px] px-10 rounded-xl font-heading font-bold text-base transition-colors',
+              valid && !isSubmitting
+                ? 'bg-[#D96626] text-white hover:bg-[#C25A20] cursor-pointer'
+                : 'bg-[#E7E4DE] text-white cursor-not-allowed',
+            ].join(' ')}
           >
-            {isSubmitting ? 'Processing...' : 'Continue to Summary'}
-            <ArrowRight className="ml-2 w-4 h-4" />
-          </Button>
+            {isSubmitting ? 'Processing…' : valid ? 'Continue to Summary →' : 'Fill in your details to continue'}
+          </button>
         </div>
       </div>
+
+      <SiteFooter />
     </div>
   );
 };
@@ -325,19 +266,42 @@ interface FormFieldProps {
   placeholder?: string;
   type?: string;
   highlighted?: boolean;
+  className?: string;
+  inputClassName?: string;
+  maxLength?: number;
 }
 
-function FormField({ id, label, value, valid, onChange, placeholder, type = 'text', highlighted }: FormFieldProps) {
+function FormField({
+  id,
+  label,
+  value,
+  valid,
+  onChange,
+  placeholder,
+  type = 'text',
+  highlighted,
+  className = '',
+  inputClassName = '',
+  maxLength,
+}: FormFieldProps) {
   return (
-    <div
-      className={`space-y-2 ${
-        highlighted ? 'rounded-md ring-2 ring-primary ring-offset-2 ring-offset-background transition-shadow' : ''
-      }`}
-    >
-      <Label htmlFor={id}>{label}</Label>
+    <div className={`${className} ${highlighted ? 'rounded-[10px] ring-2 ring-[#D96626] ring-offset-2 ring-offset-[#FBFAF8] transition-shadow' : ''}`}>
+      <label htmlFor={id} className="block text-[13.5px] font-semibold text-[#16243F] mb-2">
+        {label}
+      </label>
       <div className="relative">
-        <Input id={id} type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="pr-10" />
-        {valid && <Check className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-primary" />}
+        <input
+          id={id}
+          type={type}
+          value={value}
+          maxLength={maxLength}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className={`w-full h-12 pl-3.5 pr-10 rounded-[10px] border-[1.5px] border-[#DCD9D2] bg-[#FBFAF8] text-[#16243F] text-[15px] outline-none focus:border-[#D96626] transition-colors placeholder:text-[#A9B0BC] ${inputClassName}`}
+        />
+        {valid && (
+          <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-[#D96626] font-bold">✓</span>
+        )}
       </div>
     </div>
   );

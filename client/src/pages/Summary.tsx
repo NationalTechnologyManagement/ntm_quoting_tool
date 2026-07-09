@@ -10,9 +10,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
-import { Mail, CreditCard, CalendarCheck, ChevronDown, ChevronUp, ArrowLeft, AlertCircle, X, Pencil, Type as TypeIcon } from "lucide-react";
+import { Mail, CreditCard, CalendarCheck, ChevronDown, ChevronUp, AlertCircle, X, Pencil, Type as TypeIcon } from "lucide-react";
 import { toast } from "sonner";
 import { SiteHeader } from "@/components/SiteHeader";
+import { SiteFooter } from "@/components/SiteFooter";
+import { StepIndicator } from "@/components/StepIndicator";
 import { SendQuoteDialog } from "@/components/SendQuoteDialog";
 import { SignaturePad } from "@/components/SignaturePad";
 import { formatAmount, formatContractTerm } from "@/lib/utils";
@@ -542,8 +544,8 @@ const Summary = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <SiteHeader />
+    <div className="min-h-screen flex flex-col bg-background">
+      <SiteHeader variant="minimal" />
 
       {emailDialogQuoteNumber && (
         <SendQuoteDialog
@@ -561,24 +563,31 @@ const Summary = () => {
         typedName={signature.trim() || undefined}
         onConfirm={(dataUrl) => setDrawnSignature(dataUrl)}
       />
-      <div className="max-w-6xl mx-auto py-12 px-4">
-        {/* Back button */}
-        <Button variant="ghost" onClick={() => navigate("/quote-contact")} className="mb-6">
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Back
-        </Button>
+      <div className="flex-1">
+      <div className="max-w-[1080px] mx-auto px-6">
+        <StepIndicator current={4} />
+      </div>
+      <div className="max-w-6xl mx-auto pt-4 pb-12 px-4">
+        {/* Back link */}
+        <button
+          type="button"
+          onClick={() => navigate("/quote-contact")}
+          className="inline-flex items-center gap-1.5 text-[13.5px] font-semibold text-[#7A8595] mb-4 hover:text-[#16243F] transition-colors"
+        >
+          ← Back
+        </button>
 
         {/* Header */}
-        <div className="text-center mb-8 animate-fade-in">
-          <h1 className="text-3xl sm:text-4xl font-bold text-foreground mb-2">Your Quote Summary</h1>
-          <p className="text-muted-foreground">Review your selection and complete your order</p>
+        <div className="text-center mb-8 animate-rise">
+          <h1 className="font-heading font-extrabold text-[34px] tracking-[-0.02em] text-[#16243F] mb-2">Your Quote Summary</h1>
+          <p className="text-[#5A6575]">Review your selection and complete your order</p>
         </div>
 
         {/* Quote Number Display */}
-        <Card className="p-4 mb-6 bg-primary/5 border-primary/20 animate-fade-in">
+        <Card className="p-4 mb-6 bg-[#FDF1E9] border-[#F6DCC7] animate-rise">
           <div>
-            <p className="text-sm text-muted-foreground">Quote Number</p>
-            <p className="text-2xl font-bold text-primary font-mono">
+            <p className="text-sm font-semibold text-[#B8511C]">Quote Number</p>
+            <p className="font-heading text-2xl font-extrabold text-[#16243F] font-mono">
               {createdQuote ? createdQuote.quoteNumber : 'Generating...'}
             </p>
           </div>
@@ -1211,6 +1220,9 @@ const Summary = () => {
           </div>
         </div>
       </div>
+      </div>
+
+      <SiteFooter />
     </div>
   );
 };
