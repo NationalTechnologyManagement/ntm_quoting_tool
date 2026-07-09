@@ -110,6 +110,99 @@ export async function findProjectTemplatesByName(name: string): Promise<ProjectT
   return [];
 }
 
+// ── Existing-customer lookups ─────────────────────────────────────────
+// Read-only helpers behind the admin "existing customer" picker. Both are
+// plain GETs so they work in CW_DRY_RUN mode too.
+
+export interface CwCompanyMatch {
+  id: number;
+  identifier: string;
+  name: string;
+  status?: string;
+  types?: string[];
+}
+
+export async function searchCompanies(query: string): Promise<CwCompanyMatch[]> {
+  if (!isCWConfigured()) throw new Error('CW is not configured');
+  const safe = query.replace(/"/g, '').replace(/'/g, "''");
+  const conditions = encodeURIComponent(`name LIKE '%${safe}%' and deletedFlag=false`);
+  const rows = await cwJson<any[]>(
+    `/company/companies?conditions=${conditions}&pageSize=15&orderBy=name asc&fields=id,identifier,name,status/name,types`,
+  );
+  return (rows ?? []).map((r) => ({
+    id: r.id,
+    identifier: r.identifier ?? '',
+    name: r.name ?? '',
+    status: r.status?.name,
+    types: Array.isArray(r.types) ? r.types.map((t: any) => t.name).filter(Boolean) : [],
+  }));
+}
+
+export interface CwAgreementMatch {
+  id: number;
+  name: string;
+  type?: string;
+  typeId?: number;
+  agreementStatus?: string;
+  startDate?: string;
+}
+
+export async function getCompanyAgreements(companyId: number): Promise<CwAgreementMatch[]> {
+  if (!isCWConfigured()) throw new Error('CW is not configured');
+  const conditions = encodeURIComponent(
+    `company/id=${companyId} and cancelledFlag=false and agreementStatus="Active"`,
+  );
+  const rows = await cwJson<any[]>(
+    `/finance/agreements?conditions=${conditions}&pageSize=50&orderBy=id desc`,
+  );
+  return (rows ?? []).map((r) => ({
+    id: r.id,
+    name: r.name ?? '',
+    type: r.type?.name,
+    typeId: r.type?.id,
+    agreementStatus: r.agreementStatus,
+    startDate: r.startDate,
+  }));
+}
+
+// Short human label for what a quote actually contains. Used to name the
+// CW opportunity/agreement/project when the quote has no package (and to
+// scope existing-customer service-addition projects to what was sold).
+function quoteContentLabel(quote: QuoteData): string {
+  if (quote.selectedPackage?.name) return quote.selectedPackage.name;
+  const names = [
+    ...quote.selectedAddons.map((a) => a.name),
+    ...((quote.customItems ?? []).map((i) => i.name)),
+  ].filter(Boolean);
+  if (names.length === 0) return 'Custom Services';
+  if (names.length <= 2) return names.join(' + ');
+  return `${names[0]} + ${names.length - 1} more`;
+}
+
+// True when the quote carries at least one recurring line a CW agreement
+// would bill: package per-unit lines, recurring add-ons, or recurring
+// custom items. Quotes with none (e.g. one-time hardware only) skip the
+// agreement/additions/activate steps entirely.
+function quoteHasRecurringLines(quote: QuoteData): boolean {
+  const pkg = quote.selectedPackage;
+  if (pkg) {
+    const desktop = (quote.customer.userCount ?? 0) * (pkg.pricePerUser ?? 0);
+    const web = ((quote.customer as any).webUserCount ?? 0) * (pkg.pricePerUserF3 ?? 0);
+    const loc = (quote.customer.locationCount ?? 0) * (pkg.pricePerLocation ?? 0);
+    if (desktop > 0 || web > 0 || loc > 0) return true;
+  }
+  if (
+    quote.selectedAddons.some(
+      (a) => a.pricingType !== 'one-time-only' && (a.recurringPrice ?? 0) > 0 && a.quantity > 0,
+    )
+  ) {
+    return true;
+  }
+  return (quote.customItems ?? []).some(
+    (i) => (i.recurringPrice ?? 0) > 0 && (i.quantity ?? 0) > 0,
+  );
+}
+
 // ── Step runner ───────────────────────────────────────────────────────
 // Wraps every CW call with state lookup → mark started → execute → record outcome.
 // If status was already 'success' on a prior run, we skip the call and return the
@@ -424,7 +517,7 @@ async function createOpportunity(
   const opp = await cwJson<any>('/sales/opportunities', {
     method: 'POST',
     body: JSON.stringify({
-      name: `Quoting Tool - ${quote.customer.businessName} - ${quote.selectedPackage.name}`,
+      name: `Quoting Tool - ${quote.customer.businessName} - ${quoteContentLabel(quote)}`,
       company: { id: companyId },
       contact: { id: contactId },
       primarySalesRep: { id: salesRepId },
@@ -435,7 +528,8 @@ async function createOpportunity(
       expectedCloseDate: `${expectedClose}T00:00:00Z`,
       notes: [
         `Quote: ${quote.quoteNumber}`,
-        `Package: ${quote.selectedPackage.name}`,
+        `Package: ${quote.selectedPackage?.name ?? 'None (custom/add-on only)'}`,
+        ...(quote.isExistingCustomer ? ['Existing customer — service addition'] : []),
         `Desktop Users: ${quote.customer.userCount}`,
         `Web Users: ${(quote.customer as any).webUserCount ?? 0}`,
         quote.customer.locationCount > 0
@@ -444,10 +538,87 @@ async function createOpportunity(
         `Recurring: $${quote.totals.recurringCosts.toFixed(2)}/${quote.totals.recurringFrequency}`,
         `One-time: $${(quote.totals.onboardingCost + quote.totals.oneTimeCosts).toFixed(2)}`,
         `Addons: ${quote.selectedAddons.map((a) => a.name).join(', ') || 'None'}`,
+        ...((quote.customItems ?? []).length > 0
+          ? [`Custom items: ${(quote.customItems ?? []).map((i) => i.name).join(', ')}`]
+          : []),
       ].join('\n'),
     }),
   });
   return opp.id;
+}
+
+// Decide which CW agreement this quote's additions land on.
+// Priority: (1) an agreement pinned on the quote (admin picked it, or an
+// amendment inherited it from its parent) — verify it still exists;
+// (2) existing-customer mode: newest ACTIVE agreement on the company,
+// preferring one whose type matches the quote's package; (3) create a new
+// one. `created` tells the caller whether the activate step applies —
+// reused agreements are NEVER touched (no status flips, no field patches),
+// only added onto.
+async function resolveAgreement(
+  quote: QuoteData,
+  companyId: number,
+  contactId: number,
+  cfg: Awaited<ReturnType<typeof getCwConfig>>,
+): Promise<{ agreementId: number; created: boolean }> {
+  // Transient CW errors (timeout/429/5xx) during lookup/discovery must THROW
+  // so the agreement step fails and the retry worker replays it — falling
+  // through to createAgreement on a blip would irreversibly hand an existing
+  // customer a duplicate active agreement.
+  if (quote.cwAgreementId) {
+    const res = await cwFetch(
+      `/finance/agreements/${quote.cwAgreementId}?fields=id,agreementStatus,cancelledFlag`,
+    );
+    if (res.ok) {
+      const pinned = (await res.json()) as {
+        id?: number;
+        agreementStatus?: string;
+        cancelledFlag?: boolean;
+      };
+      // The admin picker and discovery both filter to non-cancelled Active
+      // agreements; the pinned path must enforce the same or additions land
+      // on an agreement CW will never invoice.
+      if (pinned?.id && pinned.agreementStatus === 'Active' && !pinned.cancelledFlag) {
+        return { agreementId: pinned.id, created: false };
+      }
+      console.warn(
+        `[CW] pinned agreement ${quote.cwAgreementId} is ${pinned?.cancelledFlag ? 'cancelled' : pinned?.agreementStatus ?? 'missing'} — falling through to discovery`,
+      );
+    } else if (res.status === 404) {
+      console.warn(
+        `[CW] pinned agreement ${quote.cwAgreementId} not found — falling through to discovery`,
+      );
+    } else {
+      const body = await res.text().catch(() => '');
+      throw new Error(
+        `CW GET /finance/agreements/${quote.cwAgreementId} failed (${res.status}): ${body}`,
+      );
+    }
+  }
+
+  if (quote.isExistingCustomer) {
+    // No catch: a discovery failure fails the step (retryable) instead of
+    // silently creating a duplicate agreement for a live customer.
+    const agreements = await getCompanyAgreements(companyId);
+    if (agreements.length > 0) {
+      const pkgTypeId = quote.selectedPackage
+        ? await getAgreementTypeIdForPackage(quote.selectedPackage.id)
+        : null;
+      const match =
+        (pkgTypeId ? agreements.find((a) => a.typeId === pkgTypeId) : undefined) ??
+        agreements[0];
+      console.log(
+        `[CW] existing customer — adding onto agreement ${match.id} ("${match.name}")`,
+      );
+      return { agreementId: match.id, created: false };
+    }
+    console.log(
+      `[CW] existing customer ${companyId} has no active agreement — creating a new one`,
+    );
+  }
+
+  const agreementId = await createAgreement(quote, companyId, contactId, cfg);
+  return { agreementId, created: true };
 }
 
 async function createAgreement(
@@ -456,10 +627,16 @@ async function createAgreement(
   contactId: number,
   cfg: Awaited<ReturnType<typeof getCwConfig>>,
 ): Promise<number> {
-  const agreementTypeId = await getAgreementTypeIdForPackage(quote.selectedPackage.id);
+  // Package-less quotes can't derive the agreement type from the package —
+  // fall back to the agreement.defaultTypeId config key.
+  const agreementTypeId = quote.selectedPackage
+    ? await getAgreementTypeIdForPackage(quote.selectedPackage.id)
+    : intCfg(cfg, 'agreement.defaultTypeId');
   if (!agreementTypeId) {
     throw new Error(
-      `Package "${quote.selectedPackage.name}" has no cwAgreementTypeId — set it on the package row first`,
+      quote.selectedPackage
+        ? `Package "${quote.selectedPackage.name}" has no cwAgreementTypeId — set it on the package row first`
+        : 'Quote has no package and CW config agreement.defaultTypeId is not set — set it on /admin/cw-reference-ids',
     );
   }
   const today = todayISO();
@@ -484,10 +661,12 @@ async function createAgreement(
   const agreement = await cwJson<any>('/finance/agreements', {
     method: 'POST',
     body: JSON.stringify({
-      name: `${quote.selectedPackage.name} - ${quote.customer.businessName}`,
+      name: `${quoteContentLabel(quote)} - ${quote.customer.businessName}`,
       type: { id: agreementTypeId },
       company: { id: companyId },
-      contact: { id: contactId },
+      // Omit rather than send contact:{id:0} when contact creation failed —
+      // CW rejects a zero reference outright.
+      ...(contactId ? { contact: { id: contactId } } : {}),
       startDate: today,
       noEndingDateFlag: true,
       billStartDate: billStart,
@@ -521,13 +700,21 @@ async function postAdditions(
   // (could differ from firstOfNextMonthISO() if the agreement was created
   // a long time ago, or if ops adjusted it manually). Fall back to
   // tomorrow's first-of-month if the GET fails.
+  //
+  // Never bill retroactively: for a REUSED agreement (existing customer,
+  // amendment) the stored billStartDate is months/years in the past —
+  // additions must take effect from the next cycle, not back-bill from the
+  // agreement's original start. Use the LATER of billStartDate and the
+  // first of next month. (For freshly created agreements the two are equal,
+  // so new-customer behavior is unchanged.)
   let effectiveDate = firstOfNextMonthISO();
   try {
     const agreement = await cwJson<{ billStartDate?: string }>(
       `/finance/agreements/${agreementId}?fields=billStartDate`,
     );
-    if (agreement?.billStartDate) {
-      effectiveDate = agreement.billStartDate.slice(0, 10);
+    const billStart = agreement?.billStartDate?.slice(0, 10);
+    if (billStart && billStart > effectiveDate) {
+      effectiveDate = billStart;
     }
   } catch (e) {
     console.warn(
@@ -536,11 +723,34 @@ async function postAdditions(
     );
   }
 
-  // Pre-fetch existing additions on this agreement for dedupe-by-description.
-  const existing = await cwJson<Array<{ id: number; description?: string }>>(
-    `/finance/agreements/${agreementId}/additions?pageSize=1000&fields=id,description`,
-  ).catch(() => [] as Array<{ id: number; description?: string }>);
-  const existingDescriptions = new Set(existing.map((a) => a.description ?? ''));
+  // Pre-fetch existing additions on this agreement. Used for QUANTITY-DELTA
+  // dedupe: the naive skip-if-description-exists rule was safe when every
+  // agreement was created fresh for its quote, but agreements are now REUSED
+  // (existing customers, amendments), so a colliding description must not
+  // silently drop a quantity increase. Rules, per line:
+  //   - no existing line with this description → post the full line
+  //   - existing quantity >= quoted quantity  → skip (idempotent retry /
+  //     nothing new to add; we NEVER reduce or remove existing additions)
+  //   - existing quantity <  quoted quantity  → post ONLY the difference as a
+  //     new "(added <quote#>)" line, so the agreement's total matches the
+  //     quote without touching what's already there.
+  // Delta lines are matched back to their base description on later runs so
+  // repeated amendments keep summing correctly.
+  const existing = await cwJson<Array<{ id: number; description?: string; quantity?: number }>>(
+    `/finance/agreements/${agreementId}/additions?pageSize=1000&fields=id,description,quantity`,
+  ).catch(() => [] as Array<{ id: number; description?: string; quantity?: number }>);
+  const existingQtyFor = (base: string): number =>
+    existing
+      .filter((a) => {
+        const d = a.description ?? '';
+        return d === base || d.startsWith(`${base} (added `);
+      })
+      .reduce((s, a) => s + (Number(a.quantity) || 0), 0);
+  const hasAnyWithBase = (base: string): boolean =>
+    existing.some((a) => {
+      const d = a.description ?? '';
+      return d === base || d.startsWith(`${base} (added `);
+    });
 
   const postLine = async (
     productId: number,
@@ -548,16 +758,29 @@ async function postAdditions(
     quantity: number,
     unitPrice: number,
   ) => {
-    if (existingDescriptions.has(description)) {
-      skipped += 1;
-      return;
+    let postQty = quantity;
+    let postDescription = description;
+    if (hasAnyWithBase(description)) {
+      const already = existingQtyFor(description);
+      if (already >= quantity) {
+        if (already > quantity) {
+          console.warn(
+            `[CW] agreement ${agreementId}: "${description}" has qty ${already} but quote asks ${quantity} — ` +
+              'additions are add-only; reduce manually in CW if intended.',
+          );
+        }
+        skipped += 1;
+        return;
+      }
+      postQty = quantity - already;
+      postDescription = `${description} (added ${quote.quoteNumber})`;
     }
     await cwJson(`/finance/agreements/${agreementId}/additions`, {
       method: 'POST',
       body: JSON.stringify({
         product: { id: productId },
-        description,
-        quantity,
+        description: postDescription,
+        quantity: postQty,
         unitPrice,
         // Must be >= agreement.billStartDate per CW's API rule.
         effectiveDate,
@@ -572,69 +795,81 @@ async function postAdditions(
   // F3 pricing. Quotes don't snapshot product IDs because they're CW-internal
   // plumbing — ops can correct mis-mapped IDs on the package row and replay
   // provisioning without re-issuing the customer's quote.
-  const pkg = await prisma.package.findUnique({
-    where: { id: quote.selectedPackage.id },
-    select: {
-      name: true,
-      pricePerUserF3: true,
-      cwPerUserProductId: true,
-      cwPerUserF3ProductId: true,
-      cwPerLocationProductId: true,
-    },
-  });
+  // A package-less quote (admin stripped it) simply has no package lines.
+  const selectedPackage = quote.selectedPackage;
+  const pkg = selectedPackage
+    ? await prisma.package.findUnique({
+        where: { id: selectedPackage.id },
+        select: {
+          name: true,
+          pricePerUserF3: true,
+          cwPerUserProductId: true,
+          cwPerUserF3ProductId: true,
+          cwPerLocationProductId: true,
+        },
+      })
+    : null;
 
   const desktopUserCount = quote.customer.userCount ?? 0;
   const webUserCount = (quote.customer as any).webUserCount ?? 0;
   const locationCount = quote.customer.locationCount ?? 0;
-  const pricePerUser = quote.selectedPackage.pricePerUser ?? 0;
+  const pricePerUser = selectedPackage?.pricePerUser ?? 0;
   const pricePerUserF3 = pkg?.pricePerUserF3 ?? 0;
-  const pricePerLocation = quote.selectedPackage.pricePerLocation ?? 0;
+  const pricePerLocation = selectedPackage?.pricePerLocation ?? 0;
+  const customItems = quote.customItems ?? [];
   // Pre-discount monthly recurring base. Used downstream to size the
   // negative-priced discount Additions for percentage-based admin promos.
   const packageRecurringBase =
-    pricePerUser * desktopUserCount +
-    pricePerUserF3 * webUserCount +
-    pricePerLocation * locationCount +
+    (selectedPackage
+      ? pricePerUser * desktopUserCount +
+        pricePerUserF3 * webUserCount +
+        pricePerLocation * locationCount
+      : 0) +
     quote.selectedAddons
       .filter((a) => a.pricingType !== 'one-time-only' && (a.recurringPrice ?? 0) > 0)
-      .reduce((s, a) => s + (a.recurringPrice ?? 0) * a.quantity, 0);
+      .reduce((s, a) => s + (a.recurringPrice ?? 0) * a.quantity, 0) +
+    customItems.reduce((s, i) => {
+      const price = Number(i.recurringPrice) || 0;
+      const monthly = i.recurringFrequency === 'annually' ? price / 12 : price;
+      return s + monthly * (Number(i.quantity) || 1);
+    }, 0);
 
-  if (desktopUserCount > 0 && pricePerUser > 0) {
+  if (selectedPackage && desktopUserCount > 0 && pricePerUser > 0) {
     if (pkg?.cwPerUserProductId) {
       await postLine(
         pkg.cwPerUserProductId,
-        `${quote.selectedPackage.name} — Desktop User`,
+        `${selectedPackage.name} — Desktop User`,
         desktopUserCount,
         pricePerUser,
       );
     } else {
-      missing.push(`${quote.selectedPackage.name} per-user (Desktop)`);
+      missing.push(`${selectedPackage.name} per-user (Desktop)`);
     }
   }
 
-  if (webUserCount > 0 && pricePerUserF3 > 0) {
+  if (selectedPackage && webUserCount > 0 && pricePerUserF3 > 0) {
     if (pkg?.cwPerUserF3ProductId) {
       await postLine(
         pkg.cwPerUserF3ProductId,
-        `${quote.selectedPackage.name} — Web User`,
+        `${selectedPackage.name} — Web User`,
         webUserCount,
         pricePerUserF3,
       );
     } else {
-      missing.push(`${quote.selectedPackage.name} per-user (Web/F3)`);
+      missing.push(`${selectedPackage.name} per-user (Web/F3)`);
     }
   }
 
-  if (locationCount > 0 && pricePerLocation > 0) {
+  if (selectedPackage && locationCount > 0 && pricePerLocation > 0) {
     if (pkg?.cwPerLocationProductId) {
       await postLine(
         pkg.cwPerLocationProductId,
-        `${quote.selectedPackage.name} — Per Location`,
+        `${selectedPackage.name} — Per Location`,
         locationCount,
         pricePerLocation,
       );
     } else {
-      missing.push(`${quote.selectedPackage.name} per-location`);
+      missing.push(`${selectedPackage.name} per-location`);
     }
   }
 
@@ -661,6 +896,33 @@ async function postAdditions(
       continue;
     }
     await postLine(productId, addon.name, addon.quantity, addon.recurringPrice ?? 0);
+  }
+
+  // ── Custom line items (staff-added) ──
+  // Recurring custom items roll into the agreement like addons do. The CW
+  // product id comes off the item itself (set by the admin when adding it);
+  // items without one are surfaced in missingProductIds so ops can map a SKU
+  // and replay. One-time custom items are charged on the AP invoice, not here.
+  // Annually-priced items post at price/12 — the agreement bills monthly, so
+  // the face-value annual price would overbill 12x.
+  for (const item of customItems) {
+    const recurring = Number(item.recurringPrice) || 0;
+    if (recurring <= 0) {
+      skipped += 1;
+      continue;
+    }
+    const productId = Number(item.cwProductId) || 0;
+    if (!productId) {
+      missing.push(`${item.name} (custom item — no cwProductId)`);
+      skipped += 1;
+      continue;
+    }
+    const isAnnual = item.recurringFrequency === 'annually';
+    const monthlyRate = isAnnual ? Math.round((recurring / 12) * 100) / 100 : recurring;
+    const description = isAnnual
+      ? `${item.name} ($${recurring.toFixed(2)}/yr billed monthly)`
+      : item.name;
+    await postLine(productId, description, Number(item.quantity) || 1, monthlyRate);
   }
 
   // ── Discount lines from applied promos ──
@@ -709,13 +971,21 @@ async function createProject(
   if (!boardId) {
     throw new Error('CW config: project.boardId is required (CW Project schema requires board)');
   }
-  const typeId = intCfg(cfg, 'project.typeId');
-  let templateId = intCfg(cfg, 'project.templateId');
+  const isExisting = !!quote.isExistingCustomer;
+
+  // Existing customers do NOT get the onboarding template — they're already
+  // onboarded. Their project is a plain one on the same Projects board,
+  // scoped to exactly what this quote sells (phones, backups, whatever),
+  // with an optional dedicated type (project.existingCustomerTypeId).
+  const typeId = isExisting
+    ? intCfg(cfg, 'project.existingCustomerTypeId')
+    : intCfg(cfg, 'project.typeId');
+  let templateId = isExisting ? null : intCfg(cfg, 'project.templateId');
   // When project.templateId isn't set, fall back to looking up the
   // configured project.templateName (e.g. "SafeSecure Pure SaaS (Project
   // Template) v3"). Resolved id gets cached back into project.templateId
   // so subsequent provisioning calls skip the lookup.
-  if (!templateId) {
+  if (!isExisting && !templateId) {
     const templateName = strCfg(cfg, 'project.templateName');
     if (templateName) {
       try {
@@ -745,13 +1015,13 @@ async function createProject(
   // is globally unique — CW rejects POST with "A record with this name
   // already exists." when two customers happen to onboard the same package
   // on the same day, or when a retry attempts to recreate a project that
-  // exists. Format: "<Package> - <Company> - <QuoteNumber>".
+  // exists. Format: "<Contents> - <Company> - <QuoteNumber>".
   const projectName =
-    `${quote.selectedPackage.name} - ${quote.customer.businessName} - ${quote.quoteNumber}`;
+    `${quoteContentLabel(quote)} - ${quote.customer.businessName} - ${quote.quoteNumber}`;
 
-  // Description: everything the onboarding PM needs to scope the work — sizing,
-  // pricing, addon list with quantities and unit prices, customer contact, and
-  // links back to the quote/order so they can pull the full record.
+  // Description: everything the PM needs to scope the work — sizing,
+  // pricing, addon + custom-item lists with quantities and unit prices,
+  // customer contact, and links back to the quote/order.
   const fmtMoney = (n: number) => `$${n.toFixed(2)}`;
   const addonLines = quote.selectedAddons.length
     ? quote.selectedAddons.map((a) => {
@@ -761,9 +1031,25 @@ async function createProject(
         return `  - ${a.name} × ${a.quantity}${pricing ? ` (${pricing})` : ''}`;
       })
     : ['  (none)'];
+  const customItems = quote.customItems ?? [];
+  const customItemLines = customItems.map((i) => {
+    const recurring = i.recurringPrice
+      ? `${fmtMoney(Number(i.recurringPrice))}/${i.recurringFrequency || 'mo'}`
+      : null;
+    const oneTime = i.oneTimePrice ? `${fmtMoney(Number(i.oneTimePrice))} one-time` : null;
+    const pricing = [recurring, oneTime].filter(Boolean).join(', ');
+    return `  - ${i.name} × ${i.quantity}${pricing ? ` (${pricing})` : ''}`;
+  });
   const referrer = (quote.customer as any).referrerCode;
   const description = [
-    `Package: ${quote.selectedPackage.name}`,
+    ...(isExisting
+      ? [
+          'EXISTING CUSTOMER — service addition, NOT onboarding.',
+          'Scope is limited to the items below; everything already in place stays untouched.',
+          '',
+        ]
+      : []),
+    `Package: ${quote.selectedPackage?.name ?? 'None (custom/add-on only)'}`,
     `Sizing: ${quote.customer.userCount} desktop user(s), ${
       (quote.customer as any).webUserCount ?? 0
     } web user(s), ${
@@ -776,6 +1062,7 @@ async function createProject(
     '',
     'Add-ons:',
     ...addonLines,
+    ...(customItemLines.length > 0 ? ['', 'Custom items:', ...customItemLines] : []),
     '',
     `Customer contact: ${quote.customer.name} <${quote.customer.email}> ${quote.customer.phone}`,
     `Address: ${quote.customer.address}`,
@@ -789,7 +1076,8 @@ async function createProject(
   const body = {
     name: projectName,
     company: { id: companyId },
-    contact: { id: contactId },
+    // Omit rather than send contact:{id:0} when contact creation failed.
+    ...(contactId ? { contact: { id: contactId } } : {}),
     board: { id: boardId },
     billingMethod,
     estimatedStart: `${start}T00:00:00Z`,
@@ -1019,6 +1307,13 @@ export async function onQuoteCreated(quote: QuoteData): Promise<CwQuoteCreatedRe
   let siteId = 0;
   try {
     const companyStep = await runStep(quoteId, 'company', async () => {
+      // Admin pinned an existing CW company on the quote (existing-customer
+      // picker) — use it verbatim, no search, no create. siteId stays 0 so
+      // the site tax-code PATCH below is skipped: we never modify an
+      // existing customer's site.
+      if (quote.cwCompanyId) {
+        return { cwId: quote.cwCompanyId, result: { companyId: quote.cwCompanyId, siteId: 0 } };
+      }
       const r = await findOrCreateCompany(quote.customer, cfg);
       siteId = r.siteId;
       return { cwId: r.companyId, result: r };
@@ -1031,9 +1326,12 @@ export async function onQuoteCreated(quote: QuoteData): Promise<CwQuoteCreatedRe
     return result; // soft fail — payment hasn't happened yet
   }
 
-  // Site PATCH (tax code) — only if both site id and tax code id are known
+  // Site PATCH (tax code) — only if both site id and tax code id are known.
+  // Never touch the site of an existing customer's company.
   const taxCodeId = intCfg(cfg, 'agreement.defaultTaxCodeId');
-  if (companyId && siteId && taxCodeId) {
+  if (quote.isExistingCustomer) {
+    await runStep(quoteId, 'site', async () => null).catch(() => {});
+  } else if (companyId && siteId && taxCodeId) {
     await runStep(quoteId, 'site', async () => {
       await patchSiteTaxCode(companyId!, siteId, taxCodeId);
       return { cwId: siteId, result: null };
@@ -1157,6 +1455,35 @@ export async function onPaymentCompleted(quote: QuoteData): Promise<CwPaymentCom
     );
   }
 
+  // Ensure company/contact step rows exist. Quotes with PRE-PINNED ids
+  // (admin-picked existing customers, amendments inheriting from a paid
+  // parent) never ran those steps, which left the provisioning rollup stuck
+  // at 'partial' forever. runStep short-circuits when the row is already
+  // 'success', so this is a no-op for ordinary quotes.
+  await runStep(quoteId, 'company', async () => ({ cwId: companyId, result: null })).catch(
+    () => {},
+  );
+  if (contactId) {
+    await runStep(quoteId, 'contact', async () => ({ cwId: contactId, result: null })).catch(
+      () => {},
+    );
+  } else {
+    // Contact recovery must run whenever the contact is missing — not only
+    // when the company was missing too. Pinned-company quotes (existing
+    // customers) hit this when the quote-create contact step failed: without
+    // it every downstream POST carried contact:{id:0} and looped failing.
+    try {
+      const step = await runStep(quoteId, 'contact', async () => {
+        const id = await createContact(quote.customer, companyId, cfg);
+        return { cwId: id, result: id };
+      });
+      contactId = step.cwId ?? 0;
+      if (contactId) result.cwContactId = contactId;
+    } catch (e) {
+      console.error('[CW] contact recovery failed:', e);
+    }
+  }
+
   // Mark opportunity won (soft-fail; opportunity is non-critical for billing)
   if (quote.cwOpportunityId) {
     await runStep(quoteId, 'opportunity', async () => {
@@ -1178,28 +1505,56 @@ export async function onPaymentCompleted(quote: QuoteData): Promise<CwPaymentCom
     }
   }
 
-  // Promote company to Customer type (soft-fail; cosmetic if it doesn't take)
-  try {
-    await updateCompanyToCustomer(companyId, cfg);
-  } catch (e) {
-    console.error('[CW] updateCompanyToCustomer failed:', e);
+  // Promote company to Customer type (soft-fail; cosmetic if it doesn't take).
+  // Existing customers already ARE customers — leave their company record
+  // completely alone (no type churn, no status flips).
+  if (!quote.isExistingCustomer) {
+    try {
+      await updateCompanyToCustomer(companyId, cfg);
+    } catch (e) {
+      console.error('[CW] updateCompanyToCustomer failed:', e);
+    }
   }
 
-  // Agreement (hard-fail — no recurring billing without it)
+  // Quotes with no recurring content (e.g. one-time custom items only) have
+  // nothing for a CW agreement to bill: skip agreement/additions/activate
+  // entirely instead of shipping an empty agreement.
+  const hasRecurring = quoteHasRecurringLines(quote);
+
+  // Agreement (hard-fail — no recurring billing without it).
+  // For existing customers this RESOLVES rather than creates: the additions
+  // land on the agreement already in CW (pinned by the admin or discovered
+  // by company), and that agreement is never modified — only added onto.
   let agreementId: number | null = null;
-  try {
-    const step = await runStep(quoteId, 'agreement', async () => {
-      const id = await createAgreement(quote, companyId, contactId, cfg);
-      return { cwId: id, result: id };
-    });
-    agreementId = step.cwId;
-    if (agreementId) result.cwAgreementId = agreementId;
-  } catch (e) {
-    console.error('[CW] agreement step failed:', e);
-    await markProvisioningStatus(quoteId, 'partial');
-    // Not a hard fail — payment is captured, ops needs to fix and retry.
-    // Return early; remaining steps depend on agreement.
-    return result;
+  // Whether THIS run created the agreement. true/false when resolveAgreement
+  // actually ran; null when the agreement step resumed from a prior run and
+  // the decision is unknown — the activate step then re-derives it from the
+  // agreement's live status instead of guessing (guessing wrong either
+  // touched a reused agreement or left a created one Inactive forever).
+  let agreementCreated: boolean | null = null;
+  if (!hasRecurring) {
+    console.log(
+      `[CW] ${quote.quoteNumber} has no recurring lines — skipping agreement/additions/activate`,
+    );
+    await runStep(quoteId, 'agreement', async () => null).catch(() => {});
+    await runStep(quoteId, 'additions', async () => null).catch(() => {});
+    await runStep(quoteId, 'activate', async () => null).catch(() => {});
+  } else {
+    try {
+      const step = await runStep(quoteId, 'agreement', async () => {
+        const r = await resolveAgreement(quote, companyId, contactId, cfg);
+        agreementCreated = r.created;
+        return { cwId: r.agreementId, result: r };
+      });
+      agreementId = step.cwId;
+      if (agreementId) result.cwAgreementId = agreementId;
+    } catch (e) {
+      console.error('[CW] agreement step failed:', e);
+      await markProvisioningStatus(quoteId, 'partial');
+      // Not a hard fail — payment is captured, ops needs to fix and retry.
+      // Return early; remaining steps depend on agreement.
+      return result;
+    }
   }
 
   // Additions (soft-fail — agreement remains Inactive, retry worker can finish)
@@ -1223,10 +1578,25 @@ export async function onPaymentCompleted(quote: QuoteData): Promise<CwPaymentCom
     }
   }
 
-  // Activate agreement (only if additions succeeded)
+  // Activate agreement — ONLY agreements this flow created. A reused
+  // (existing-customer / pinned) agreement is already live and must not be
+  // status-flipped or otherwise modified; record the step as skipped so the
+  // provisioning rollup still reads complete.
   if (agreementId && additionsOk) {
     try {
       await runStep(quoteId, 'activate', async () => {
+        if (agreementCreated === false) return null; // reused this run — hands off
+        if (agreementCreated === null) {
+          // Resumed run: the resolve decision didn't re-run, so read the
+          // agreement's live status. Agreements this flow creates start
+          // Inactive; reused ones are Active by the discovery/pin filters —
+          // Active means there is nothing to activate. A failed GET throws,
+          // failing the step so the retry worker tries again (never guess).
+          const a = await cwJson<{ agreementStatus?: string }>(
+            `/finance/agreements/${agreementId}?fields=agreementStatus`,
+          );
+          if (a?.agreementStatus === 'Active') return null;
+        }
         await activateAgreement(agreementId!);
         return { cwId: agreementId!, result: null };
       });
@@ -1248,12 +1618,23 @@ export async function onPaymentCompleted(quote: QuoteData): Promise<CwPaymentCom
     console.error('[CW] project step failed:', e);
   }
 
-  // Cross-reference custom fields (soft-fail; nothing here breaks billing)
+  // Cross-reference custom fields (soft-fail; nothing here breaks billing).
+  // Add-only invariant applies here too: never PATCH a REUSED agreement's
+  // custom fields (it would clobber the original quote's crossref) — only
+  // agreements this flow created, which is exactly when the activate step
+  // recorded 'success'. Likewise leave an existing customer's company
+  // record untouched.
   try {
+    const activateStep = await getStep(quoteId, 'activate');
+    const agreementIsOurs = activateStep?.status === 'success';
     await runStep(quoteId, 'crossref', async () => {
       await patchCustomFields(
         cfg,
-        { companyId, agreementId, projectId },
+        {
+          companyId: quote.isExistingCustomer ? null : companyId,
+          agreementId: agreementIsOurs ? agreementId : null,
+          projectId,
+        },
         quote,
       );
       return { cwId: null, result: null };
@@ -1268,7 +1649,7 @@ export async function onPaymentCompleted(quote: QuoteData): Promise<CwPaymentCom
       await notify.notifyProvisioned({
         quoteNumber: quote.quoteNumber,
         businessName: quote.customer.businessName,
-        packageName: quote.selectedPackage.name,
+        packageName: quoteContentLabel(quote),
         cwCompanyId: companyId,
         cwAgreementId: agreementId,
         cwProjectId: projectId,
@@ -1318,9 +1699,13 @@ export async function computeProvisioningStatus(
   });
   const byStep = new Map(steps.map((s) => [s.step, s.status] as const));
   const hasFailed = steps.some((s) => s.status === 'failed');
-  const allRequiredOk = REQUIRED_STEPS_FOR_PROVISIONED.every(
-    (s) => byStep.get(s) === 'success',
-  );
+  // 'skipped' satisfies a required step: quotes legitimately skip steps now
+  // (no-recurring-lines quotes skip agreement/additions/activate; reused
+  // existing-customer agreements skip activate).
+  const allRequiredOk = REQUIRED_STEPS_FOR_PROVISIONED.every((s) => {
+    const st = byStep.get(s);
+    return st === 'success' || st === 'skipped';
+  });
   if (allRequiredOk && !hasFailed) return 'provisioned';
   if (steps.length === 0) return 'pending';
   return 'partial';
@@ -1331,6 +1716,17 @@ export async function computeProvisioningStatus(
 export async function replayProvisioning(quoteNumber: string): Promise<void> {
   const quote = await prisma.quote.findUnique({ where: { quoteNumber } });
   if (!quote) throw new Error(`Quote ${quoteNumber} not found`);
+  // Payment gate. onPaymentCompleted mutates real billing — for existing
+  // customers it posts additions straight onto their LIVE agreement. A
+  // failed quote-create step (contact, opportunity) on an unpaid draft must
+  // not drag the whole payment pipeline through the retry worker; those
+  // steps are recovered inside onPaymentCompleted once payment lands.
+  if (quote.status !== 'paid') {
+    console.log(
+      `[CW] replayProvisioning: ${quoteNumber} is '${quote.status}' (not paid) — skipping`,
+    );
+    return;
+  }
   // Reset failed steps to pending so runStep will retry them.
   await prisma.cwProvisioningStep.updateMany({
     where: { quoteId: quote.id, status: 'failed' },

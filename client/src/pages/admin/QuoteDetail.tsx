@@ -75,6 +75,7 @@ const QuoteDetail = () => {
   const [editPricePerUserF3, setEditPricePerUserF3] = useState<number>(0);
   const [editPricePerLocation, setEditPricePerLocation] = useState<number>(0);
   const [editNotes, setEditNotes] = useState<string>('');
+  const [editExistingCustomer, setEditExistingCustomer] = useState<boolean>(false);
   // addonId -> quantity (0 = not selected)
   const [editAddonQty, setEditAddonQty] = useState<Record<string, number>>({});
 
@@ -150,6 +151,7 @@ const QuoteDetail = () => {
   const [recurringPrice, setRecurringPrice] = useState<string>('');
   const [recurringFrequency, setRecurringFrequency] = useState<'monthly' | 'annually'>('monthly');
   const [oneTimePrice, setOneTimePrice] = useState<string>('');
+  const [cwProductId, setCwProductId] = useState<string>('');
   const [adding, setAdding] = useState(false);
 
   useEffect(() => {
@@ -192,13 +194,14 @@ const QuoteDetail = () => {
     }
     setEditPackageId(quote.selectedPackage?.id ?? '');
     setEditAgreementMonths(Number(quote.selectedPackage?.agreementMonths ?? 0));
-    setEditUserCount(Number(quote.customer?.userCount ?? 1));
+    setEditUserCount(Number(quote.customer?.userCount ?? 0));
     setEditWebUserCount(Number(quote.customer?.webUserCount ?? 0));
-    setEditLocationCount(Number(quote.customer?.locationCount ?? 1));
+    setEditLocationCount(Number(quote.customer?.locationCount ?? 0));
     setEditPricePerUser(Number(quote.selectedPackage?.pricePerUser ?? 0));
     setEditPricePerUserF3(Number(quote.selectedPackage?.pricePerUserF3 ?? 0));
     setEditPricePerLocation(Number(quote.selectedPackage?.pricePerLocation ?? 0));
     setEditNotes(typeof quote.notes === 'string' ? quote.notes : '');
+    setEditExistingCustomer(!!quote.isExistingCustomer);
     const qty: Record<string, number> = {};
     for (const a of (quote.selectedAddons as any[]) ?? []) {
       qty[a.id] = Number(a.quantity) || 0;
@@ -209,8 +212,16 @@ const QuoteDetail = () => {
 
   // When the admin switches packages mid-edit, snap the price-override fields
   // to that package's catalog defaults so they have something sensible to
-  // tweak instead of carrying over the old package's numbers.
+  // tweak instead of carrying over the old package's numbers. 'none' strips
+  // the package from the quote entirely.
   const pickPackage = (id: string) => {
+    if (id === 'none') {
+      setEditPackageId('');
+      setEditPricePerUser(0);
+      setEditPricePerUserF3(0);
+      setEditPricePerLocation(0);
+      return;
+    }
     setEditPackageId(id);
     const pkg = catalog?.packages.find((p) => p.id === id);
     if (pkg) {
@@ -223,8 +234,10 @@ const QuoteDetail = () => {
 
   const saveEdit = async () => {
     if (!quote || !catalog) return;
-    const pkg = catalog.packages.find((p) => p.id === editPackageId);
-    if (!pkg) {
+    // Empty editPackageId = admin removed the package: send null so the
+    // server strips it. Anything else must resolve in the catalog.
+    const pkg = editPackageId ? catalog.packages.find((p) => p.id === editPackageId) : null;
+    if (editPackageId && !pkg) {
       toast.error('Pick a package');
       return;
     }
@@ -254,24 +267,27 @@ const QuoteDetail = () => {
         userCount: editUserCount,
         webUserCount: editWebUserCount,
         locationCount: editLocationCount,
-        selectedPackage: {
-          id: pkg.id,
-          name: pkg.name,
-          // Snapshot the admin's price overrides — these can diverge from
-          // the catalog defaults so a single quote can carry custom pricing
-          // without changing the canonical package row.
-          pricePerUser: editPricePerUser,
-          pricePerUserF3: editPricePerUserF3,
-          pricePerLocation: editPricePerLocation,
-          frequency: pkg.frequency,
-          features: pkg.features,
-          // Always pull the structured feature list from the live package
-          // so re-saving the quote refreshes the categorized list shown on
-          // /quote-review and in the contract PDF.
-          featureGroups: pkg.featureGroups ?? [],
-          agreementMonths: editAgreementMonths,
-        },
+        selectedPackage: pkg
+          ? {
+              id: pkg.id,
+              name: pkg.name,
+              // Snapshot the admin's price overrides — these can diverge from
+              // the catalog defaults so a single quote can carry custom pricing
+              // without changing the canonical package row.
+              pricePerUser: editPricePerUser,
+              pricePerUserF3: editPricePerUserF3,
+              pricePerLocation: editPricePerLocation,
+              frequency: pkg.frequency,
+              features: pkg.features,
+              // Always pull the structured feature list from the live package
+              // so re-saving the quote refreshes the categorized list shown on
+              // /quote-review and in the contract PDF.
+              featureGroups: pkg.featureGroups ?? [],
+              agreementMonths: editAgreementMonths,
+            }
+          : null,
         selectedAddons: selectedAddons as any[],
+        isExistingCustomer: editExistingCustomer,
         notes: editNotes.trim() ? editNotes.trim() : null,
       });
       if (result.mode === 'amendment') {
@@ -378,6 +394,7 @@ const QuoteDetail = () => {
         recurringPrice: r,
         recurringFrequency: r ? recurringFrequency : null,
         oneTimePrice: o,
+        cwProductId: cwProductId.trim() ? Number(cwProductId.trim()) || null : null,
       });
       toast.success(`Added "${name}"`);
       setName('');
@@ -385,6 +402,7 @@ const QuoteDetail = () => {
       setQuantity(1);
       setRecurringPrice('');
       setOneTimePrice('');
+      setCwProductId('');
       await fetchQuote();
     } catch (e: any) {
       toast.error(e?.message || 'Add failed');
@@ -453,6 +471,15 @@ const QuoteDetail = () => {
             </div>
             <div className="flex gap-2">
               <Badge variant="secondary">{quote.status}</Badge>
+              {quote.isExistingCustomer && (
+                <Badge
+                  variant="secondary"
+                  className="bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200"
+                  title="Existing ConnectWise customer — provisioning adds onto the current agreement; no onboarding template; Service Addition PDF"
+                >
+                  Existing customer
+                </Badge>
+              )}
               {quote.provisioningStatus && quote.provisioningStatus !== 'pending' && (
                 <Badge
                   variant="secondary"
@@ -473,7 +500,7 @@ const QuoteDetail = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
             <div>
               <p className="text-muted-foreground">Package</p>
-              <p className="font-semibold">{pkg?.name}</p>
+              <p className="font-semibold">{pkg?.name ?? 'None (custom/add-on only)'}</p>
             </div>
             <div>
               <p className="text-muted-foreground">Recurring</p>
@@ -635,11 +662,12 @@ const QuoteDetail = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="edit-package">Package</Label>
-                <Select value={editPackageId} onValueChange={pickPackage}>
+                <Select value={editPackageId || 'none'} onValueChange={pickPackage}>
                   <SelectTrigger id="edit-package">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="none">No package (add-ons / custom items only)</SelectItem>
                     {catalog.packages.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
                         {p.name}
@@ -651,7 +679,8 @@ const QuoteDetail = () => {
                 </Select>
                 <p className="text-xs text-muted-foreground">
                   Admin-only packages aren't shown on the customer picker but are still usable
-                  from here.
+                  from here. "No package" strips the package from the quote — everything is
+                  removable.
                 </p>
               </div>
 
@@ -678,13 +707,13 @@ const QuoteDetail = () => {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="edit-users">Desktop Users</Label>
+                <Label htmlFor="edit-users">Desktop Users (0 if none)</Label>
                 <Input
                   id="edit-users"
                   type="number"
-                  min={1}
+                  min={0}
                   value={editUserCount}
-                  onChange={(e) => setEditUserCount(Math.max(1, parseInt(e.target.value) || 1))}
+                  onChange={(e) => setEditUserCount(Math.max(0, parseInt(e.target.value) || 0))}
                 />
               </div>
 
@@ -762,6 +791,24 @@ const QuoteDetail = () => {
                   />
                 </div>
               </div>
+            </div>
+
+            <div className="mt-6 flex items-start gap-3 p-3 bg-secondary/30 border border-border rounded-md">
+              <input
+                id="edit-existing-customer"
+                type="checkbox"
+                checked={editExistingCustomer}
+                onChange={(e) => setEditExistingCustomer(e.target.checked)}
+                className="w-4 h-4 mt-0.5"
+              />
+              <label htmlFor="edit-existing-customer" className="text-sm cursor-pointer select-none">
+                <span className="font-medium">Existing ConnectWise customer</span>
+                <span className="block text-xs text-muted-foreground mt-0.5">
+                  Provisioning adds onto their current CW agreement (never removes anything),
+                  skips the onboarding project template, and the customer receives the Service
+                  Addition PDF instead of the full onboarding contract.
+                </span>
+              </label>
             </div>
 
             <div className="mt-6 space-y-2">
@@ -1090,6 +1137,21 @@ const QuoteDetail = () => {
                   onChange={(e) => setOneTimePrice(e.target.value)}
                   placeholder="0.00"
                 />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="ci-cw-product">CW Product ID (for recurring items)</Label>
+                <Input
+                  id="ci-cw-product"
+                  type="number"
+                  min={0}
+                  value={cwProductId}
+                  onChange={(e) => setCwProductId(e.target.value)}
+                  placeholder="e.g. 1234"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Needed for recurring items to post onto the CW agreement as an Addition.
+                  Leave blank for one-time items.
+                </p>
               </div>
             </div>
             <div className="flex justify-end">

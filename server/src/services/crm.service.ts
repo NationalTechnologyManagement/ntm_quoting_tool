@@ -181,7 +181,7 @@ export async function createOpportunity(
     const response = await ghlFetch('/opportunities/', {
       method: 'POST',
       body: JSON.stringify({
-        name: `${quote.customer.businessName} - ${quote.selectedPackage.name}`,
+        name: `${quote.customer.businessName} - ${quote.selectedPackage?.name ?? "Custom Services"}`,
         pipelineId: pipeline.id,
         pipelineStageId: firstStage?.id,
         status: 'open',
@@ -282,7 +282,7 @@ export async function markLiteLeadSubmitted(
   await addTagsToContact(ghlContactId, ['quote-tool-lite-submitted']);
   await addContactNote(
     ghlContactId,
-    `Lite quote ${quote.quoteNumber} submitted — ${quote.selectedPackage.name} ($${quote.totals.grandTotal.toFixed(2)} ${quote.totals.recurringFrequency}). Calendar link sent.`,
+    `Lite quote ${quote.quoteNumber} submitted — ${quote.selectedPackage?.name ?? "Custom Services"} ($${quote.totals.grandTotal.toFixed(2)} ${quote.totals.recurringFrequency}). Calendar link sent.`,
   );
 }
 
@@ -320,7 +320,7 @@ export async function onQuoteCreated(
     const oppId = await createOpportunity(quote, contactId);
     if (oppId) result.ghlOpportunityId = oppId;
 
-    await addContactNote(contactId, `Quote ${quote.quoteNumber} created - ${quote.selectedPackage.name}`);
+    await addContactNote(contactId, `Quote ${quote.quoteNumber} created - ${quote.selectedPackage?.name ?? "Custom Services"}`);
   }
 
   return result;
@@ -352,7 +352,7 @@ export async function onPaymentCompleted(quote: QuoteData): Promise<void> {
     await addTagsToContact(quote.ghlContactId, ['quote-paid']);
     await addContactNote(
       quote.ghlContactId,
-      `Payment received for quote ${quote.quoteNumber} - ${quote.selectedPackage.name}`,
+      `Payment received for quote ${quote.quoteNumber} - ${quote.selectedPackage?.name ?? "Custom Services"}`,
     );
   }
 }

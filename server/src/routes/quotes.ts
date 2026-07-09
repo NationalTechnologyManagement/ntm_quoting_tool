@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { validate } from '../middleware/validate.js';
+import { optionalAuth } from '../middleware/auth.js';
 import { env } from '../config/env.js';
 import * as quoteService from '../services/quote.service.js';
 import * as emailService from '../services/email.service.js';
@@ -27,30 +28,29 @@ const createQuoteSchema = z.object({
       // manage. A 0-location quote skips the per-location CW agreement line.
       locationCount: z.number().int().min(0),
       referrerCode: z.string().nullable().optional(),
+    }),
+  // Sizing gate lives in a superRefine below: package-bearing quotes need at
+  // least one non-zero sizing dimension; package-less (admin) quotes don't —
+  // their content is add-ons / custom items.
+  // Nullable: an authenticated admin may create a quote with no package at
+  // all (add-ons / custom items only). Public wizard always sends one — the
+  // route handler enforces that for unauthenticated callers.
+  selectedPackage: z
+    .object({
+      id: z.string(),
+      name: z.string(),
+      pricePerUser: z.number(),
+      pricePerUserF3: z.number().optional(),
+      pricePerLocation: z.number(),
+      frequency: z.string(),
+      features: z.array(z.string()),
+      featureGroups: z
+        .array(z.object({ category: z.string(), items: z.array(z.string()) }))
+        .optional(),
+      agreementMonths: z.number().int().min(0).optional(),
+      calculatedPrice: z.number(),
     })
-    // At least one sizing dimension must be non-zero — otherwise there's
-    // nothing to quote. Mirrors the UI gate on the sizing step.
-    .refine(
-      (c) => c.userCount > 0 || (c.webUserCount ?? 0) > 0 || c.locationCount > 0,
-      {
-        message: 'At least one of Desktop Users, Web Users, or Locations is required.',
-        path: ['userCount'],
-      },
-    ),
-  selectedPackage: z.object({
-    id: z.string(),
-    name: z.string(),
-    pricePerUser: z.number(),
-    pricePerUserF3: z.number().optional(),
-    pricePerLocation: z.number(),
-    frequency: z.string(),
-    features: z.array(z.string()),
-    featureGroups: z
-      .array(z.object({ category: z.string(), items: z.array(z.string()) }))
-      .optional(),
-    agreementMonths: z.number().int().min(0).optional(),
-    calculatedPrice: z.number(),
-  }),
+    .nullable(),
   selectedAddons: z.array(z.any()),
   onboarding: z.object({
     userCount: z.number(),
@@ -78,10 +78,52 @@ const createQuoteSchema = z.object({
   // auto-CC on send-quote works out of the box. Customer-built quotes
   // omit this; an admin can assign one later.
   salesRepId: z.string().nullable().optional(),
+  // Admin-only (stripped for unauthenticated callers in the handler):
+  // existing-CW-customer mode + optional pinned CW company/agreement ids.
+  isExistingCustomer: z.boolean().optional(),
+  cwCompanyId: z.number().int().positive().nullable().optional(),
+  cwAgreementId: z.number().int().positive().nullable().optional(),
+}).superRefine((payload, ctx) => {
+  // A package-bearing quote must be sized on at least one dimension —
+  // otherwise every package line is 0 and there's nothing to quote. A
+  // package-less quote is sized by its add-ons / custom items instead.
+  if (payload.selectedPackage) {
+    const c = payload.customer;
+    if (c.userCount <= 0 && (c.webUserCount ?? 0) <= 0 && c.locationCount <= 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'At least one of Desktop Users, Web Users, or Locations is required.',
+        path: ['customer', 'userCount'],
+      });
+    }
+  }
 });
 
 // Create a new quote
-router.post('/api/quotes', validate(createQuoteSchema), async (req, res) => {
+router.post('/api/quotes', optionalAuth, validate(createQuoteSchema), async (req, res) => {
+  const isAdmin = !!req.admin;
+
+  // Admin-only capabilities. Unauthenticated (customer wizard) callers can't
+  // create package-less quotes or point provisioning at an arbitrary CW
+  // company/agreement. REJECT rather than silently strip: the admin Create
+  // Quote page submits through this route, and a session that expired mid-
+  // build must not quietly downgrade an existing-customer quote to full
+  // new-customer provisioning (duplicate company, new agreement, onboarding
+  // template — everything the flag exists to prevent).
+  if (!isAdmin) {
+    if (!req.body.selectedPackage) {
+      res.status(400).json({ error: 'selectedPackage is required' });
+      return;
+    }
+    if (req.body.isExistingCustomer || req.body.cwCompanyId || req.body.cwAgreementId) {
+      res.status(401).json({
+        error:
+          'Existing-customer quotes require an active admin session — your login may have expired. Sign in again and retry.',
+      });
+      return;
+    }
+  }
+
   const quote = await quoteService.createQuote(req.body);
 
   // Skip CW provisioning in lead-gen mode — the lite tool only collects
@@ -118,11 +160,24 @@ router.get('/api/quotes/lookup/by-email', async (req, res) => {
   res.json({ quotes });
 });
 
+// Strip staff-internal metadata from custom items before they leave on a
+// public (unauthenticated) response: addedBy is an admin email, cwProductId
+// an internal CW catalog id. The admin UI reads the raw rows via the
+// authenticated /api/admin/quotes/:id route instead.
+function sanitizeQuoteForPublic<T extends { customItems?: any[] }>(quote: T): T {
+  return {
+    ...quote,
+    customItems: (quote.customItems ?? []).map(
+      ({ addedBy, addedAt, cwProductId, ...rest }: any) => rest,
+    ),
+  };
+}
+
 // Get a quote by ID or quoteNumber
 router.get('/api/quotes/:id', async (req, res) => {
   const id = req.params.id as string;
   const quote = await quoteService.getQuote(id);
-  res.json(quote);
+  res.json(sanitizeQuoteForPublic(quote));
 });
 
 // Apply promo code to an existing quote
@@ -249,6 +304,20 @@ router.post('/api/quotes/:id/checkout', async (req, res) => {
 
   const payload = agreementSchema.parse(req.body);
   const quoteId = req.params.id as string;
+
+  // Guard BEFORE persisting the signature: a fully-stripped quote can total
+  // $0 (no package, no addons, no custom items yet) and AP rejects empty
+  // invoices — signing first would strand the quote in 'accepted' with a
+  // stored signature and no payment path.
+  const existing = await quoteService.getQuote(quoteId);
+  if ((existing.totals?.grandTotal ?? 0) <= 0) {
+    res.status(400).json({
+      error:
+        'This quote has no payable items yet. Contact us to finalize the quote before signing.',
+    });
+    return;
+  }
+
   const quote = await quoteService.updateQuoteAgreement(quoteId, payload);
   const result = await apService.createCheckout(quote);
 
@@ -267,6 +336,10 @@ router.get('/api/quotes/:id/payment-link', async (req, res) => {
   }
   const id = req.params.id as string;
   const quote = await quoteService.getQuote(id);
+  if ((quote.totals?.grandTotal ?? 0) <= 0) {
+    res.status(400).json({ error: 'This quote has no payable items yet.' });
+    return;
+  }
   const result = await apService.getOrCreatePaymentLink(quote);
   res.json({
     checkoutToken: result.checkoutToken,

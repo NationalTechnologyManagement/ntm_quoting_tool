@@ -133,7 +133,9 @@ model Quote {
   quoteNumber        String    @unique
   status             String    @default("draft") // draft | sent | accepted | checkout_pending | paid | expired
   customer           Json      // CustomerInfo snapshot
-  selectedPackage    Json      // QuoteSelectedPackage snapshot
+  // Nullable: an admin can strip the package entirely and quote nothing but
+  // add-ons / custom items (e.g. phones for an existing customer).
+  selectedPackage    Json?     // QuoteSelectedPackage snapshot | null
   selectedAddons     Json      // QuoteSelectedAddon[] snapshot
   onboarding         Json      // QuoteOnboarding snapshot
   appliedPromoCodes  Json      @default("[]") // AppliedPromoCode[] snapshot
@@ -173,6 +175,13 @@ model Quote {
   // anything the structured fields don't cover (custom scope, special
   // pricing rationale, hand-off instructions, etc.).
   notes              String?
+
+  // Existing-ConnectWise-customer mode. When true, provisioning reuses the
+  // company/agreement already in CW (add-only: additions are appended, nothing
+  // existing is touched), skips the onboarding project template in favor of a
+  // plain scoped project, and the customer gets the service-addition PDF
+  // instead of the full onboarding contract.
+  isExistingCustomer Boolean  @default(false)
 
   // Assigned sales rep — used to auto-CC them when the quote is emailed
   // and to enable per-rep reporting later. Nullable: legacy quotes and

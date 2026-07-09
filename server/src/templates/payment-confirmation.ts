@@ -16,6 +16,11 @@ export function buildPaymentConfirmationHtml(
 ): string {
   const dueToday = quote.totals.onboardingCost + quote.totals.oneTimeCosts;
 
+  // Existing customers are adding services, not onboarding — no "Welcome",
+  // no onboarding/implementation promises. Matches the Service Addition PDF
+  // and subject line so nothing about the email reads like a new contract.
+  const isExisting = !!quote.isExistingCustomer;
+
   const paymentSection = paymentUrl
     ? `
       <div style="background:#fef3c7;border:2px solid #f59e0b;border-radius:12px;padding:24px;margin:24px 0;text-align:center;">
@@ -40,19 +45,24 @@ export function buildPaymentConfirmationHtml(
         width="56" height="56"
         style="display:block; margin:0 auto 12px; width:56px; height:56px;"
       />
-      <h1 style="margin:0 0 10px 0;font-size:24px;">Welcome to National Technology Management!</h1>
+      <h1 style="margin:0 0 10px 0;font-size:24px;">${isExisting ? 'Your Service Addition is Confirmed' : 'Welcome to National Technology Management!'}</h1>
       <p style="margin:0;opacity:0.9;">Quote #${quote.quoteNumber}${quote.agreement ? ` | Order #${(quote as any).orderNumber || ''}` : ''}</p>
     </div>
     <div style="padding:32px 30px;">
       <p>Hi ${quote.customer.name},</p>
-      <p>Thank you for choosing <strong>${SERVICE_PROVIDER.company}</strong> for your technology management needs. Your contract is attached to this email as a PDF.</p>
+      ${isExisting
+        ? `<p>Thank you for continuing to trust <strong>${SERVICE_PROVIDER.company}</strong> with your technology. Your Service Addition Agreement is attached to this email as a PDF — it covers only the newly added services. All of your existing services, pricing, and terms remain unchanged.</p>`
+        : `<p>Thank you for choosing <strong>${SERVICE_PROVIDER.company}</strong> for your technology management needs. Your contract is attached to this email as a PDF.</p>`}
       ${paymentSection}
       <div style="background:#f3f4f6;border-radius:8px;padding:20px;margin:24px 0;">
         <h3 style="margin:0 0 12px 0;font-size:16px;">What Happens Next</h3>
         <ol style="margin:0;padding-left:20px;">
           ${paymentUrl ? '<li>Complete your payment using the link above</li>' : '<li>Your payment has been confirmed</li>'}
-          <li>Someone from our team will reach out soon to begin the onboarding process with you</li>
-          <li>We\'ll work with you to schedule implementation and training</li>
+          ${isExisting
+            ? `<li>Our team will reach out to schedule the work for your newly added services</li>
+          <li>The new services will appear on your regular NTM invoice starting next billing cycle</li>`
+            : `<li>Someone from our team will reach out soon to begin the onboarding process with you</li>
+          <li>We'll work with you to schedule implementation and training</li>`}
         </ol>
       </div>
       <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px;margin:24px 0;">

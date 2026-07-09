@@ -369,6 +369,7 @@ export const adminApi = {
       recurringPrice?: number | null;
       recurringFrequency?: 'monthly' | 'annually' | null;
       oneTimePrice?: number | null;
+      cwProductId?: number | null;
     },
   ) =>
     apiRequest<{ success: true; item: any; totals: any }>(
@@ -418,10 +419,14 @@ export const adminApi = {
     id: string,
     body: {
       userCount?: number;
+      webUserCount?: number;
       locationCount?: number;
-      selectedPackage?: any;
+      // null = remove the package from the quote entirely.
+      selectedPackage?: any | null;
       selectedAddons?: any[];
       agreementMonths?: number;
+      isExistingCustomer?: boolean;
+      notes?: string | null;
       amendIfPaid?: boolean;
     },
   ) =>
@@ -438,6 +443,28 @@ export const adminApi = {
       method: 'PUT',
       body: JSON.stringify(body),
     }),
+  // ConnectWise lookups for the existing-customer picker (read-only).
+  searchCwCompanies: (q: string) =>
+    apiRequest<{
+      companies: Array<{
+        id: number;
+        identifier: string;
+        name: string;
+        status?: string;
+        types?: string[];
+      }>;
+    }>(`/api/admin/cw/companies?q=${encodeURIComponent(q)}`),
+  listCwCompanyAgreements: (companyId: number) =>
+    apiRequest<{
+      agreements: Array<{
+        id: number;
+        name: string;
+        type?: string;
+        typeId?: number;
+        agreementStatus?: string;
+        startDate?: string;
+      }>;
+    }>(`/api/admin/cw/companies/${companyId}/agreements`),
   getQuoteProvisioning: (id: string) =>
     apiRequest<{
       quoteNumber: string;

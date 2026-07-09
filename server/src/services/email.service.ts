@@ -101,14 +101,21 @@ export async function sendContractEmail(
 
   const html = buildPaymentConfirmationHtml(quote, paymentUrl);
 
+  // Existing customers get "Service Addition" naming so the email + attached
+  // PDF can't be mistaken for a replacement of their current contract.
+  const isExisting = !!quote.isExistingCustomer;
   const result = await resend.emails.send({
     from: fromEmail(),
     to: quote.customer.email,
-    subject: `Your Contract - ${quote.customer.businessName} (${quote.quoteNumber})`,
+    subject: isExisting
+      ? `Your Service Addition - ${quote.customer.businessName} (${quote.quoteNumber})`
+      : `Your Contract - ${quote.customer.businessName} (${quote.quoteNumber})`,
     html,
     attachments: [
       {
-        filename: `Contract-${quote.quoteNumber}.pdf`,
+        filename: isExisting
+          ? `Service-Addition-${quote.quoteNumber}.pdf`
+          : `Contract-${quote.quoteNumber}.pdf`,
         content: pdfBuffer,
       },
     ],

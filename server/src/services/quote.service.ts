@@ -22,7 +22,7 @@ export async function createQuote(
       quoteNumber,
       status: 'draft',
       customer: payload.customer as any,
-      selectedPackage: payload.selectedPackage as any,
+      selectedPackage: (payload.selectedPackage ?? undefined) as any,
       selectedAddons: payload.selectedAddons as any,
       onboarding: payload.onboarding as any,
       appliedPromoCodes: payload.appliedPromoCodes as any,
@@ -30,6 +30,12 @@ export async function createQuote(
       terms: payload.terms as any,
       expiresAt,
       salesRepId: payload.salesRepId ?? null,
+      isExistingCustomer: payload.isExistingCustomer ?? false,
+      // Admin-picked CW targets for existing customers. Setting cwCompanyId
+      // up front makes onQuoteCreated reuse that company instead of matching
+      // by name; cwAgreementId pins which agreement additions land on.
+      cwCompanyId: payload.cwCompanyId ?? null,
+      cwAgreementId: payload.cwAgreementId ?? null,
     },
     include: { salesRep: { select: { id: true, email: true, name: true } } },
   });
@@ -286,19 +292,35 @@ async function recalcAndSaveQuote(quote: any, promos: any[]): Promise<any> {
   const pkg = quote.selectedPackage as any;
   const customer = quote.customer as any;
 
-  // Always derive base costs from raw stored data
+  // Always derive base costs from raw stored data. pkg may be null (admin
+  // stripped the package) and legacy rows can miss price keys — coerce with
+  // Number()||0 so a promo apply/remove never produces NaN totals.
+  const customItems = (quote.customItems as any[]) ?? [];
   const baseOnboarding = onboarding.totalCost || 0;
-  const baseOneTime = selectedAddons
-    .filter((a: any) => a.pricingType === 'one-time-only' || a.pricingType === 'both')
-    .reduce((sum: number, a: any) => sum + (a.setupPrice || 0) * a.quantity, 0);
+  const baseOneTime =
+    selectedAddons
+      .filter((a: any) => a.pricingType === 'one-time-only' || a.pricingType === 'both')
+      .reduce((sum: number, a: any) => sum + (Number(a.setupPrice) || 0) * (Number(a.quantity) || 1), 0) +
+    customItems.reduce(
+      (sum: number, i: any) => sum + (Number(i.oneTimePrice) || 0) * (Number(i.quantity) || 1),
+      0,
+    );
   const packageCost =
-    (pkg.pricePerUser * customer.userCount) +
-    ((pkg.pricePerUserF3 ?? 0) * (customer.webUserCount ?? 0)) +
-    (pkg.pricePerLocation * customer.locationCount);
+    ((Number(pkg?.pricePerUser) || 0) * (Number(customer?.userCount) || 0)) +
+    ((Number(pkg?.pricePerUserF3) || 0) * (Number(customer?.webUserCount) || 0)) +
+    ((Number(pkg?.pricePerLocation) || 0) * (Number(customer?.locationCount) || 0));
   const addonRecurring = selectedAddons
     .filter((a: any) => a.pricingType === 'recurring-only' || a.pricingType === 'both')
-    .reduce((sum: number, a: any) => sum + (a.recurringPrice || 0) * a.quantity, 0);
-  const baseRecurring = packageCost + addonRecurring;
+    .reduce((sum: number, a: any) => sum + (Number(a.recurringPrice) || 0) * (Number(a.quantity) || 1), 0);
+  // Monthly-equivalent: annually-priced custom items fold in at price/12 —
+  // mirrors sumCustomRecurring in admin-quotes.ts. All downstream billing
+  // (AP first month, CW additions) runs on a monthly cycle.
+  const customRecurring = customItems.reduce((sum: number, i: any) => {
+    const price = Number(i.recurringPrice) || 0;
+    const monthly = i.recurringFrequency === 'annually' ? price / 12 : price;
+    return sum + monthly * (Number(i.quantity) || 1);
+  }, 0);
+  const baseRecurring = packageCost + addonRecurring + customRecurring;
 
   let onboardingDiscount = 0;
   let oneTimeDiscount = 0;
@@ -343,8 +365,9 @@ function mapQuoteToData(quote: any): QuoteData {
   return {
     quoteNumber: quote.quoteNumber,
     customer: quote.customer as QuoteData['customer'],
-    selectedPackage: quote.selectedPackage as QuoteData['selectedPackage'],
+    selectedPackage: (quote.selectedPackage ?? null) as QuoteData['selectedPackage'],
     selectedAddons: quote.selectedAddons as QuoteData['selectedAddons'],
+    customItems: (quote.customItems ?? []) as QuoteData['customItems'],
     onboarding: quote.onboarding as QuoteData['onboarding'],
     appliedPromoCodes: quote.appliedPromoCodes as QuoteData['appliedPromoCodes'],
     totals: quote.totals as QuoteData['totals'],
@@ -362,6 +385,7 @@ function mapQuoteToData(quote: any): QuoteData {
     ghlContactId: quote.ghlContactId ?? undefined,
     ghlOpportunityId: quote.ghlOpportunityId ?? undefined,
     notes: quote.notes ?? undefined,
+    isExistingCustomer: quote.isExistingCustomer ?? false,
     salesRepId: quote.salesRepId ?? undefined,
     salesRep: quote.salesRep
       ? { id: quote.salesRep.id, email: quote.salesRep.email, name: quote.salesRep.name }

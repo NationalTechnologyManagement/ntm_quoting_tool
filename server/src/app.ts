@@ -14,6 +14,7 @@ import adminAddonRoutes from './routes/admin-addons.js';
 import adminPromoCodeRoutes from './routes/admin-promo-codes.js';
 import adminTermsRoutes from './routes/admin-terms.js';
 import adminQuoteRoutes from './routes/admin-quotes.js';
+import adminCwRoutes from './routes/admin-cw.js';
 import adminSettingsRoutes from './routes/admin-settings.js';
 import quoteRoutes from './routes/quotes.js';
 import leadRoutes from './routes/leads.js';
@@ -56,6 +57,7 @@ export function createApp() {
   app.use(adminPromoCodeRoutes);
   app.use(adminTermsRoutes);
   app.use(adminQuoteRoutes);
+  app.use(adminCwRoutes);
   app.use(adminSettingsRoutes);
   app.use(adminAiRoutes);
   app.use(adminSiteContentRoutes);

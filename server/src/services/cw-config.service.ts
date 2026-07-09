@@ -39,9 +39,19 @@ export const CW_CONFIG_KEYS = [
   'agreement.departmentId',
   'agreement.locationId',
   'agreement.billCycleId',
+  // Fallback agreement type used when a quote has no package (package-less
+  // quotes can't derive the type from Package.cwAgreementTypeId). Optional —
+  // when unset, a package-less quote for a NEW customer fails the agreement
+  // step with a clear error; existing-customer quotes reuse their agreement
+  // and never need it.
+  'agreement.defaultTypeId',
 
   // ── Project ──
   'project.typeId',
+  // Project type for existing-customer service-addition projects (plain
+  // projects created WITHOUT the onboarding template). Optional — when unset
+  // the project is created without a type.
+  'project.existingCustomerTypeId',
   'project.templateId',
   // Human-readable template name. Used by the admin "discover template"
   // helper, which searches CW Manage for projectTemplates by name and
@@ -95,9 +105,11 @@ export const DEFAULTS: Record<CwConfigKey, string> = {
   'agreement.departmentId': '1',       // "Services" (observed on existing project)
   'agreement.locationId': '11',        // "National Technology Management" (observed)
   'agreement.billCycleId': '2',        // Monthly (legacy)
+  'agreement.defaultTypeId': 'null',   // fallback type for package-less quotes; opt-in
 
   // Project — all five confirmed
   'project.typeId': '8',                    // "Customer Onboarding"
+  'project.existingCustomerTypeId': 'null', // optional type for service-addition projects
   // Template ID is intentionally null by default — ops should run the
   // admin "Discover template by name" helper which looks up the right id
   // from CW Manage and writes it back. Hard-coding "2" picked the wrong

@@ -173,6 +173,25 @@ export interface QuoteOnboarding {
   finalCost: number;
 }
 
+// Freeform line item added by NTM staff from the admin quote detail page.
+// Not part of the package/addon catalog. Recurring custom items roll into
+// the CW agreement as Additions (when cwProductId is set); one-time items
+// are charged on the upfront AP invoice.
+export interface QuoteCustomItem {
+  id: string;
+  name: string;
+  description?: string;
+  quantity: number;
+  recurringPrice?: number | null;
+  recurringFrequency?: 'monthly' | 'annually' | null;
+  oneTimePrice?: number | null;
+  // CW catalog product id for the recurring Addition. Optional — when unset
+  // the recurring line is surfaced in missingProductIds for ops to map.
+  cwProductId?: number | null;
+  addedBy?: string;
+  addedAt?: string;
+}
+
 export interface AppliedPromoCode {
   code: string;
   discount: number;
@@ -183,8 +202,11 @@ export interface AppliedPromoCode {
 export interface QuoteData {
   quoteNumber: string;
   customer: CustomerInfo;
-  selectedPackage: QuoteSelectedPackage;
+  // null when the admin removed the package — the quote is add-ons and/or
+  // custom items only.
+  selectedPackage: QuoteSelectedPackage | null;
   selectedAddons: QuoteSelectedAddon[];
+  customItems?: QuoteCustomItem[];
   onboarding: QuoteOnboarding;
   appliedPromoCodes: AppliedPromoCode[];
   totals: QuoteTotals;
@@ -212,6 +234,11 @@ export interface QuoteData {
   // Admin-edited free-text notes shown to the customer + copied into the
   // contract PDF. Captures anything the structured fields don't.
   notes?: string;
+  // True when this quote is for a company that already exists in ConnectWise.
+  // Provisioning adds onto the existing agreement (never removes anything),
+  // skips the onboarding project template, and the customer receives the
+  // service-addition PDF variant.
+  isExistingCustomer?: boolean;
   // Assigned sales rep — used to auto-CC their email when the quote is sent.
   salesRepId?: string;
   salesRep?: { id: string; email: string; name?: string | null };
@@ -231,7 +258,8 @@ export interface SiteContent {
 
 export interface CreateQuotePayload {
   customer: CustomerInfo;
-  selectedPackage: QuoteSelectedPackage;
+  // null = no package (admin-only; the public wizard always sends one).
+  selectedPackage: QuoteSelectedPackage | null;
   selectedAddons: QuoteSelectedAddon[];
   onboarding: QuoteOnboarding;
   appliedPromoCodes: AppliedPromoCode[];
@@ -242,6 +270,12 @@ export interface CreateQuotePayload {
     url: string;
     content: string;
   };
+  // Admin-only fields (ignored on unauthenticated requests): flag the quote
+  // as an existing CW customer and optionally pin the exact CW company /
+  // agreement provisioning should target.
+  isExistingCustomer?: boolean;
+  cwCompanyId?: number | null;
+  cwAgreementId?: number | null;
 }
 
 export interface CheckoutPayload {

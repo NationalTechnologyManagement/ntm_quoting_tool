@@ -1,12 +1,6 @@
 import type { QuoteData } from '@ntm/shared';
 import { SERVICE_PROVIDER } from '@ntm/shared';
-
-// NTM shield logo. Puppeteer fetches this when rendering the PDF.
-// External URL (not a local asset) so emails can reuse the same constant
-// without bundling a binary into the server image. ICO files can carry
-// multiple resolutions; Chrome picks the right one for the render size.
-const NTM_LOGO_URL =
-  'https://seahorse-space.nyc3.cdn.digitaloceanspaces.com/website/ntm_shield.ico';
+import { NTM_LOGO_DATA_URI } from './ntm-logo.js';
 
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-US', {
@@ -158,14 +152,31 @@ function formatTermsContent(content: string): string {
 }
 
 export function buildContractHtml(quote: QuoteData): string {
+  // Existing-customer quotes render the "Service Addition" variant: same
+  // two-part structure, but framed as adding services onto their current
+  // agreement — no onboarding language, no confusion with the new-customer
+  // Managed Services Agreement.
+  const isExisting = !!quote.isExistingCustomer;
+  const docTitle = isExisting ? 'Service Addition Agreement' : 'Managed Services Agreement';
+
   const paidAtSigning =
     (quote.totals.onboardingCost || 0) + (quote.totals.oneTimeCosts || 0);
 
+  const customItems = quote.customItems ?? [];
   const monthlyAddonsCost = (quote.selectedAddons || [])
-    .filter((a) => a.frequency === 'monthly')
-    .reduce((sum, a) => sum + (a.totalPrice || 0), 0);
+    .filter((a) => a.pricingType !== 'one-time-only' && (a.recurringPrice ?? 0) > 0)
+    .reduce((sum, a) => sum + (a.recurringPrice ?? 0) * (a.quantity || 1), 0);
+  // Monthly-equivalent: annually-priced custom items count at price/12 so the
+  // "Monthly Recurring" line matches totals.recurringCosts (same rule as
+  // sumCustomRecurring server-side) instead of stating the annual price as a
+  // monthly charge.
+  const monthlyCustomCost = customItems.reduce((sum, i) => {
+    const price = Number(i.recurringPrice) || 0;
+    const monthly = i.recurringFrequency === 'annually' ? price / 12 : price;
+    return sum + monthly * (Number(i.quantity) || 1);
+  }, 0);
   const totalMonthlyCost =
-    (quote.selectedPackage?.calculatedPrice || 0) + monthlyAddonsCost;
+    (quote.selectedPackage?.calculatedPrice || 0) + monthlyAddonsCost + monthlyCustomCost;
 
   // Pull the contract length off the snapshotted package. Falls back to
   // "month-to-month" if the field is missing (legacy quotes pre-2026 didn't
@@ -220,8 +231,8 @@ export function buildContractHtml(quote: QuoteData): string {
     (quote.selectedPackage as any)?.featureGroups &&
     (quote.selectedPackage as any).featureGroups.length > 0
       ? (quote.selectedPackage as any).featureGroups
-      : quote.selectedPackage?.features?.length > 0
-        ? [{ category: 'Includes', items: quote.selectedPackage.features }]
+      : (quote.selectedPackage?.features?.length ?? 0) > 0
+        ? [{ category: 'Includes', items: quote.selectedPackage!.features }]
         : [];
   const featuresHtml = pkgGroups.length
     ? pkgGroups
@@ -246,16 +257,30 @@ export function buildContractHtml(quote: QuoteData): string {
 <head>
   <meta charset="UTF-8">
   <style>
-    @page {
-      /* Margins are set by Puppeteer's pdf() options (see pdf.service.ts) so
-         this only declares the page-counter footer. */
-      @bottom-center { content: counter(page) " of " counter(pages); font-size: 8pt; color: #999; }
+    /* Page-number footer is rendered by Puppeteer (displayHeaderFooter in
+       pdf.service.ts). Chrome does not support @page margin boxes, so the
+       old @bottom-center counter rule silently never rendered. */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      /* Keep the navy banners / table headers visible when the customer
+         prints from the browser preview — without this, "Background
+         graphics" defaults off and the first page looks blank. */
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    /* Page margins for BOTH render paths. Chrome gives author @page margins
+       precedence over Puppeteer's pdf() margin options, so this rule — not
+       pdf.service.ts — is what actually governs the emailed PDF, and it also
+       covers customers using the browser's "Save as PDF" on the preview.
+       Keep it in sync with pdf.service.ts (0.5in top, 0.75in sides, 0.6in
+       bottom reserved for the page-number footer). */
+    @page { margin: 0.5in 0.75in 0.6in; }
     body {
       font-family: 'Georgia', 'Times New Roman', serif;
       color: #222;
-      line-height: 1.55;
+      line-height: 1.5;
       font-size: 10pt;
       background: white;
       padding: 0;
@@ -311,10 +336,14 @@ export function buildContractHtml(quote: QuoteData): string {
       font-family: 'Helvetica Neue', Arial, sans-serif;
     }
 
-    /* ── Sections ── */
+    /* ── Sections ──
+       IMPORTANT: no page-break-inside: avoid here. With it, a long section
+       (e.g. Service Package with the full feature list) that doesn't fit on
+       page 1 got pushed WHOLE to page 2, leaving the first page nearly
+       blank. Long sections must be allowed to flow across pages; only small
+       atomic blocks (signature grid, parties) avoid internal breaks. */
     .section {
-      margin-bottom: 20px;
-      page-break-inside: avoid;
+      margin-bottom: 18px;
     }
     .section-title {
       font-family: 'Helvetica Neue', Arial, sans-serif;
@@ -324,8 +353,10 @@ export function buildContractHtml(quote: QuoteData): string {
       text-transform: uppercase;
       letter-spacing: 1.5px;
       border-bottom: 1.5px solid #1a3a5c;
-      padding-bottom: 5px;
-      margin-bottom: 12px;
+      padding-bottom: 4px;
+      margin-bottom: 10px;
+      /* Never leave a section title stranded at the bottom of a page. */
+      page-break-after: avoid;
     }
 
     /* ── Part banners (QUOTE vs CONTRACT) ──
@@ -334,12 +365,13 @@ export function buildContractHtml(quote: QuoteData): string {
        legal terms + signature block. Each opens with a full-width banner
        so a reader skimming the PDF can tell which part they're in. */
     .part-banner {
-      margin: 28px 0 18px 0;
-      padding: 14px 18px;
+      margin: 0 0 16px 0;
+      padding: 12px 18px;
       background: #1a3a5c;
       color: #fff;
       page-break-after: avoid;
       page-break-before: auto;
+      page-break-inside: avoid;
     }
     .part-banner .label {
       font-family: 'Helvetica Neue', Arial, sans-serif;
@@ -365,12 +397,27 @@ export function buildContractHtml(quote: QuoteData): string {
       page-break-before: always;
     }
 
+    /* ── Existing-customer notice ── */
+    .notice-band {
+      background: #eef4fa;
+      border: 1px solid #b9d0e8;
+      border-left: 4px solid #1a3a5c;
+      padding: 10px 14px;
+      margin-bottom: 18px;
+      font-size: 9.5pt;
+      line-height: 1.55;
+      color: #1a3a5c;
+      page-break-inside: avoid;
+    }
+    .notice-band strong { text-transform: uppercase; letter-spacing: 0.8px; font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 8.5pt; }
+
     /* ── Parties ── */
     .parties {
       display: grid;
       grid-template-columns: 1fr 30px 1fr;
       gap: 0;
-      margin-bottom: 20px;
+      margin-bottom: 18px;
+      page-break-inside: avoid;
     }
     .party p { margin: 3px 0; font-size: 9.5pt; }
     .party .name { font-weight: 700; font-size: 10.5pt; color: #1a3a5c; margin-bottom: 6px; }
@@ -458,6 +505,9 @@ export function buildContractHtml(quote: QuoteData): string {
       font-weight: 700;
       font-family: 'Helvetica Neue', Arial, sans-serif;
       border-bottom: none;
+      /* Must be explicit: the generic "table td" color rule (#333) wins
+         over inheritance from the tr — which rendered navy-on-navy. */
+      color: #fff;
     }
     .fin-note {
       font-size: 8.5pt;
@@ -553,9 +603,11 @@ export function buildContractHtml(quote: QuoteData): string {
 
     /* ── Signature ── */
     .sig-block {
-      margin-top: 30px;
-      padding-top: 20px;
+      margin-top: 24px;
+      padding-top: 16px;
       border-top: 2px solid #1a3a5c;
+      /* Keep the signature block intact on one page. */
+      page-break-inside: avoid;
     }
     .sig-intro {
       font-size: 9pt;
@@ -624,7 +676,7 @@ export function buildContractHtml(quote: QuoteData): string {
     <div class="doc-header-top">
       <div style="display:flex; align-items:center; gap:14px;">
         <img
-          src="${NTM_LOGO_URL}"
+          src="${NTM_LOGO_DATA_URI}"
           alt="NTM"
           style="width:56px; height:56px; flex-shrink:0;"
         />
@@ -640,8 +692,18 @@ export function buildContractHtml(quote: QuoteData): string {
         <strong>Valid For</strong> 30 days
       </div>
     </div>
-    <h1 class="doc-title">Managed Services Agreement</h1>
+    <h1 class="doc-title">${docTitle}</h1>
   </div>
+
+  ${isExisting ? `
+  <!-- Existing-customer callout: this document ADDS services; it does not
+       replace or restate the customer's current agreement. -->
+  <div class="notice-band">
+    <strong>Existing Customer &mdash; Service Addition</strong><br>
+    This document adds the services listed below to ${escapeHtmlBasic(quote.customer.businessName)}'s current
+    agreement with National Technology Management. All existing services, pricing, and terms
+    remain unchanged and in full effect — the additions below are billed alongside them.
+  </div>` : ''}
 
   <!-- ──────────────────────────────────────────────────────────────────
        PART 1 — QUOTE
@@ -652,7 +714,7 @@ export function buildContractHtml(quote: QuoteData): string {
   <div class="part-banner">
     <div class="label">Part 1 of 2</div>
     <div class="title">Quote</div>
-    <div class="subtitle">Pricing, services, and add-ons for ${quote.customer.businessName}</div>
+    <div class="subtitle">${isExisting ? `Added services and pricing for ${quote.customer.businessName}` : `Pricing, services, and add-ons for ${quote.customer.businessName}`}</div>
   </div>
 
   <!-- Service Package -->
@@ -724,20 +786,57 @@ export function buildContractHtml(quote: QuoteData): string {
     </table>
   </div>` : ''}
 
-  <!-- Financial Summary -->
+  <!-- Custom line items (staff-added) -->
+  ${customItems.length > 0 ? `
+  <div class="section">
+    <div class="section-title">Custom Items &amp; Services</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Item</th>
+          <th>Description</th>
+          <th style="text-align:center;">Qty</th>
+          <th style="text-align:right;">Recurring</th>
+          <th style="text-align:right;">One-Time</th>
+        </tr>
+      </thead>
+      <tbody>${customItems
+        .map((item) => {
+          const qty = Number(item.quantity) || 1;
+          const rec = Number(item.recurringPrice) || 0;
+          const oneTime = Number(item.oneTimePrice) || 0;
+          return `
+          <tr>
+            <td>${escapeHtmlBasic(item.name)}</td>
+            <td class="desc">${escapeHtmlBasic(item.description || '')}</td>
+            <td class="center">${qty}</td>
+            <td class="right">${rec > 0 ? `${formatCurrency(rec * qty)}/${item.recurringFrequency === 'annually' ? 'yr' : 'mo'}` : '&mdash;'}</td>
+            <td class="right">${oneTime > 0 ? formatCurrency(oneTime * qty) : '&mdash;'}</td>
+          </tr>`;
+        })
+        .join('')}</tbody>
+    </table>
+  </div>` : ''}
+
+  <!-- Financial Summary. Zero rows are dropped — a wall of $0.00 lines was a
+       big part of why the old layout read as cluttered. -->
   <div class="section">
     <div class="section-title">Financial Summary</div>
     <table class="fin-table">
       <tbody>
-        <tr><td>Onboarding &amp; Implementation</td><td class="amount">${formatCurrency(quote.totals.onboardingCost)}</td></tr>
-        <tr><td>One-Time Fees (setup &amp; one-time add-ons)</td><td class="amount">${formatCurrency(quote.totals.oneTimeCosts)}</td></tr>
+        ${quote.totals.onboardingCost > 0 ? `<tr><td>Onboarding &amp; Implementation</td><td class="amount">${formatCurrency(quote.totals.onboardingCost)}</td></tr>` : ''}
+        ${quote.totals.oneTimeCosts > 0 ? `<tr><td>One-Time Fees (setup, hardware &amp; one-time items)</td><td class="amount">${formatCurrency(quote.totals.oneTimeCosts)}</td></tr>` : ''}
         ${quote.totals.discount > 0 ? `<tr class="discount"><td>Discount Applied</td><td class="amount discount">-${formatCurrency(quote.totals.discount)}</td></tr>` : ''}
-        <tr><td>Monthly Recurring (package + monthly add-ons)</td><td class="amount">${formatCurrency(totalMonthlyCost)}/mo</td></tr>
+        ${totalMonthlyCost > 0 ? `<tr><td>${isExisting ? 'Added Monthly Recurring (new services on this quote)' : 'Monthly Recurring (package + monthly add-ons)'}</td><td class="amount">${formatCurrency(totalMonthlyCost)}/mo</td></tr>` : ''}
         <tr class="fin-total"><td>Due at Signing</td><td class="amount" style="text-align:right;">${formatCurrency(paidAtSigning)}</td></tr>
       </tbody>
     </table>
     <div class="fin-note">
-      <strong>Ongoing Billing:</strong> Beginning the next billing cycle, ${formatCurrency(quote.totals.recurringCosts)} will be charged ${quote.totals.recurringFrequency || 'monthly'} for the duration of the ${contractTerm} contract term. Invoices are issued on the <strong>1st of every month</strong> and are due within <strong>30 days</strong> (Net 30). Onboarding and implementation will be completed within 30 days of contract execution.
+      ${quote.totals.recurringCosts <= 0
+        ? `<strong>Billing:</strong> This quote contains one-time charges only — there is no new recurring charge. Invoices are issued on the <strong>1st of every month</strong> and are due within <strong>30 days</strong> (Net 30).`
+        : isExisting
+          ? `<strong>Ongoing Billing:</strong> Beginning the next billing cycle, the added services above (${formatCurrency(quote.totals.recurringCosts)}/${quote.totals.recurringFrequency || 'monthly'}) will appear on your existing NTM invoice alongside your current services. Your existing charges are unchanged. Invoices are issued on the <strong>1st of every month</strong> and are due within <strong>30 days</strong> (Net 30).`
+          : `<strong>Ongoing Billing:</strong> Beginning the next billing cycle, ${formatCurrency(quote.totals.recurringCosts)} will be charged ${quote.totals.recurringFrequency || 'monthly'} for the duration of the ${contractTerm} contract term. Invoices are issued on the <strong>1st of every month</strong> and are due within <strong>30 days</strong> (Net 30). Onboarding and implementation will be completed within 30 days of contract execution.`}
     </div>
   </div>
 
@@ -751,7 +850,7 @@ export function buildContractHtml(quote: QuoteData): string {
   <div class="part-banner contract">
     <div class="label">Part 2 of 2</div>
     <div class="title">Contract</div>
-    <div class="subtitle">Legal terms governing the services quoted above</div>
+    <div class="subtitle">${isExisting ? 'Legal terms governing the added services quoted above' : 'Legal terms governing the services quoted above'}</div>
   </div>
 
   <!-- Parties -->
@@ -780,17 +879,18 @@ export function buildContractHtml(quote: QuoteData): string {
   <!-- Agreement Details -->
   <div class="section">
     <div class="section-title">Agreement Details</div>
+    ${isExisting ? `<div class="detail-row"><span class="label">Agreement Type</span><span class="value">Addition to existing services</span></div>` : ''}
     <div class="detail-row"><span class="label">Contract Term</span><span class="value">${contractTerm}</span></div>
-    <div class="detail-row"><span class="label">Effective Date</span><span class="value">${formatDate(signedAt)}</span></div>
+    <div class="detail-row"><span class="label">Effective Date</span><span class="value">${isSigned && signedAt ? formatDate(signedAt) : 'Upon signing'}</span></div>
     <div class="detail-row"><span class="label">Billing Cycle</span><span class="value" style="text-transform:capitalize;">${quote.totals.recurringFrequency || 'monthly'}</span></div>
-    ${quote.onboarding?.totalCost > 0 ? `
+    ${!isExisting && quote.onboarding?.totalCost > 0 ? `
     <div class="detail-row"><span class="label">Onboarding</span><span class="value">${quote.onboarding.userCount} users &times; ${formatCurrency(quote.onboarding.costPerUser)}/user = ${formatCurrency(quote.onboarding.finalCost)}</span></div>` : ''}
   </div>
 
   <!-- Terms & Conditions -->
   <div class="section" style="page-break-before: auto;">
     <div class="section-title">Terms &amp; Conditions</div>
-    <p class="terms-intro">The following terms and conditions govern this Managed Services Agreement between the parties identified above.</p>
+    <p class="terms-intro">The following terms and conditions govern this ${docTitle} between the parties identified above.</p>
     ${termsHtml}
   </div>
 
@@ -803,8 +903,8 @@ export function buildContractHtml(quote: QuoteData): string {
   <div class="sig-block">
     <p class="sig-intro">
       ${isSigned
-        ? `By electronically signing below, <strong>${signedBy}</strong> on behalf of <strong>${quote.customer.businessName}</strong> acknowledged having read, understood, and agreed to all terms and conditions of this ${contractTerm} Managed Services Agreement.`
-        : `By electronically signing below, an authorized representative of <strong>${quote.customer.businessName}</strong> acknowledges having read, understood, and agreed to all terms and conditions of this ${contractTerm} Managed Services Agreement.`}
+        ? `By electronically signing below, <strong>${signedBy}</strong> on behalf of <strong>${quote.customer.businessName}</strong> acknowledged having read, understood, and agreed to all terms and conditions of this ${contractTerm} ${docTitle}.`
+        : `By electronically signing below, an authorized representative of <strong>${quote.customer.businessName}</strong> acknowledges having read, understood, and agreed to all terms and conditions of this ${contractTerm} ${docTitle}.`}
     </p>
     <div class="sig-grid">
       <div class="sig-party">

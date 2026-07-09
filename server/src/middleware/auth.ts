@@ -55,6 +55,23 @@ export function requireAuth(req: Request, _res: Response, next: NextFunction) {
   }
 }
 
+// Best-effort auth: populates req.admin when a valid token is present but
+// never rejects. Use on public routes that unlock extra admin-only behavior
+// (e.g. POST /api/quotes accepting existing-customer / no-package payloads
+// only from the admin quote builder).
+export function optionalAuth(req: Request, _res: Response, next: NextFunction) {
+  const token = extractToken(req);
+  if (token) {
+    try {
+      const payload = jwt.verify(token, env.JWT_SECRET) as AuthPayload;
+      req.admin = { ...payload, role: payload.role ?? 'admin' };
+    } catch {
+      // Invalid/expired token on a public route: proceed unauthenticated.
+    }
+  }
+  next();
+}
+
 // Role gate. Pass one or more role names; the authenticated user must hold
 // one of them. Always chain after requireAuth.
 export function requireRole(...allowed: string[]) {

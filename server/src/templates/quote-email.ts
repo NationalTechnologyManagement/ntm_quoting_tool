@@ -1,5 +1,14 @@
 import type { QuoteData } from '@ntm/shared';
 
+// Minimal HTML escape for interpolated names (addon/custom-item/package).
+// A name like "Monitors <24in> & mounts" must not be parsed as markup.
+function esc(s: string): string {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
 function formatCurrency(amount: number): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
@@ -117,10 +126,12 @@ export function buildQuoteEmailHtml(
       <div class="section">
         <div class="section-title">Monthly Service</div>
         <div class="cost-card recurring">
-          <div class="cost-label">${quote.selectedPackage.name}</div>
-          ${quote.customer.userCount > 0 ? `<div class="cost-detail">${quote.customer.userCount} desktop users &times; ${formatCurrency(quote.selectedPackage.pricePerUser)}/user</div>` : ''}
-          ${(quote.customer.webUserCount ?? 0) > 0 ? `<div class="cost-detail">${quote.customer.webUserCount} web users &times; ${formatCurrency(quote.selectedPackage.pricePerUserF3 ?? 0)}/user</div>` : ''}
-          ${quote.customer.locationCount > 0 ? `<div class="cost-detail">${quote.customer.locationCount} locations &times; ${formatCurrency(quote.selectedPackage.pricePerLocation)}/location</div>` : ''}
+          <div class="cost-label">${esc(quote.selectedPackage?.name ?? 'Custom Services')}</div>
+          ${quote.selectedPackage && quote.customer.userCount > 0 ? `<div class="cost-detail">${quote.customer.userCount} desktop users &times; ${formatCurrency(quote.selectedPackage.pricePerUser)}/user</div>` : ''}
+          ${quote.selectedPackage && (quote.customer.webUserCount ?? 0) > 0 ? `<div class="cost-detail">${quote.customer.webUserCount} web users &times; ${formatCurrency(quote.selectedPackage.pricePerUserF3 ?? 0)}/user</div>` : ''}
+          ${quote.selectedPackage && quote.customer.locationCount > 0 ? `<div class="cost-detail">${quote.customer.locationCount} locations &times; ${formatCurrency(quote.selectedPackage.pricePerLocation)}/location</div>` : ''}
+          ${(quote.selectedAddons ?? []).filter((a) => (a.recurringPrice ?? 0) > 0 && a.pricingType !== 'one-time-only').map((a) => `<div class="cost-detail">${esc(a.name)} &times; ${a.quantity}</div>`).join('')}
+          ${(quote.customItems ?? []).filter((i) => (Number(i.recurringPrice) || 0) > 0).map((i) => `<div class="cost-detail">${esc(i.name)} &times; ${i.quantity}</div>`).join('')}
           <div class="cost-amount">${formatCurrency(firstMonth)}<span style="font-size:16px;opacity:0.8;">/${quote.totals.recurringFrequency}</span></div>
         </div>
       </div>

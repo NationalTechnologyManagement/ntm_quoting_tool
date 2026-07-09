@@ -273,12 +273,27 @@ function buildLineItems(quote: QuoteData) {
     }
   }
 
+  // 3b. One-time custom line items (staff-added). Recurring custom items are
+  //     folded into totals.recurringCosts and billed via line 4 + the CW
+  //     agreement; the one-time portion is charged here.
+  for (const item of quote.customItems ?? []) {
+    const oneTime = Number(item.oneTimePrice) || 0;
+    if (oneTime > 0) {
+      items.push({
+        description: item.name,
+        amount: dollars(oneTime),
+        quantity: Number(item.quantity) || 1,
+      });
+    }
+  }
+
   // 4. First month's recurring charge — captured upfront via AP so the customer
   //    has paid something real even when onboarding is waived. CW agreement
-  //    handles months 2+. Composed of package recurring + recurring addons.
+  //    handles months 2+. Composed of package recurring + recurring addons +
+  //    recurring custom items (all already folded into totals.recurringCosts).
   if (quote.totals.recurringCosts > 0) {
     items.push({
-      description: `First month — ${quote.selectedPackage.name}`,
+      description: `First month — ${quote.selectedPackage?.name ?? 'Recurring services'}`,
       amount: dollars(quote.totals.recurringCosts),
       quantity: 1,
     });

@@ -16,6 +16,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 type Step = { quoteId: string; step: string; status: string; cwId: number | null; attempts: number; lastError: string | null };
 const stepStore = new Map<string, Step>();
 const provisioningStatusByQuote = new Map<string, string>();
+// Quote row status served by the prisma mock (replayProvisioning gates on it).
+let mockQuoteStatus = 'paid';
 
 vi.mock('../../config/prisma.js', () => {
   const cwProvisioningStep = {
@@ -72,8 +74,9 @@ vi.mock('../../config/prisma.js', () => {
   const quote = {
     findUnique: vi.fn(async ({ where }: any) => {
       // Tests use a single fixture; map quoteNumber QT-1 ↔ id quote-id-1.
+      // status is mutable via setMockQuoteStatus for the replay-gate test.
       if (where.quoteNumber === 'QT-1' || where.id === 'quote-id-1') {
-        return { id: 'quote-id-1', quoteNumber: 'QT-1' };
+        return { id: 'quote-id-1', quoteNumber: 'QT-1', status: mockQuoteStatus };
       }
       return null;
     }),
@@ -149,7 +152,10 @@ vi.mock('../cw-config.service.js', () => ({
     'agreement.departmentId': 1,
     'agreement.locationId': 11,
     'agreement.billCycleId': 2,
+    // Fallback agreement type for package-less quotes.
+    'agreement.defaultTypeId': 36,
     'project.typeId': 100,
+    'project.existingCustomerTypeId': undefined,
     'project.templateId': 101,
     'project.boardId': 102,
     'project.defaultManagerMemberId': 201,
@@ -256,8 +262,21 @@ beforeEach(() => {
   stepStore.clear();
   provisioningStatusByQuote.clear();
   calls = [];
+  mockQuoteStatus = 'paid';
   vi.unstubAllGlobals();
 });
+
+// Seed the steps onQuoteCreated would have recorded at quote-creation time.
+// Needed by tests asserting the final provisioned rollup, which requires
+// company + contact to be success/skipped.
+function seedQuoteCreatedSteps() {
+  stepStore.set('quote-id-1::company', {
+    quoteId: 'quote-id-1', step: 'company', status: 'success', cwId: 999, attempts: 0, lastError: null,
+  });
+  stepStore.set('quote-id-1::contact', {
+    quoteId: 'quote-id-1', step: 'contact', status: 'success', cwId: 888, attempts: 0, lastError: null,
+  });
+}
 
 describe('CW orchestrator', () => {
   it('resumes after partial run: agreement step skips POST when already success', async () => {
@@ -368,5 +387,296 @@ describe('CW orchestrator', () => {
     const noCompanyQuote = { ...baseQuote, cwCompanyId: undefined };
     await expect(onPaymentCompleted(noCompanyQuote)).rejects.toBeInstanceOf(CwHardFailError);
     expect(provisioningStatusByQuote.get('quote-id-1')).toBe('failed');
+  });
+
+  // ── Existing-customer mode ─────────────────────────────────────────
+
+  it('existing customer: reuses the active agreement, adds only, never patches it, no template on project', async () => {
+    seedQuoteCreatedSteps();
+    const existingQuote: QuoteData = {
+      ...baseQuote,
+      isExistingCustomer: true,
+    };
+
+    setupFetchMock([
+      { match: (p, i) => p === '/sales/opportunities/777' && i.method === 'PATCH', respond: () => jsonResponse({}) },
+      { match: (p) => p === '/sales/opportunities/777/notes', respond: () => jsonResponse({}) },
+      // Active-agreement discovery on the company → one match, same type as pkg
+      {
+        match: (p, i) => p.startsWith('/finance/agreements?conditions=') && (i.method ?? 'GET') === 'GET',
+        respond: () =>
+          jsonResponse([
+            { id: 4200, name: 'Protect - Acme Inc', type: { id: 36, name: 'MSA' }, agreementStatus: 'Active', startDate: '2024-01-01' },
+          ]),
+      },
+      // billStartDate lookup: far in the past (old agreement)
+      { match: (p) => p.startsWith('/finance/agreements/4200?fields=billStartDate'), respond: () => jsonResponse({ billStartDate: '2024-01-01T00:00:00Z' }) },
+      // dedupe pre-fetch: agreement already has additions from years of service
+      { match: (p, i) => p.startsWith('/finance/agreements/4200/additions') && (i.method ?? 'GET') === 'GET', respond: () => jsonResponse([{ id: 1, description: 'Legacy line — do not touch' }]) },
+      { match: (p, i) => p.startsWith('/finance/agreements/4200/additions') && i.method === 'POST', respond: () => jsonResponse({ id: 7000 }) },
+      { match: (p) => p === '/project/projects', respond: () => jsonResponse({ id: 6001 }) },
+    ]);
+
+    const { onPaymentCompleted } = await import('../connectwise.service.js');
+    const result = await onPaymentCompleted(existingQuote);
+
+    // Reused the existing agreement — no new agreement POSTed.
+    expect(result.cwAgreementId).toBe(4200);
+    expect(calls.filter((c) => c.path === '/finance/agreements' && c.method === 'POST').length).toBe(0);
+
+    // Add-only: additions POSTed onto 4200; the agreement itself NEVER
+    // PATCHed (no activate, no status flip) and no DELETE anywhere.
+    const additionPosts = calls.filter((c) => c.method === 'POST' && /^\/finance\/agreements\/4200\/additions/.test(c.path));
+    expect(additionPosts.length).toBeGreaterThan(0);
+    expect(calls.filter((c) => c.method === 'PATCH' && /^\/finance\/agreements\/4200$/.test(c.path)).length).toBe(0);
+    expect(calls.filter((c) => c.method === 'DELETE').length).toBe(0);
+
+    // Additions never back-bill: effectiveDate must be later than the old
+    // agreement's 2024 billStartDate.
+    for (const post of additionPosts) {
+      expect(post.body.effectiveDate > '2024-01-01').toBe(true);
+    }
+
+    // Company left alone: no Customer-type association, no status flip.
+    expect(calls.filter((c) => c.path === '/company/companyTypeAssociations').length).toBe(0);
+    expect(calls.filter((c) => c.method === 'PATCH' && c.path === '/company/companies/999').length).toBe(0);
+
+    // Project created WITHOUT the onboarding template and scoped as an addition.
+    const projectPost = calls.find((c) => c.path === '/project/projects' && c.method === 'POST');
+    expect(projectPost).toBeDefined();
+    expect(projectPost!.body.projectTemplateId).toBeUndefined();
+    expect(projectPost!.body.description).toContain('EXISTING CUSTOMER');
+
+    // Activate recorded as skipped → still rolls up as provisioned.
+    expect(stepStore.get('quote-id-1::activate')?.status).toBe('skipped');
+    expect(provisioningStatusByQuote.get('quote-id-1')).toBe('provisioned');
+  });
+
+  it('existing customer with pinned agreement id: additions land on that agreement', async () => {
+    const pinnedQuote: QuoteData = {
+      ...baseQuote,
+      isExistingCustomer: true,
+      cwAgreementId: 5555,
+    };
+
+    setupFetchMock([
+      { match: (p, i) => p === '/sales/opportunities/777' && i.method === 'PATCH', respond: () => jsonResponse({}) },
+      { match: (p) => p === '/sales/opportunities/777/notes', respond: () => jsonResponse({}) },
+      // pinned-agreement existence + status check
+      { match: (p) => p.startsWith('/finance/agreements/5555?fields=id'), respond: () => jsonResponse({ id: 5555, agreementStatus: 'Active', cancelledFlag: false }) },
+      { match: (p) => p.startsWith('/finance/agreements/5555?fields=billStartDate'), respond: () => jsonResponse({ billStartDate: '2023-06-01T00:00:00Z' }) },
+      { match: (p, i) => p.startsWith('/finance/agreements/5555/additions') && (i.method ?? 'GET') === 'GET', respond: () => jsonResponse([]) },
+      { match: (p, i) => p.startsWith('/finance/agreements/5555/additions') && i.method === 'POST', respond: () => jsonResponse({ id: 7000 }) },
+      { match: (p) => p === '/project/projects', respond: () => jsonResponse({ id: 6001 }) },
+    ]);
+
+    const { onPaymentCompleted } = await import('../connectwise.service.js');
+    const result = await onPaymentCompleted(pinnedQuote);
+
+    expect(result.cwAgreementId).toBe(5555);
+    // No discovery needed, no create, no patch.
+    expect(calls.filter((c) => c.path === '/finance/agreements' && c.method === 'POST').length).toBe(0);
+    expect(calls.filter((c) => c.method === 'PATCH' && /^\/finance\/agreements\/5555$/.test(c.path)).length).toBe(0);
+    expect(calls.filter((c) => c.method === 'POST' && /^\/finance\/agreements\/5555\/additions/.test(c.path)).length).toBeGreaterThan(0);
+  });
+
+  // ── Fully-stripped / package-less quotes ───────────────────────────
+
+  it('package-less quote: posts only addon + custom-item additions', async () => {
+    const noPkgQuote: QuoteData = {
+      ...baseQuote,
+      selectedPackage: null,
+      customItems: [
+        { id: 'ci-1', name: 'Yealink T54W Phones', quantity: 10, recurringPrice: 5, recurringFrequency: 'monthly', oneTimePrice: 150, cwProductId: 3333 },
+      ],
+      onboarding: { userCount: 0, costPerUser: 0, totalCost: 0, discount: 0, finalCost: 0 },
+      totals: { onboardingCost: 0, oneTimeCosts: 1500, recurringCosts: 100, discount: 0, grandTotal: 1600, recurringFrequency: 'monthly' },
+    };
+
+    setupFetchMock([
+      { match: (p, i) => p === '/sales/opportunities/777' && i.method === 'PATCH', respond: () => jsonResponse({}) },
+      { match: (p) => p === '/sales/opportunities/777/notes', respond: () => jsonResponse({}) },
+      { match: (p, i) => p === '/company/companies/999' && i.method === 'PATCH', respond: () => jsonResponse({}) },
+      { match: (p) => p === '/company/companyTypeAssociations', respond: () => jsonResponse({}) },
+      // New agreement created with the fallback default type (36 in mock cfg below is absent → this test asserts the failure-free path via package fallback… the mock cfg has no agreement.defaultTypeId, so we mock the POST to still return an id if called)
+      { match: (p, i) => p === '/finance/agreements' && i.method === 'POST', respond: () => jsonResponse({ id: 5001 }) },
+      { match: (p) => p.startsWith('/finance/agreements/5001?fields=billStartDate'), respond: () => jsonResponse({ billStartDate: '2099-01-01' }) },
+      { match: (p, i) => p.startsWith('/finance/agreements/5001/additions') && (i.method ?? 'GET') === 'GET', respond: () => jsonResponse([]) },
+      { match: (p, i) => p.startsWith('/finance/agreements/5001/additions') && i.method === 'POST', respond: () => jsonResponse({ id: 7000 }) },
+      { match: (p, i) => p === '/finance/agreements/5001' && i.method === 'PATCH', respond: () => jsonResponse({}) },
+      { match: (p) => p === '/project/projects', respond: () => jsonResponse({ id: 6001 }) },
+    ]);
+
+    const { onPaymentCompleted } = await import('../connectwise.service.js');
+    await onPaymentCompleted(noPkgQuote);
+
+    const additionPosts = calls.filter((c) => c.method === 'POST' && /additions/.test(c.path));
+    // No package lines (products 1100/1101/1102) — only addon 9001 and custom 3333.
+    expect(additionPosts.some((c) => [1100, 1101, 1102].includes(c.body?.product?.id))).toBe(false);
+    expect(additionPosts.some((c) => c.body?.product?.id === 9001)).toBe(true);
+    const customPost = additionPosts.find((c) => c.body?.product?.id === 3333);
+    expect(customPost).toBeDefined();
+    expect(customPost!.body.quantity).toBe(10);
+    expect(customPost!.body.unitPrice).toBe(5);
+  });
+
+  it('quote with no recurring lines: skips agreement/additions/activate, still creates the project', async () => {
+    seedQuoteCreatedSteps();
+    const oneTimeOnlyQuote: QuoteData = {
+      ...baseQuote,
+      selectedPackage: null,
+      selectedAddons: [],
+      customItems: [
+        { id: 'ci-1', name: 'Server rack install', quantity: 1, oneTimePrice: 2500 },
+      ],
+      onboarding: { userCount: 0, costPerUser: 0, totalCost: 0, discount: 0, finalCost: 0 },
+      totals: { onboardingCost: 0, oneTimeCosts: 2500, recurringCosts: 0, discount: 0, grandTotal: 2500, recurringFrequency: 'monthly' },
+    };
+
+    setupFetchMock([
+      { match: (p, i) => p === '/sales/opportunities/777' && i.method === 'PATCH', respond: () => jsonResponse({}) },
+      { match: (p) => p === '/sales/opportunities/777/notes', respond: () => jsonResponse({}) },
+      { match: (p, i) => p === '/company/companies/999' && i.method === 'PATCH', respond: () => jsonResponse({}) },
+      { match: (p) => p === '/company/companyTypeAssociations', respond: () => jsonResponse({}) },
+      { match: (p) => p === '/project/projects', respond: () => jsonResponse({ id: 6001 }) },
+    ]);
+
+    const { onPaymentCompleted } = await import('../connectwise.service.js');
+    await onPaymentCompleted(oneTimeOnlyQuote);
+
+    // No agreement traffic at all.
+    expect(calls.filter((c) => /\/finance\/agreements/.test(c.path)).length).toBe(0);
+    expect(stepStore.get('quote-id-1::agreement')?.status).toBe('skipped');
+    expect(stepStore.get('quote-id-1::additions')?.status).toBe('skipped');
+    expect(stepStore.get('quote-id-1::activate')?.status).toBe('skipped');
+    // Project still created for the work itself.
+    expect(calls.filter((c) => c.path === '/project/projects' && c.method === 'POST').length).toBe(1);
+    // Skipped steps satisfy the provisioned rollup.
+    expect(provisioningStatusByQuote.get('quote-id-1')).toBe('provisioned');
+  });
+
+  it('quantity increase on a reused agreement posts a DELTA line, never a duplicate or a skip', async () => {
+    // Existing customer whose agreement already bills 10 desktop seats; the
+    // quote (e.g. an amendment) asks for 15. Add-only means: post 5 more as a
+    // tagged delta line, touch nothing else.
+    seedQuoteCreatedSteps();
+    const existingQuote: QuoteData = { ...baseQuote, isExistingCustomer: true };
+
+    setupFetchMock([
+      { match: (p, i) => p === '/sales/opportunities/777' && i.method === 'PATCH', respond: () => jsonResponse({}) },
+      { match: (p) => p === '/sales/opportunities/777/notes', respond: () => jsonResponse({}) },
+      {
+        match: (p, i) => p.startsWith('/finance/agreements?conditions=') && (i.method ?? 'GET') === 'GET',
+        respond: () =>
+          jsonResponse([
+            { id: 4200, name: 'Protect - Acme Inc', type: { id: 36 }, agreementStatus: 'Active' },
+          ]),
+      },
+      { match: (p) => p.startsWith('/finance/agreements/4200?fields=billStartDate'), respond: () => jsonResponse({ billStartDate: '2024-01-01T00:00:00Z' }) },
+      // Agreement already carries the desktop-user line at qty 4 and the
+      // addon at qty 2 (fully covered).
+      {
+        match: (p, i) => p.startsWith('/finance/agreements/4200/additions') && (i.method ?? 'GET') === 'GET',
+        respond: () =>
+          jsonResponse([
+            { id: 1, description: 'Protect — Desktop User', quantity: 4 },
+            { id: 2, description: 'Addon 1', quantity: 2 },
+          ]),
+      },
+      { match: (p, i) => p.startsWith('/finance/agreements/4200/additions') && i.method === 'POST', respond: () => jsonResponse({ id: 7000 }) },
+      { match: (p) => p === '/project/projects', respond: () => jsonResponse({ id: 6001 }) },
+    ]);
+
+    const { onPaymentCompleted } = await import('../connectwise.service.js');
+    await onPaymentCompleted(existingQuote);
+
+    const additionPosts = calls.filter((c) => c.method === 'POST' && /additions/.test(c.path));
+    // Desktop-user line: quote asks 10, agreement has 4 → post the 6-seat
+    // delta under a quote-tagged description.
+    const deltaPost = additionPosts.find((c) => c.body?.product?.id === 1100);
+    expect(deltaPost).toBeDefined();
+    expect(deltaPost!.body.quantity).toBe(6);
+    expect(deltaPost!.body.description).toBe('Protect — Desktop User (added QT-1)');
+    // Addon fully covered (existing 2 >= quoted 2) → nothing posted for it.
+    expect(additionPosts.some((c) => c.body?.product?.id === 9001)).toBe(false);
+    // Per-location: not on the agreement yet → full line, base description.
+    const locPost = additionPosts.find((c) => c.body?.product?.id === 1102);
+    expect(locPost).toBeDefined();
+    expect(locPost!.body.description).toBe('Protect — Per Location');
+    // Still add-only: nothing PATCHed or DELETEd on the reused agreement.
+    expect(calls.filter((c) => c.method === 'PATCH' && /^\/finance\/agreements\/4200$/.test(c.path)).length).toBe(0);
+    expect(calls.filter((c) => c.method === 'DELETE').length).toBe(0);
+  });
+
+  it('resume after additions failure still activates the agreement this flow created', async () => {
+    // Run-1 created agreement 5001 (Inactive) but additions failed; the
+    // webhook persisted cwAgreementId. The retry must NOT mistake the
+    // agreement for a reused one — it re-derives from live status and
+    // activates.
+    seedQuoteCreatedSteps();
+    stepStore.set('quote-id-1::agreement', {
+      quoteId: 'quote-id-1', step: 'agreement', status: 'success', cwId: 5001, attempts: 0, lastError: null,
+    });
+    const resumedQuote: QuoteData = { ...baseQuote, cwAgreementId: 5001 };
+
+    setupFetchMock([
+      { match: (p, i) => p === '/sales/opportunities/777' && i.method === 'PATCH', respond: () => jsonResponse({}) },
+      { match: (p) => p === '/sales/opportunities/777/notes', respond: () => jsonResponse({}) },
+      { match: (p, i) => p === '/company/companies/999' && i.method === 'PATCH', respond: () => jsonResponse({}) },
+      { match: (p) => p === '/company/companyTypeAssociations', respond: () => jsonResponse({}) },
+      { match: (p) => p.startsWith('/finance/agreements/5001?fields=billStartDate'), respond: () => jsonResponse({ billStartDate: '2099-01-01' }) },
+      // activate re-derivation: agreement is still Inactive → it's ours
+      { match: (p) => p.startsWith('/finance/agreements/5001?fields=agreementStatus'), respond: () => jsonResponse({ agreementStatus: 'Inactive' }) },
+      { match: (p, i) => p.startsWith('/finance/agreements/5001/additions') && (i.method ?? 'GET') === 'GET', respond: () => jsonResponse([]) },
+      { match: (p, i) => p.startsWith('/finance/agreements/5001/additions') && i.method === 'POST', respond: () => jsonResponse({ id: 7000 }) },
+      { match: (p, i) => p === '/finance/agreements/5001' && i.method === 'PATCH', respond: () => jsonResponse({}) },
+      { match: (p) => p === '/project/projects', respond: () => jsonResponse({ id: 6001 }) },
+    ]);
+
+    const { onPaymentCompleted } = await import('../connectwise.service.js');
+    await onPaymentCompleted(resumedQuote);
+
+    // The Inactive agreement WAS activated on resume.
+    const activatePatches = calls.filter(
+      (c) => c.method === 'PATCH' && /^\/finance\/agreements\/5001$/.test(c.path),
+    );
+    expect(activatePatches.length).toBe(1);
+    expect(provisioningStatusByQuote.get('quote-id-1')).toBe('provisioned');
+  });
+
+  it('replayProvisioning refuses to run for unpaid quotes', async () => {
+    mockQuoteStatus = 'draft';
+    setupFetchMock([]);
+    const { replayProvisioning } = await import('../connectwise.service.js');
+    await replayProvisioning('QT-1');
+    // No CW traffic at all — the payment pipeline must not run pre-payment.
+    expect(calls.length).toBe(0);
+  });
+
+  it('new customer still gets template project + activated agreement (regression)', async () => {
+    seedQuoteCreatedSteps();
+    setupFetchMock([
+      { match: (p, i) => p === '/sales/opportunities/777' && i.method === 'PATCH', respond: () => jsonResponse({}) },
+      { match: (p) => p === '/sales/opportunities/777/notes', respond: () => jsonResponse({}) },
+      { match: (p, i) => p === '/company/companies/999' && i.method === 'PATCH', respond: () => jsonResponse({}) },
+      { match: (p) => p === '/company/companyTypeAssociations', respond: () => jsonResponse({}) },
+      { match: (p, i) => p === '/finance/agreements' && i.method === 'POST', respond: () => jsonResponse({ id: 5001 }) },
+      { match: (p) => p.startsWith('/finance/agreements/5001?fields=billStartDate'), respond: () => jsonResponse({ billStartDate: '2099-01-01' }) },
+      { match: (p, i) => p.startsWith('/finance/agreements/5001/additions') && (i.method ?? 'GET') === 'GET', respond: () => jsonResponse([]) },
+      { match: (p, i) => p.startsWith('/finance/agreements/5001/additions') && i.method === 'POST', respond: () => jsonResponse({ id: 7000 }) },
+      { match: (p, i) => p === '/finance/agreements/5001' && i.method === 'PATCH', respond: () => jsonResponse({}) },
+      { match: (p) => p === '/project/projects', respond: () => jsonResponse({ id: 6001 }) },
+    ]);
+
+    const { onPaymentCompleted } = await import('../connectwise.service.js');
+    await onPaymentCompleted(baseQuote);
+
+    // Agreement created AND activated (new-customer flow unchanged).
+    expect(calls.filter((c) => c.path === '/finance/agreements' && c.method === 'POST').length).toBe(1);
+    expect(calls.filter((c) => c.method === 'PATCH' && /^\/finance\/agreements\/5001$/.test(c.path)).length).toBe(1);
+    // Project carries the onboarding template id from config.
+    const projectPost = calls.find((c) => c.path === '/project/projects' && c.method === 'POST');
+    expect(projectPost!.body.projectTemplateId).toBe(101);
+    expect(provisioningStatusByQuote.get('quote-id-1')).toBe('provisioned');
   });
 });

@@ -45,6 +45,7 @@ interface QuoteData {
     locationCount: number;
     referrerCode?: string;
   };
+  // null = no package on this quote (custom/add-on-only quote built by staff)
   selectedPackage: {
     id: string;
     name: string;
@@ -55,7 +56,7 @@ interface QuoteData {
     calculatedPrice: number;
     features?: string[];
     featureGroups?: Array<{ category: string; items: string[] }>;
-  };
+  } | null;
   selectedAddons: Array<{
     id: string;
     name: string;
@@ -91,11 +92,21 @@ interface QuoteData {
     grandTotal: number;
     recurringFrequency: string;
   };
+  customItems?: Array<{
+    id: string;
+    name: string;
+    description?: string;
+    quantity: number;
+    recurringPrice?: number | null;
+    recurringFrequency?: string | null;
+    oneTimePrice?: number | null;
+  }>;
   termsVersion: string;
   termsId: string;
   termsUrl: string;
   termsContent: string;
   notes?: string;
+  isExistingCustomer?: boolean;
 }
 
 const generateOrderNumber = () => {
@@ -432,6 +443,18 @@ export default function QuoteReview() {
           </div>
         </Card>
 
+        {/* Existing-customer framing: this quote ADDS services to their
+            current NTM agreement; nothing they already have changes. */}
+        {quoteData.isExistingCustomer && (
+          <Card className="p-4 mb-6 animate-fade-in border-blue-300 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-950/20">
+            <p className="text-sm text-blue-900 dark:text-blue-100">
+              <span className="font-semibold">Service addition for an existing customer.</span>{' '}
+              This quote adds the services below to your current agreement with NTM — all of
+              your existing services, pricing, and terms stay exactly as they are.
+            </p>
+          </Card>
+        )}
+
         {/* Admin-authored notes, if any. Customer-visible. Plain text with
             blank-line paragraphs preserved. */}
         {quoteData.notes && quoteData.notes.trim() && (
@@ -441,7 +464,9 @@ export default function QuoteReview() {
           </Card>
         )}
 
-        {/* Selected Package */}
+        {/* Selected Package — omitted entirely for package-less quotes
+            (custom/add-on-only quotes built by NTM staff). */}
+        {quoteData.selectedPackage && (
         <Card className="p-6 mb-6 animate-fade-in">
           <h2 className="text-2xl font-semibold mb-4">Selected Package</h2>
           <div className="space-y-3">
@@ -518,6 +543,7 @@ export default function QuoteReview() {
             })()}
           </div>
         </Card>
+        )}
 
         {/* Selected Add-ons */}
         <Card className="p-6 mb-6 animate-fade-in">
@@ -566,6 +592,47 @@ export default function QuoteReview() {
             </ul>
           )}
         </Card>
+
+        {/* Custom items added by NTM staff (one-off services, hardware, etc.) */}
+        {(quoteData.customItems?.length ?? 0) > 0 && (
+          <Card className="p-6 mb-6 animate-fade-in">
+            <h2 className="text-2xl font-semibold mb-4">Custom Items &amp; Services</h2>
+            <ul className="space-y-4">
+              {quoteData.customItems!.map((item) => (
+                <li key={item.id} className="pb-4 border-b last:border-b-0 last:pb-0">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium">{item.name}</p>
+                        {item.quantity > 1 && (
+                          <Badge variant="secondary" className="text-xs">
+                            × {item.quantity}
+                          </Badge>
+                        )}
+                      </div>
+                      {item.description && (
+                        <p className="text-sm text-muted-foreground mt-1">{item.description}</p>
+                      )}
+                    </div>
+                    <div className="text-right space-y-1">
+                      {(item.recurringPrice ?? 0) > 0 && (
+                        <p className="text-sm font-semibold text-primary">
+                          ${formatAmount((item.recurringPrice ?? 0) * item.quantity)}/
+                          {item.recurringFrequency === 'annually' ? 'yr' : 'mo'}
+                        </p>
+                      )}
+                      {(item.oneTimePrice ?? 0) > 0 && (
+                        <p className="text-sm font-semibold text-primary">
+                          ${formatAmount((item.oneTimePrice ?? 0) * item.quantity)} one-time
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )}
 
         {/* Promo Code Entry */}
         <Card className="p-6 mb-6 animate-fade-in">
@@ -686,9 +753,13 @@ export default function QuoteReview() {
 
             {/* One-Time Add-ons */}
             {(() => {
+              // Base must include custom items — totals do, and the
+              // "Discount applied" callout is derived as base − totals.
               const baseOneTime = quoteData.selectedAddons
                 .filter(a => a.pricingType === 'one-time-only' || a.pricingType === 'both')
-                .reduce((sum, a) => sum + (a.setupPrice || 0) * a.quantity, 0);
+                .reduce((sum, a) => sum + (a.setupPrice || 0) * a.quantity, 0) +
+                (quoteData.customItems ?? [])
+                  .reduce((sum, i) => sum + (i.oneTimePrice || 0) * i.quantity, 0);
               const oneTimeDiscount = baseOneTime - quoteData.totals.oneTimeCosts;
               if (baseOneTime <= 0 && quoteData.totals.oneTimeCosts <= 0) return null;
               return (
@@ -713,10 +784,17 @@ export default function QuoteReview() {
 
             {/* Monthly Recurring */}
             {(() => {
-              const baseRecurring = quoteData.selectedPackage.calculatedPrice +
+              // Includes custom items at their monthly equivalent (annual
+              // price / 12) — same rule the server uses to build totals.
+              const baseRecurring = (quoteData.selectedPackage?.calculatedPrice ?? 0) +
                 quoteData.selectedAddons
                   .filter(a => a.pricingType === 'recurring-only' || a.pricingType === 'both')
-                  .reduce((sum, a) => sum + (a.recurringPrice || 0) * a.quantity, 0);
+                  .reduce((sum, a) => sum + (a.recurringPrice || 0) * a.quantity, 0) +
+                (quoteData.customItems ?? []).reduce((sum, i) => {
+                  const price = i.recurringPrice || 0;
+                  const monthly = i.recurringFrequency === 'annually' ? price / 12 : price;
+                  return sum + monthly * i.quantity;
+                }, 0);
               const recurringDiscount = baseRecurring - quoteData.totals.recurringCosts;
               return (
                 <Card className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 dark:from-blue-950/30 dark:to-blue-900/30 border-blue-200 dark:border-blue-800">
@@ -727,7 +805,7 @@ export default function QuoteReview() {
                           quoteData.totals.recurringFrequency.slice(1)}{" "}
                         Recurring
                       </h3>
-                      <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">{quoteData.selectedPackage.name}</p>
+                      <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">{quoteData.selectedPackage?.name ?? 'Custom services'}</p>
                       {recurringDiscount > 0.01 && (
                         <p className="text-sm text-green-600 dark:text-green-400 mt-1">
                           Discount applied: ${formatAmount(recurringDiscount)}/mo

@@ -42,12 +42,30 @@ const CreateQuote = () => {
   const [address, setAddress] = useState('');
   const [referrerCode, setReferrerCode] = useState('');
 
+  // Existing ConnectWise customer mode. When on, the admin searches CW and
+  // pins the exact company (and optionally the agreement) provisioning
+  // should target. Provisioning then only ADDS to what's already in CW:
+  // no onboarding project template, no new agreement if one exists, no
+  // changes to existing additions.
+  const [isExistingCustomer, setIsExistingCustomer] = useState(false);
+  const [cwSearch, setCwSearch] = useState('');
+  const [cwSearching, setCwSearching] = useState(false);
+  const [cwResults, setCwResults] = useState<
+    Array<{ id: number; identifier: string; name: string; status?: string; types?: string[] }>
+  >([]);
+  const [cwCompany, setCwCompany] = useState<{ id: number; name: string } | null>(null);
+  const [cwAgreements, setCwAgreements] = useState<
+    Array<{ id: number; name: string; type?: string; agreementStatus?: string }>
+  >([]);
+  const [cwAgreementId, setCwAgreementId] = useState<number | null>(null);
+
   // Sizing
   const [userCount, setUserCount] = useState<number>(1);
   const [webUserCount, setWebUserCount] = useState<number>(0);
   const [locationCount, setLocationCount] = useState<number>(1);
 
-  // Selection
+  // Selection. Empty packageId = NO package — the quote is add-ons (and any
+  // custom items added afterwards from the quote detail page) only.
   const [packageId, setPackageId] = useState<string>('');
   const [agreementMonths, setAgreementMonths] = useState<number>(0);
   // Price overrides (default to catalog values when the package is picked)
@@ -96,6 +114,13 @@ const CreateQuote = () => {
   }, []);
 
   const pickPackage = (id: string) => {
+    if (id === 'none') {
+      setPackageId('');
+      setPricePerUser(0);
+      setPricePerUserF3(0);
+      setPricePerLocation(0);
+      return;
+    }
     setPackageId(id);
     const pkg = catalog?.packages.find((p) => p.id === id);
     if (pkg) {
@@ -106,15 +131,47 @@ const CreateQuote = () => {
     }
   };
 
+  const searchCw = async () => {
+    const q = cwSearch.trim();
+    if (q.length < 2) {
+      toast.error('Type at least 2 characters to search');
+      return;
+    }
+    setCwSearching(true);
+    try {
+      const r = await adminApi.searchCwCompanies(q);
+      setCwResults(r.companies);
+      if (r.companies.length === 0) toast.info('No ConnectWise companies matched');
+    } catch (e: any) {
+      toast.error(e?.message || 'ConnectWise search failed');
+    } finally {
+      setCwSearching(false);
+    }
+  };
+
+  const pickCwCompany = async (c: { id: number; name: string }) => {
+    setCwCompany(c);
+    setCwResults([]);
+    setCwAgreementId(null);
+    // Pre-fill the business name so the CW record and quote agree.
+    if (!businessName.trim()) setBusinessName(c.name);
+    try {
+      const r = await adminApi.listCwCompanyAgreements(c.id);
+      setCwAgreements(r.agreements);
+    } catch {
+      setCwAgreements([]);
+    }
+  };
+
   const pkg = catalog?.packages.find((p) => p.id === packageId);
   const activeAddons = (catalog?.addons ?? []).filter((a: any) => a.active);
 
-  // Compute totals live. Mirrors Summary.tsx math.
+  // Compute totals live. Mirrors Summary.tsx math. Works without a package —
+  // the package contribution is simply 0.
   const totals = useMemo(() => {
-    if (!pkg) return null;
-    const desktop = userCount * pricePerUser;
-    const web = webUserCount * pricePerUserF3;
-    const location = locationCount * pricePerLocation;
+    const desktop = pkg ? userCount * pricePerUser : 0;
+    const web = pkg ? webUserCount * pricePerUserF3 : 0;
+    const location = pkg ? locationCount * pricePerLocation : 0;
     const packageCost = desktop + web + location;
     const addonRecurring = Object.entries(addonQty).reduce((sum, [aid, qty]) => {
       if (!qty) return sum;
@@ -142,20 +199,22 @@ const CreateQuote = () => {
     };
   }, [pkg, userCount, webUserCount, locationCount, pricePerUser, pricePerUserF3, pricePerLocation, addonQty, activeAddons]);
 
+  // Package-bearing quotes need at least one sizing dimension (mirrors the
+  // server-side gate); package-less quotes are sized by their add-ons /
+  // custom items instead. Existing-customer mode requires the CW company pick
+  // so provisioning targets the right record.
   const canSubmit =
     name.trim() &&
     businessName.trim() &&
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) &&
     phone.trim() &&
     address.trim() &&
-    userCount >= 1 &&
-    // Locations are optional — a customer with no site to manage can have 0.
-    locationCount >= 0 &&
-    pkg &&
+    (!pkg || userCount + webUserCount + locationCount >= 1) &&
+    (!isExistingCustomer || cwCompany) &&
     totals;
 
   const submit = async () => {
-    if (!canSubmit || !pkg || !totals) return;
+    if (!canSubmit || !totals) return;
     setSubmitting(true);
     try {
       const selectedAddons = Object.entries(addonQty)
@@ -181,8 +240,9 @@ const CreateQuote = () => {
 
       // Onboarding is waived for admin-created quotes (same policy as
       // portal customers); admin can flip individual quotes via the
-      // edit panel post-create if needed.
-      const onboardingBase = totals.recurring * 2; // 2x monthly per NTM policy
+      // edit panel post-create if needed. Existing customers never owe
+      // onboarding — they're already onboarded.
+      const onboardingBase = isExistingCustomer || !pkg ? 0 : totals.recurring * 2; // 2x monthly per NTM policy
       const onboarding = {
         userCount,
         costPerUser: userCount > 0 ? onboardingBase / userCount : 0,
@@ -203,21 +263,23 @@ const CreateQuote = () => {
           locationCount,
           referrerCode: referrerCode.trim() || null,
         },
-        selectedPackage: {
-          id: pkg.id,
-          name: pkg.name,
-          pricePerUser,
-          pricePerUserF3,
-          pricePerLocation,
-          frequency: pkg.frequency,
-          features: pkg.features ?? [],
-          // Snapshot the categorized list so the contract PDF + customer
-          // review page render the full per-category feature breakdown
-          // instead of falling back to the legacy flat features list.
-          featureGroups: pkg.featureGroups ?? [],
-          agreementMonths,
-          calculatedPrice: totals.packageCost,
-        },
+        selectedPackage: pkg
+          ? {
+              id: pkg.id,
+              name: pkg.name,
+              pricePerUser,
+              pricePerUserF3,
+              pricePerLocation,
+              frequency: pkg.frequency,
+              features: pkg.features ?? [],
+              // Snapshot the categorized list so the contract PDF + customer
+              // review page render the full per-category feature breakdown
+              // instead of falling back to the legacy flat features list.
+              featureGroups: pkg.featureGroups ?? [],
+              agreementMonths,
+              calculatedPrice: totals.packageCost,
+            }
+          : null,
         selectedAddons,
         onboarding,
         appliedPromoCodes: [],
@@ -227,7 +289,7 @@ const CreateQuote = () => {
           recurringCosts: totals.recurring,
           discount: 0,
           grandTotal: totals.addonOneTime + totals.recurring,
-          recurringFrequency: pkg.frequency,
+          recurringFrequency: pkg?.frequency ?? 'monthly',
         },
         terms: {
           version: termsContent.version,
@@ -236,6 +298,9 @@ const CreateQuote = () => {
           content: termsContent.content,
         },
         salesRepId: salesRepId || null,
+        isExistingCustomer,
+        cwCompanyId: isExistingCustomer ? (cwCompany?.id ?? null) : null,
+        cwAgreementId: isExistingCustomer ? cwAgreementId : null,
       };
 
       const created = await quoteApi.create(payload);
@@ -326,17 +391,145 @@ const CreateQuote = () => {
           </div>
         </Card>
 
+        {/* Existing ConnectWise customer */}
+        <Card className="p-6 space-y-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h3 className="text-lg font-semibold">Existing Customer</h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Turn this on when the company already exists in ConnectWise. Provisioning will
+                add onto their current agreement (nothing existing is changed or removed), skip
+                the onboarding project template, and create a plain project scoped to just what
+                this quote sells. The customer receives the Service Addition PDF instead of the
+                full onboarding contract.
+              </p>
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer select-none flex-shrink-0">
+              <input
+                type="checkbox"
+                checked={isExistingCustomer}
+                onChange={(e) => {
+                  setIsExistingCustomer(e.target.checked);
+                  if (!e.target.checked) {
+                    setCwCompany(null);
+                    setCwAgreements([]);
+                    setCwAgreementId(null);
+                    setCwResults([]);
+                  }
+                }}
+                className="w-4 h-4"
+              />
+              <span className="text-sm font-medium">Existing customer</span>
+            </label>
+          </div>
+
+          {isExistingCustomer && (
+            <div className="space-y-3 border-t border-border pt-4">
+              {cwCompany ? (
+                <div className="flex items-center justify-between p-3 bg-secondary/40 border border-border rounded-md">
+                  <div>
+                    <p className="font-medium text-sm">{cwCompany.name}</p>
+                    <p className="text-xs text-muted-foreground">CW company #{cwCompany.id}</p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setCwCompany(null);
+                      setCwAgreements([]);
+                      setCwAgreementId(null);
+                    }}
+                  >
+                    Change
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="Search ConnectWise companies by name…"
+                      value={cwSearch}
+                      onChange={(e) => setCwSearch(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          searchCw();
+                        }
+                      }}
+                    />
+                    <Button variant="outline" onClick={searchCw} disabled={cwSearching}>
+                      {cwSearching ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Search'}
+                    </Button>
+                  </div>
+                  {cwResults.length > 0 && (
+                    <div className="space-y-1 max-h-56 overflow-y-auto border border-border rounded-md p-2">
+                      {cwResults.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => pickCwCompany(c)}
+                          className="w-full text-left p-2 rounded hover:bg-secondary/60 text-sm"
+                        >
+                          <span className="font-medium">{c.name}</span>
+                          <span className="text-xs text-muted-foreground ml-2">
+                            #{c.id}
+                            {c.status ? ` · ${c.status}` : ''}
+                            {c.types?.length ? ` · ${c.types.join(', ')}` : ''}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Picking the company here guarantees provisioning targets the right CW record
+                    instead of matching by name.
+                  </p>
+                </>
+              )}
+
+              {cwCompany && (
+                <div className="space-y-1">
+                  <Label htmlFor="cw-agreement">Add onto agreement</Label>
+                  <Select
+                    value={cwAgreementId ? String(cwAgreementId) : 'auto'}
+                    onValueChange={(v) => setCwAgreementId(v === 'auto' ? null : parseInt(v, 10))}
+                  >
+                    <SelectTrigger id="cw-agreement">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="auto">
+                        Auto-detect (newest active agreement{cwAgreements.length === 0 ? ' — none found, a new one will be created' : ''})
+                      </SelectItem>
+                      {cwAgreements.map((a) => (
+                        <SelectItem key={a.id} value={String(a.id)}>
+                          {a.name} {a.type ? `(${a.type})` : ''} — #{a.id}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    New recurring lines are ADDED to this agreement. Existing additions and the
+                    agreement itself are never modified or removed.
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </Card>
+
         {/* Package + sizing */}
         <Card className="p-6 space-y-4">
           <h3 className="text-lg font-semibold">Package &amp; Sizing</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1">
-              <Label htmlFor="pkg">Package *</Label>
-              <Select value={packageId} onValueChange={pickPackage}>
+              <Label htmlFor="pkg">Package</Label>
+              <Select value={packageId || 'none'} onValueChange={pickPackage}>
                 <SelectTrigger id="pkg">
                   <SelectValue placeholder="Pick a package…" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="none">No package (add-ons / custom items only)</SelectItem>
                   {(catalog?.packages ?? []).map((p: any) => (
                     <SelectItem key={p.id} value={p.id}>
                       {p.name}
@@ -365,14 +558,15 @@ const CreateQuote = () => {
               </Select>
             </div>
             <div className="space-y-1">
-              <Label htmlFor="dt">Desktop Users *</Label>
+              <Label htmlFor="dt">Desktop Users</Label>
               <Input
                 id="dt"
                 type="number"
-                min={1}
-                value={userCount || ''}
-                onChange={(e) => setUserCount(Math.max(1, parseInt(e.target.value) || 1))}
+                min={0}
+                value={userCount ?? ''}
+                onChange={(e) => setUserCount(Math.max(0, parseInt(e.target.value) || 0))}
               />
+              <p className="text-xs text-muted-foreground">0 is allowed — size by web users, locations, or add-ons alone.</p>
             </div>
             <div className="space-y-1">
               <Label htmlFor="web">Web Users</Label>
@@ -437,27 +631,34 @@ const CreateQuote = () => {
                   </div>
                 </div>
               </div>
-              {totals && (
-                <div className="border-t border-border pt-4">
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-                    <div>
-                      <p className="text-muted-foreground">Package recurring</p>
-                      <p className="font-semibold">{formatCurrency(totals.packageCost)}/mo</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Add-ons recurring</p>
-                      <p className="font-semibold">{formatCurrency(totals.addonRecurring)}/mo</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Total recurring</p>
-                      <p className="font-semibold text-primary">
-                        {formatCurrency(totals.recurring)}/mo
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
             </>
+          )}
+
+          {totals && (
+            <div className="border-t border-border pt-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                <div>
+                  <p className="text-muted-foreground">Package recurring</p>
+                  <p className="font-semibold">{formatCurrency(totals.packageCost)}/mo</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Add-ons recurring</p>
+                  <p className="font-semibold">{formatCurrency(totals.addonRecurring)}/mo</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">Total recurring</p>
+                  <p className="font-semibold text-primary">
+                    {formatCurrency(totals.recurring)}/mo
+                  </p>
+                </div>
+              </div>
+              {!pkg && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  No package on this quote — one-off/custom line items can be added from the
+                  quote detail page after creating it.
+                </p>
+              )}
+            </div>
           )}
         </Card>
 

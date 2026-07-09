@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../config/prisma.js';
 import { requireAuth } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
@@ -156,6 +157,9 @@ const customItemSchema = z.object({
   recurringPrice: z.number().nullable().optional(),
   recurringFrequency: z.enum(['monthly', 'annually']).nullable().optional(),
   oneTimePrice: z.number().nullable().optional(),
+  // CW catalog product id for the recurring Addition. Optional — recurring
+  // items without one are surfaced in missingProductIds at provisioning.
+  cwProductId: z.number().int().positive().nullable().optional(),
 });
 
 router.post(
@@ -184,12 +188,16 @@ router.post(
       addedAt: new Date().toISOString(),
     };
     const customItems = [...existing, newItem];
-    const totals = recalcTotalsWithCustom(quote, customItems);
+    const recomputed = recomputeQuoteTotalsFromSnapshot(quote, customItems);
     await prisma.quote.update({
       where: { id: quote.id },
-      data: { customItems, totals },
+      data: {
+        customItems,
+        onboarding: recomputed.onboarding as any,
+        totals: recomputed.totals as any,
+      },
     });
-    res.json({ success: true, item: newItem, totals });
+    res.json({ success: true, item: newItem, totals: recomputed.totals });
   },
 );
 
@@ -205,31 +213,48 @@ router.delete('/api/admin/quotes/:id/custom-items/:itemId', requireAuth, async (
   }
   const existing = (quote.customItems as any[]) ?? [];
   const customItems = existing.filter((i) => i.id !== itemId);
-  const totals = recalcTotalsWithCustom(quote, customItems);
+  const recomputed = recomputeQuoteTotalsFromSnapshot(quote, customItems);
   await prisma.quote.update({
     where: { id: quote.id },
-    data: { customItems, totals },
+    data: {
+      customItems,
+      onboarding: recomputed.onboarding as any,
+      totals: recomputed.totals as any,
+    },
   });
-  res.json({ success: true, totals });
+  res.json({ success: true, totals: recomputed.totals });
 });
 
-function recalcTotalsWithCustom(quote: any, customItems: any[]) {
-  // Start from the snapshotted base costs (package + addons), then add custom
-  // items on top. Onboarding and one-time addon costs are read from the
-  // existing totals (which already include the portal-waiver if applicable).
-  const baseRecurring = (quote.totals?.recurringCosts ?? 0) - sumCustomRecurring((quote.customItems as any[]) ?? []);
-  const baseOneTime = (quote.totals?.oneTimeCosts ?? 0) - sumCustomOneTime((quote.customItems as any[]) ?? []);
-  const customRecurring = sumCustomRecurring(customItems);
-  const customOneTime = sumCustomOneTime(customItems);
-  return {
-    ...quote.totals,
-    recurringCosts: Math.max(0, baseRecurring) + customRecurring,
-    oneTimeCosts: Math.max(0, baseOneTime) + customOneTime,
-  };
+// Full totals recompute from a quote row's stored snapshot + a custom-items
+// list. Keeps the custom-items endpoints on the exact same math as the PUT
+// edit and promo recompute paths (same promo discounting, same custom-item
+// folding) instead of layering deltas onto possibly-stale totals — which
+// left grandTotal/discount stale and produced order-dependent totals.
+function recomputeQuoteTotalsFromSnapshot(quote: any, customItems: any[]) {
+  const customer = quote.customer as any;
+  const waiveOnboarding = ((quote.onboarding as any)?.finalCost ?? 0) === 0;
+  return computeQuoteTotals({
+    pkg: quote.selectedPackage as any,
+    addons: (quote.selectedAddons as any[]) ?? [],
+    customItems,
+    userCount: Number(customer?.userCount) || 0,
+    webUserCount: Number(customer?.webUserCount) || 0,
+    locationCount: Number(customer?.locationCount) || 0,
+    appliedPromoCodes: (quote.appliedPromoCodes as any[]) ?? [],
+    waiveOnboarding,
+  });
 }
 
+// Monthly-equivalent recurring sum. Annually-priced items fold in at
+// price/12 — every downstream consumer (totals.recurringCosts, the AP
+// first-month line, CW agreement additions) bills on a monthly cycle, so an
+// annual price must never land as a monthly charge at face value.
 function sumCustomRecurring(items: any[]): number {
-  return items.reduce((sum, i) => sum + (Number(i.recurringPrice) || 0) * (Number(i.quantity) || 1), 0);
+  return items.reduce((sum, i) => {
+    const price = Number(i.recurringPrice) || 0;
+    const monthly = i.recurringFrequency === 'annually' ? price / 12 : price;
+    return sum + monthly * (Number(i.quantity) || 1);
+  }, 0);
 }
 function sumCustomOneTime(items: any[]): number {
   return items.reduce((sum, i) => sum + (Number(i.oneTimePrice) || 0) * (Number(i.quantity) || 1), 0);
@@ -276,8 +301,12 @@ const editQuoteSchema = z.object({
   userCount: z.number().int().min(0).optional(),
   webUserCount: z.number().int().min(0).optional(),
   locationCount: z.number().int().min(0).optional(),
-  selectedPackage: editSelectedPackageSchema.optional(),
+  // undefined = keep current snapshot; null = REMOVE the package entirely
+  // (quote becomes add-ons / custom items only).
+  selectedPackage: editSelectedPackageSchema.nullable().optional(),
   selectedAddons: z.array(editSelectedAddonSchema).optional(),
+  // Flip existing-CW-customer mode on a quote after the fact.
+  isExistingCustomer: z.boolean().optional(),
   // Admin can also flip the contract term on the snapshotted package
   // without changing anything else. agreementMonths on selectedPackage
   // takes precedence if both are present.
@@ -291,8 +320,9 @@ const editQuoteSchema = z.object({
 });
 
 function computeQuoteTotals(input: {
-  pkg: any;
+  pkg: any; // null = package removed from the quote
   addons: any[];
+  customItems?: any[];
   userCount: number;
   webUserCount: number;
   locationCount: number;
@@ -300,19 +330,22 @@ function computeQuoteTotals(input: {
   waiveOnboarding: boolean;
 }) {
   const { pkg, addons, userCount, webUserCount, locationCount, appliedPromoCodes, waiveOnboarding } = input;
+  const customItems = input.customItems ?? [];
   const packageCost =
-    (Number(pkg.pricePerUser) || 0) * userCount +
-    (Number(pkg.pricePerUserF3) || 0) * webUserCount +
-    (Number(pkg.pricePerLocation) || 0) * locationCount;
+    (Number(pkg?.pricePerUser) || 0) * userCount +
+    (Number(pkg?.pricePerUserF3) || 0) * webUserCount +
+    (Number(pkg?.pricePerLocation) || 0) * locationCount;
   const addonRecurring = addons
     .filter((a) => a.pricingType === 'recurring-only' || a.pricingType === 'both')
     .reduce((sum, a) => sum + (Number(a.recurringPrice) || 0) * (Number(a.quantity) || 1), 0);
   const addonOneTime = addons
     .filter((a) => a.pricingType === 'one-time-only' || a.pricingType === 'both')
     .reduce((sum, a) => sum + (Number(a.setupPrice) || 0) * (Number(a.quantity) || 1), 0);
+  const customRecurring = sumCustomRecurring(customItems);
+  const customOneTime = sumCustomOneTime(customItems);
 
-  const baseRecurring = packageCost + addonRecurring;
-  const baseOneTime = addonOneTime;
+  const baseRecurring = packageCost + addonRecurring + customRecurring;
+  const baseOneTime = addonOneTime + customOneTime;
   const baseOnboarding = waiveOnboarding ? 0 : packageCost * 2; // 2x monthly per NTM policy
 
   let onboardingDiscount = 0;
@@ -412,6 +445,7 @@ router.post('/api/admin/quotes/:id/refresh-package', requireAuth, async (req, re
   const recomputed = computeQuoteTotals({
     pkg: editedPkg,
     addons: (quote.selectedAddons as any[]) ?? [],
+    customItems: (quote.customItems as any[]) ?? [],
     userCount,
     webUserCount,
     locationCount,
@@ -457,22 +491,31 @@ router.put(
     const customer = quote.customer as any;
     const currentPkg = quote.selectedPackage as any;
     const currentAddons = (quote.selectedAddons as any[]) ?? [];
+    const customItems = (quote.customItems as any[]) ?? [];
 
     // 0 is the valid empty state — don't fall back to 1 for a missing key.
     const userCount = body.userCount ?? customer?.userCount ?? 0;
     const webUserCount = body.webUserCount ?? customer?.webUserCount ?? 0;
     const locationCount = body.locationCount ?? customer?.locationCount ?? 0;
 
-    const editedPkg = body.selectedPackage
-      ? { ...body.selectedPackage }
-      : { ...currentPkg };
-    if (body.agreementMonths !== undefined && body.selectedPackage === undefined) {
-      editedPkg.agreementMonths = body.agreementMonths;
+    // undefined = keep the current snapshot; null = remove the package.
+    const editedPkg: any =
+      body.selectedPackage === undefined
+        ? currentPkg
+          ? { ...currentPkg }
+          : null
+        : body.selectedPackage === null
+          ? null
+          : { ...body.selectedPackage };
+    if (editedPkg) {
+      if (body.agreementMonths !== undefined && body.selectedPackage === undefined) {
+        editedPkg.agreementMonths = body.agreementMonths;
+      }
+      editedPkg.calculatedPrice =
+        Number(editedPkg.pricePerUser ?? 0) * userCount +
+        Number(editedPkg.pricePerUserF3 ?? 0) * webUserCount +
+        Number(editedPkg.pricePerLocation ?? 0) * locationCount;
     }
-    editedPkg.calculatedPrice =
-      Number(editedPkg.pricePerUser ?? 0) * userCount +
-      Number(editedPkg.pricePerUserF3 ?? 0) * webUserCount +
-      Number(editedPkg.pricePerLocation ?? 0) * locationCount;
 
     const editedAddons = (body.selectedAddons ?? currentAddons).map((a: any) => {
       const qty = Number(a.quantity) || 1;
@@ -496,6 +539,7 @@ router.put(
     const recomputed = computeQuoteTotals({
       pkg: editedPkg,
       addons: editedAddons,
+      customItems,
       userCount,
       webUserCount,
       locationCount,
@@ -503,6 +547,7 @@ router.put(
       waiveOnboarding,
     });
 
+    const nextExistingCustomer = body.isExistingCustomer ?? quote.isExistingCustomer;
     const isPaid = quote.status === 'paid';
 
     if (isPaid && body.amendIfPaid !== false) {
@@ -522,8 +567,9 @@ router.put(
           quoteNumber: genQuoteNumber(),
           status: 'accepted',
           customer: newCustomer as any,
-          selectedPackage: editedPkg as any,
+          selectedPackage: (editedPkg ?? undefined) as any,
           selectedAddons: editedAddons as any,
+          customItems: customItems as any,
           onboarding: recomputed.onboarding as any,
           appliedPromoCodes: quote.appliedPromoCodes as any,
           totals: recomputed.totals as any,
@@ -531,6 +577,14 @@ router.put(
           parentQuoteId: quote.id,
           notes: nextNotes,
           expiresAt,
+          // The parent quote is paid, so by definition this company already
+          // exists in CW. Provision the amendment in existing-customer mode:
+          // reuse the same company/contact/agreement and only ADD new
+          // additions — never touch what's already there.
+          isExistingCustomer: true,
+          cwCompanyId: quote.cwCompanyId,
+          cwContactId: quote.cwContactId,
+          cwAgreementId: quote.cwAgreementId,
         },
       });
 
@@ -555,9 +609,29 @@ router.put(
           // Build a quote-shaped object whose totals reflect *just* the delta.
           // apService.createCheckout calls updateQuoteAPSession internally,
           // which will persist the AP ids on the new amendment row.
+          //
+          // buildLineItems derives one-time charges by ITERATING
+          // selectedAddons/customItems at full price — the parent invoice
+          // already charged those, so blank them out here and carry the
+          // one-time delta as a single synthetic line instead. Otherwise a
+          // $500 one-time item paid on the parent would be re-charged on
+          // every amendment.
           const quoteShapeForAp = await quoteService.getQuote(created.quoteNumber);
           const deltaQuote = {
             ...quoteShapeForAp,
+            selectedAddons: [],
+            customItems:
+              oneTimeDelta > 0
+                ? [
+                    {
+                      id: 'amendment-one-time-delta',
+                      name: `One-time charges — amendment ${created.quoteNumber}`,
+                      quantity: 1,
+                      oneTimePrice: oneTimeDelta,
+                      recurringPrice: null,
+                    },
+                  ]
+                : [],
             totals: {
               ...quoteShapeForAp.totals,
               onboardingCost: 0, // amendments never re-charge onboarding
@@ -590,10 +664,12 @@ router.put(
       where: { id: quote.id },
       data: {
         customer: { ...customer, userCount, webUserCount, locationCount } as any,
-        selectedPackage: editedPkg as any,
+        // Prisma needs the JsonNull sentinel to null out a Json column.
+        selectedPackage: (editedPkg ?? Prisma.JsonNull) as any,
         selectedAddons: editedAddons as any,
         onboarding: recomputed.onboarding as any,
         totals: recomputed.totals as any,
+        isExistingCustomer: nextExistingCustomer,
         ...(body.notes !== undefined ? { notes: body.notes } : {}),
       },
     });
@@ -836,13 +912,16 @@ router.post(
     const onboarding = quote.onboarding as any;
     const totals = quote.totals as any;
     const selectedAddons = (quote.selectedAddons as any[]) ?? [];
+    const quoteCustomItems = (quote.customItems as any[]) ?? [];
     const pkg = quote.selectedPackage as any;
     const customer = quote.customer as any;
     const webUserCount = Number(customer?.webUserCount ?? 0);
     const baseOnboarding = onboarding?.totalCost ?? 0;
-    const baseOneTime = selectedAddons
-      .filter((a) => a.pricingType === 'one-time-only' || a.pricingType === 'both')
-      .reduce((s, a) => s + (Number(a.setupPrice) || 0) * (Number(a.quantity) || 1), 0);
+    const baseOneTime =
+      selectedAddons
+        .filter((a) => a.pricingType === 'one-time-only' || a.pricingType === 'both')
+        .reduce((s, a) => s + (Number(a.setupPrice) || 0) * (Number(a.quantity) || 1), 0) +
+      sumCustomOneTime(quoteCustomItems);
     const packageCost =
       (Number(pkg?.pricePerUser) || 0) * (Number(customer?.userCount) || 0) +
       (Number(pkg?.pricePerUserF3) || 0) * webUserCount +
@@ -850,7 +929,7 @@ router.post(
     const addonRecurring = selectedAddons
       .filter((a) => a.pricingType === 'recurring-only' || a.pricingType === 'both')
       .reduce((s, a) => s + (Number(a.recurringPrice) || 0) * (Number(a.quantity) || 1), 0);
-    const baseRecurring = packageCost + addonRecurring;
+    const baseRecurring = packageCost + addonRecurring + sumCustomRecurring(quoteCustomItems);
 
     let onboardingDiscount = 0;
     let oneTimeDiscount = 0;
@@ -915,13 +994,16 @@ router.delete(
     const onboarding = quote.onboarding as any;
     const totals = quote.totals as any;
     const selectedAddons = (quote.selectedAddons as any[]) ?? [];
+    const quoteCustomItems = (quote.customItems as any[]) ?? [];
     const pkg = quote.selectedPackage as any;
     const customer = quote.customer as any;
     const webUserCount = Number(customer?.webUserCount ?? 0);
     const baseOnboarding = onboarding?.totalCost ?? 0;
-    const baseOneTime = selectedAddons
-      .filter((a) => a.pricingType === 'one-time-only' || a.pricingType === 'both')
-      .reduce((s, a) => s + (Number(a.setupPrice) || 0) * (Number(a.quantity) || 1), 0);
+    const baseOneTime =
+      selectedAddons
+        .filter((a) => a.pricingType === 'one-time-only' || a.pricingType === 'both')
+        .reduce((s, a) => s + (Number(a.setupPrice) || 0) * (Number(a.quantity) || 1), 0) +
+      sumCustomOneTime(quoteCustomItems);
     const packageCost =
       (Number(pkg?.pricePerUser) || 0) * (Number(customer?.userCount) || 0) +
       (Number(pkg?.pricePerUserF3) || 0) * webUserCount +
@@ -929,7 +1011,7 @@ router.delete(
     const addonRecurring = selectedAddons
       .filter((a) => a.pricingType === 'recurring-only' || a.pricingType === 'both')
       .reduce((s, a) => s + (Number(a.recurringPrice) || 0) * (Number(a.quantity) || 1), 0);
-    const baseRecurring = packageCost + addonRecurring;
+    const baseRecurring = packageCost + addonRecurring + sumCustomRecurring(quoteCustomItems);
     let onboardingDiscount = 0;
     let oneTimeDiscount = 0;
     let recurringDiscount = 0;
