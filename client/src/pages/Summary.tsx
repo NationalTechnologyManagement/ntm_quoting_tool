@@ -671,10 +671,15 @@ const Summary = () => {
                         </p>
                       )}
                       {customerInfo.locationCount > 0 && (
-                        <p>
-                          ${selectedPackage.pricePerLocation}/location × {customerInfo.locationCount} = $
-                          {formatAmount(selectedPackage.pricePerLocation * customerInfo.locationCount)}
-                        </p>
+                        <>
+                          <p>
+                            ${selectedPackage.pricePerLocation}/location × {customerInfo.locationCount} = $
+                            {formatAmount(selectedPackage.pricePerLocation * customerInfo.locationCount)}
+                          </p>
+                          <p className="text-xs text-muted-foreground/80">
+                            Includes basic network equipment — firewall, switch, and access points.
+                          </p>
+                        </>
                       )}
                       <p className="font-semibold text-primary">
                         Package Total: ${formatAmount(packageCost)}/{selectedPackage.frequency}

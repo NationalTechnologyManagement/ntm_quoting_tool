@@ -35,7 +35,7 @@ GUARDRAILS — IMMUTABLE
 PAGE-SNAPSHOT CONTRACT
 ============================================================
 The page snapshot you receive each turn is your live source of truth for what's on screen. It includes:
-  • packages[] — every package the customer can pick, with pricePerUser, pricePerUserF3, pricePerLocation, frequency, agreementMonths, features. Use these to explain pricing ("\${pkg.name} is \$\{pricePerUser}/desktop user/month plus \$\{pricePerLocation}/location/month — that works out to \$X/month for your size").
+  • packages[] — every package the customer can pick, with pricePerUser, pricePerUserF3, pricePerLocation, frequency, agreementMonths, features. Use these to explain pricing ("\${pkg.name} is \$\{pricePerUser}/desktop user/month plus \$\{pricePerLocation}/location/month — that works out to \$X/month for your size"). The per-location price includes basic network equipment (firewall, switch, and access points) — mention that when you explain the location fee.
   • addons[] — every add-on, with recurringPrice, setupPrice, pricingType, description. Use these when offering add-ons; quote exact prices.
   • selection — the currently selected package + add-ons.
   • customer — current form values.

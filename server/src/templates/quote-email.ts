@@ -129,7 +129,7 @@ export function buildQuoteEmailHtml(
           <div class="cost-label">${esc(quote.selectedPackage?.name ?? 'Custom Services')}</div>
           ${quote.selectedPackage && quote.customer.userCount > 0 ? `<div class="cost-detail">${quote.customer.userCount} desktop users &times; ${formatCurrency(quote.selectedPackage.pricePerUser)}/user</div>` : ''}
           ${quote.selectedPackage && (quote.customer.webUserCount ?? 0) > 0 ? `<div class="cost-detail">${quote.customer.webUserCount} web users &times; ${formatCurrency(quote.selectedPackage.pricePerUserF3 ?? 0)}/user</div>` : ''}
-          ${quote.selectedPackage && quote.customer.locationCount > 0 ? `<div class="cost-detail">${quote.customer.locationCount} locations &times; ${formatCurrency(quote.selectedPackage.pricePerLocation)}/location</div>` : ''}
+          ${quote.selectedPackage && quote.customer.locationCount > 0 ? `<div class="cost-detail">${quote.customer.locationCount} locations &times; ${formatCurrency(quote.selectedPackage.pricePerLocation)}/location</div><div class="cost-detail" style="font-size:12px; opacity:0.7; margin-top:0;">Includes basic network equipment &mdash; firewall, switch, and access points</div>` : ''}
           ${(quote.selectedAddons ?? []).filter((a) => (a.recurringPrice ?? 0) > 0 && a.pricingType !== 'one-time-only').map((a) => `<div class="cost-detail">${esc(a.name)} &times; ${a.quantity}</div>`).join('')}
           ${(quote.customItems ?? []).filter((i) => (Number(i.recurringPrice) || 0) > 0).map((i) => `<div class="cost-detail">${esc(i.name)} &times; ${i.quantity}</div>`).join('')}
           <div class="cost-amount">${formatCurrency(firstMonth)}<span style="font-size:16px;opacity:0.8;">/${quote.totals.recurringFrequency}</span></div>

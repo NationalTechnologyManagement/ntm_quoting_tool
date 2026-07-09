@@ -492,11 +492,16 @@ export default function QuoteReview() {
                     </p>
                   )}
                   {quoteData.customer.locationCount > 0 && (
-                    <p>
-                      ${formatAmount(quoteData.selectedPackage.pricePerLocation)}/location ×{" "}
-                      {quoteData.customer.locationCount} = $
-                      {formatAmount(quoteData.selectedPackage.pricePerLocation * quoteData.customer.locationCount)}
-                    </p>
+                    <>
+                      <p>
+                        ${formatAmount(quoteData.selectedPackage.pricePerLocation)}/location ×{" "}
+                        {quoteData.customer.locationCount} = $
+                        {formatAmount(quoteData.selectedPackage.pricePerLocation * quoteData.customer.locationCount)}
+                      </p>
+                      <p className="text-xs text-muted-foreground/80">
+                        Includes basic network equipment — firewall, switch, and access points.
+                      </p>
+                    </>
                   )}
                   <p className="font-semibold text-primary pt-1">
                     Package Total: ${formatAmount(quoteData.selectedPackage.calculatedPrice)}/

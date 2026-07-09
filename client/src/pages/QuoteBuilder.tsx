@@ -144,6 +144,9 @@ const QuoteBuilder = () => {
                     <p className="text-[12.5px] text-[#8A94A3] mt-1">
                       Plus ${pkg.pricePerLocation} per location.
                     </p>
+                    <p className="text-[11.5px] text-[#A2ABB8] mt-1 leading-[1.4]">
+                      Includes basic network equipment — firewall, switch, and access points.
+                    </p>
                   </div>
 
                   <button

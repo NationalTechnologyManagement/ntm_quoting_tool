@@ -352,7 +352,12 @@ function PriceWidget({ pkg, userCount, webUserCount, locationCount, selectedAddo
           <div className="flex flex-col gap-2.5 text-[13.5px]">
             {userCount > 0 && <Line label={`Desktop · ${userCount} × $${formatAmount(pkg.pricePerUser)}`} value={desktopLine} />}
             {webUserCount > 0 && <Line label={`Web · ${webUserCount} × $${formatAmount(pricePerUserF3)}`} value={webLine} />}
-            {locationCount > 0 && <Line label={`Locations · ${locationCount} × $${formatAmount(pkg.pricePerLocation)}`} value={locationLine} />}
+            {locationCount > 0 && (
+              <>
+                <Line label={`Locations · ${locationCount} × $${formatAmount(pkg.pricePerLocation)}`} value={locationLine} />
+                <p className="text-[11px] text-[#A2ABB8] -mt-2 leading-[1.35]">Includes basic network equipment.</p>
+              </>
+            )}
             {addonRecurring > 0 && <Line label="Add-ons (recurring)" value={addonRecurring} />}
           </div>
 

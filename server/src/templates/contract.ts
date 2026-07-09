@@ -753,6 +753,7 @@ export function buildContractHtml(quote: QuoteData): string {
     <div class="section-title">Service Package</div>
     <div class="pkg-name">${quote.selectedPackage.name}</div>
     ${lineRows}
+    ${locationCount > 0 ? `<div style="font-size:9pt; color:#6B7280; line-height:1.5; margin-top:3px;">The per-location price includes basic network equipment &mdash; firewall, switch, and access points.</div>` : ''}
     <div class="pkg-detail" style="margin-top:6px;"><strong>Monthly Package Cost: ${formatCurrency(quote.selectedPackage.calculatedPrice)}</strong> &mdash; billed ${quote.selectedPackage.frequency}</div>
     ${featuresHtml ? `<div class="pkg-features"><strong>What's included:</strong>${featuresHtml}</div>` : ''}
   </div>`;
