@@ -528,9 +528,12 @@ export const AiChatProvider = ({ children }: { children: ReactNode }) => {
           if (!c.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.email)) {
             return { applied: false, note: 'no valid customer email yet — call collect_contact first' };
           }
-          // Async create + email; the model was already told (server-side
-          // synthetic result) that it's "being sent". Surface failures as an
-          // assistant line so the customer isn't left thinking it went out.
+          // Create the quote, walk the customer to the summary (last) page so
+          // they've been through the whole flow and can review before it's
+          // emailed, then email it. The created quote number is bridged to
+          // Summary via sessionStorage so Summary reuses it instead of
+          // auto-creating a second draft — the emailed quote and the one they
+          // can sign/pay on that page are then the SAME quote.
           void (async () => {
             try {
               let quoteNumber = createdQuoteRef.current;
@@ -546,6 +549,8 @@ export const AiChatProvider = ({ children }: { children: ReactNode }) => {
                 quoteNumber = created.quoteNumber;
                 createdQuoteRef.current = quoteNumber;
               }
+              try { sessionStorage.setItem('ntm_chat_quote', quoteNumber); } catch { /* ignore */ }
+              navigate('/summary');
               await quoteApi.email(quoteNumber);
             } catch (err) {
               console.error('send_quote failed:', err);
@@ -560,7 +565,7 @@ export const AiChatProvider = ({ children }: { children: ReactNode }) => {
               ]);
             }
           })();
-          return { applied: true, note: `emailing quote to ${c.email}` };
+          return { applied: true, note: `taking them to review + emailing quote to ${c.email}` };
         }
         case 'collect_recipients': {
           // Show the extra-recipient form. Only valid once a quote has been

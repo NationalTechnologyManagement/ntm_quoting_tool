@@ -29,6 +29,7 @@ import { env } from '../config/env.js';
 import { AppError } from '../middleware/error-handler.js';
 import type { AuthPayload } from '../middleware/auth.js';
 import { sendLoginCodeEmail } from './email.service.js';
+import { verifyTotp } from './totp.service.js';
 
 const DEVICE_TTL_DAYS = 60;
 const DEVICE_TTL_MS = DEVICE_TTL_DAYS * 24 * 60 * 60 * 1000;
@@ -215,7 +216,16 @@ export async function enrollDevice(opts: {
     throw new AppError(403, 'Account is not allowed to use GHL SSO');
   }
 
-  const ok = await verifyEnrollmentCode(user.id, opts.code.trim());
+  // Accept EITHER the emailed enrollment code OR — for a user who has an
+  // authenticator set up — their current TOTP code. This lets someone using
+  // TOTP enroll a device from the GHL iframe with their authenticator app
+  // instead of waiting on an email. Purely additive: no secret is changed,
+  // no session or device is revoked.
+  const code = opts.code.trim();
+  let ok = await verifyEnrollmentCode(user.id, code);
+  if (!ok && user.twoFactorMethod === 'totp' && user.twoFactorSecret) {
+    ok = verifyTotp(user.twoFactorSecret, code);
+  }
   if (!ok) throw new AppError(401, 'Invalid email or code');
 
   const expiresAt = new Date(Date.now() + DEVICE_TTL_MS);

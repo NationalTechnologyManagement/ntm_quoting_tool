@@ -36,8 +36,9 @@ export function SignaturePad({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const drawingRef = useRef(false);
   const lastPointRef = useRef<{ x: number; y: number } | null>(null);
-  // CSS-pixel bounding box of all inked strokes. Used to crop the exported
-  // PNG so it doesn't include the empty whitespace around the signature.
+  // Backing-store (device-pixel) bounding box of all inked strokes. Used to
+  // crop the exported PNG so it doesn't include the empty whitespace around
+  // the signature.
   const boundsRef = useRef<{
     minX: number;
     minY: number;
@@ -92,10 +93,13 @@ export function SignaturePad({
           desiredH,
         );
       }
-      ctx.scale(dpr, dpr);
+      // Draw directly in backing-store (device) pixels — no ctx.scale. getPoint
+      // maps the pointer into this same space, so alignment holds regardless of
+      // DPR, the dialog's transform, or a transiently mis-sized backing. Widen
+      // the stroke by DPR so it looks the same thickness on hi-DPI screens.
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
-      ctx.lineWidth = 2.4;
+      ctx.lineWidth = 2.4 * dpr;
       ctx.strokeStyle = '#000000';
     };
 
@@ -133,17 +137,16 @@ export function SignaturePad({
     const canvas = canvasRef.current;
     if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
-    // clientX/Y are viewport coords reflecting the VISUAL position of the
-    // cursor; rect reflects the canvas's VISUAL box (after any ancestor
-    // transforms). The backing was sized in LAYOUT coords (clientWidth ×
-    // DPR), so divide the visual offset by the live transform scale to
-    // land back in layout space. When no ancestor transform is in play
-    // these ratios are 1, so this is a no-op.
-    const scaleX = rect.width > 0 ? canvas.clientWidth / rect.width : 1;
-    const scaleY = rect.height > 0 ? canvas.clientHeight / rect.height : 1;
+    if (rect.width < 1 || rect.height < 1) return null;
+    // Map the pointer's position within the DISPLAYED box straight into the
+    // canvas BACKING store (device pixels). Using the live ratio of backing
+    // size to displayed size makes this correct no matter the devicePixelRatio,
+    // any ancestor CSS transform (the dialog's zoom/centering), OS/browser
+    // zoom, or even a transiently mis-sized backing — which is what previously
+    // threw the ink far down and to the right of the cursor.
     return {
-      x: (e.clientX - rect.left) * scaleX,
-      y: (e.clientY - rect.top) * scaleY,
+      x: (e.clientX - rect.left) * (canvas.width / rect.width),
+      y: (e.clientY - rect.top) * (canvas.height / rect.height),
     };
   };
 
@@ -169,11 +172,14 @@ export function SignaturePad({
     drawingRef.current = true;
     lastPointRef.current = pt;
     extendBounds(pt.x, pt.y);
-    // Drop a tiny dot so a tap (no drag) still leaves a visible mark.
+    // Drop a tiny dot so a tap (no drag) still leaves a visible mark. Radius
+    // is in device pixels (matches the device-pixel drawing space), scaled by
+    // DPR so it reads the same size on hi-DPI screens.
     const ctx = canvas.getContext('2d');
     if (ctx) {
+      const dpr = window.devicePixelRatio || 1;
       ctx.beginPath();
-      ctx.arc(pt.x, pt.y, 1.3, 0, Math.PI * 2);
+      ctx.arc(pt.x, pt.y, 1.3 * dpr, 0, Math.PI * 2);
       ctx.fillStyle = '#000000';
       ctx.fill();
     }
@@ -222,30 +228,30 @@ export function SignaturePad({
     const canvas = canvasRef.current;
     const b = boundsRef.current;
     if (!canvas || !hasInk || !b) return;
+    // Bounds are already in backing-store (device) pixels, so crop directly
+    // against canvas.width/height — no DPR conversion needed.
     const dpr = window.devicePixelRatio || 1;
-    const padding = 12; // CSS px of breathing room around the strokes
-    const cssWidth = canvas.width / dpr;
-    const cssHeight = canvas.height / dpr;
+    const padding = 12 * dpr; // device px of breathing room around the strokes
     const minX = Math.max(0, b.minX - padding);
     const minY = Math.max(0, b.minY - padding);
-    const maxX = Math.min(cssWidth, b.maxX + padding);
-    const maxY = Math.min(cssHeight, b.maxY + padding);
+    const maxX = Math.min(canvas.width, b.maxX + padding);
+    const maxY = Math.min(canvas.height, b.maxY + padding);
     const cropW = Math.max(1, maxX - minX);
     const cropH = Math.max(1, maxY - minY);
-    // Build a fresh canvas sized to the cropped region (in device pixels)
-    // and copy just the inked area. Result is a tight PNG that drops into
-    // any container without floating off-center.
+    // Build a fresh canvas sized to the cropped region and copy just the inked
+    // area. Result is a tight PNG that drops into any container without
+    // floating off-center.
     const out = document.createElement('canvas');
-    out.width = Math.max(1, Math.round(cropW * dpr));
-    out.height = Math.max(1, Math.round(cropH * dpr));
+    out.width = Math.max(1, Math.round(cropW));
+    out.height = Math.max(1, Math.round(cropH));
     const outCtx = out.getContext('2d');
     if (!outCtx) return;
     outCtx.drawImage(
       canvas,
-      Math.round(minX * dpr),
-      Math.round(minY * dpr),
-      Math.round(cropW * dpr),
-      Math.round(cropH * dpr),
+      Math.round(minX),
+      Math.round(minY),
+      Math.round(cropW),
+      Math.round(cropH),
       0,
       0,
       out.width,

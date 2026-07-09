@@ -144,6 +144,25 @@ const Summary = () => {
       }
     };
 
+    // If the AI assistant already created this customer's quote in chat and
+    // sent them here to review, reuse THAT quote instead of auto-creating a
+    // second draft — so the emailed quote and the one they sign/pay here are
+    // the same record. One-shot sessionStorage handoff.
+    let bridged: string | null = null;
+    try {
+      bridged = sessionStorage.getItem('ntm_chat_quote');
+    } catch {
+      /* sessionStorage blocked */
+    }
+    if (bridged) {
+      try { sessionStorage.removeItem('ntm_chat_quote'); } catch { /* ignore */ }
+      quoteApi
+        .get(bridged)
+        .then((q) => setCreatedQuote(q))
+        .catch(() => createDraftQuote()); // chat quote vanished — make a fresh draft
+      return;
+    }
+
     createDraftQuote();
   }, []);
 

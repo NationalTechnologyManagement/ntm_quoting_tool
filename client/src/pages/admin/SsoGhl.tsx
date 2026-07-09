@@ -39,6 +39,12 @@ const SsoGhl = () => {
   const [email, setEmail] = useState('');
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(false);
+  // Whether the user chose to verify with their authenticator app (TOTP)
+  // instead of an emailed code — only affects the on-screen copy; the server
+  // accepts either code at the verify step.
+  const [usingAuthenticator, setUsingAuthenticator] = useState(false);
+
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
   // ── Step 1: probe device cookie on mount ──────────────────────────
   useEffect(() => {
@@ -85,12 +91,25 @@ const SsoGhl = () => {
       // Server always returns 200 even for unknown emails to avoid leaking
       // which addresses belong to admins. Move to the code stage regardless.
       toast.message(`If ${email} is an admin, a code is on its way.`);
+      setUsingAuthenticator(false);
       setStage({ kind: 'enroll-code' });
     } catch (e: any) {
       toast.error(e?.message || 'Could not send code');
     } finally {
       setLoading(false);
     }
+  };
+
+  // Authenticator path: skip the emailed code entirely and go straight to the
+  // code entry — the user types the current code from their authenticator app.
+  // The verify endpoint accepts a valid TOTP for enrolled users.
+  const handleUseAuthenticator = () => {
+    if (!emailOk) {
+      toast.error('Enter your admin email first');
+      return;
+    }
+    setUsingAuthenticator(true);
+    setStage({ kind: 'enroll-code' });
   };
 
   // ── Step 3: user enters code, we mint device + session cookies ────
@@ -145,8 +164,10 @@ const SsoGhl = () => {
               : stage.kind === 'config-error'
                 ? stage.message
                 : stage.kind === 'enroll-code'
-                  ? `We emailed a code to ${email}. Enter it below.`
-                  : 'First time on this browser. Enter your admin email and we’ll email a one-time code.'}
+                  ? usingAuthenticator
+                    ? 'Open your authenticator app and enter the current 6-digit code.'
+                    : `We emailed a code to ${email}. Enter it below — or use your authenticator app.`
+                  : 'First time on this browser. Enter your admin email and we’ll email a one-time code — or use your authenticator app.'}
           </p>
         </div>
 
@@ -167,7 +188,16 @@ const SsoGhl = () => {
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
-              {loading ? 'Sending…' : 'Send code'}
+              {loading ? 'Sending…' : 'Email me a code'}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full"
+              onClick={handleUseAuthenticator}
+              disabled={loading}
+            >
+              <ShieldCheck className="w-4 h-4 mr-2" /> Use my authenticator app
             </Button>
           </form>
         )}
@@ -175,7 +205,9 @@ const SsoGhl = () => {
         {stage.kind === 'enroll-code' && (
           <form onSubmit={handleCodeSubmit} className="space-y-6">
             <div className="space-y-2">
-              <Label htmlFor="code">6-digit code</Label>
+              <Label htmlFor="code">
+                {usingAuthenticator ? 'Authenticator code' : '6-digit code'}
+              </Label>
               <Input
                 id="code"
                 type="text"
@@ -187,14 +219,21 @@ const SsoGhl = () => {
                 required
                 autoFocus
               />
+              {!usingAuthenticator && (
+                <p className="text-xs text-muted-foreground">
+                  You can also enter the current code from your authenticator app.
+                </p>
+              )}
             </div>
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null}
               {loading ? 'Verifying…' : 'Verify & sign in'}
             </Button>
-            <Button type="button" variant="ghost" className="w-full" onClick={handleResend}>
-              <Mail className="w-4 h-4 mr-2" /> Resend code
-            </Button>
+            {!usingAuthenticator && (
+              <Button type="button" variant="ghost" className="w-full" onClick={handleResend}>
+                <Mail className="w-4 h-4 mr-2" /> Resend code
+              </Button>
+            )}
             <Button
               type="button"
               variant="link"
