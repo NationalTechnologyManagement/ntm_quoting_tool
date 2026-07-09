@@ -252,6 +252,23 @@ interface SizingFieldProps {
 }
 
 function SizingField({ id, label, info, value, onChange, placeholder, helper, highlighted, invalid }: SizingFieldProps) {
+  // Back the input with a raw string so typing is smooth and predictable:
+  // no eaten digits (the old number-derived value blanked on 0), and leading
+  // zeros are stripped so "016" shows as "16". The parent still holds the
+  // numeric value for pricing; we sync back when it changes externally (AI
+  // prefill / reset).
+  const [raw, setRaw] = useState(value > 0 ? String(value) : '');
+  useEffect(() => {
+    setRaw((prev) => ((parseInt(prev, 10) || 0) === value ? prev : value > 0 ? String(value) : ''));
+  }, [value]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let s = e.target.value.replace(/[^\d]/g, ''); // digits only
+    s = s.replace(/^0+(?=\d)/, ''); // drop leading zeros but keep a lone "0"
+    setRaw(s);
+    onChange(Math.max(0, parseInt(s, 10) || 0));
+  };
+
   return (
     <div className={highlighted ? 'rounded-[10px] ring-2 ring-[#D96626] ring-offset-2 ring-offset-[#FBFAF8] transition-shadow' : ''}>
       <div className="flex items-center gap-2 mb-2 h-5">
@@ -271,10 +288,11 @@ function SizingField({ id, label, info, value, onChange, placeholder, helper, hi
       <div className="relative">
         <input
           id={id}
-          type="number"
-          min="0"
-          value={value > 0 ? value : ''}
-          onChange={(e) => onChange(Math.max(0, parseInt(e.target.value) || 0))}
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          value={raw}
+          onChange={handleChange}
           placeholder={placeholder}
           className="w-full h-12 pl-3.5 pr-10 rounded-[10px] border-[1.5px] bg-[#FBFAF8] text-[#16243F] text-[15px] outline-none transition-colors placeholder:text-[#A9B0BC]"
           style={{ borderColor: invalid ? '#E0A99B' : '#DCD9D2' }}

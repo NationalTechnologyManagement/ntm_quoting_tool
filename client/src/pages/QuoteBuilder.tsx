@@ -9,12 +9,48 @@ import { formatContractTerm } from '@/lib/utils';
 // the rest; no information is hidden, just deferred.
 const PREVIEW = 3;
 
+// "What happens next" FAQ. Answers are grounded in how the portal actually
+// works (see docs/SOP.html) and NTM's real service facts (trustntm.com) — no
+// invented marketing claims.
+const FAQS: { q: string; a: string }[] = [
+  {
+    q: 'What happens after I choose a plan?',
+    a: "Tell us your team size and contact details, review your full quote, then type your name to e-sign and pay online — by card or ACH — through a secure hosted checkout. You'll get one email with your signed contract attached as a PDF.",
+  },
+  {
+    q: "What's included in every plan?",
+    a: 'Every plan includes proactive monitoring, a Network Operations Center, endpoint security, Microsoft 365 management, and a US-based helpdesk. Higher tiers add managed security like MDR/EDR and advanced threat protection, Microsoft 365 backups, and 24×7 coverage.',
+  },
+  {
+    q: 'Is there a contract, and what about the onboarding fee?',
+    a: 'Each plan shows its term on the card — month-to-month, 3-year, or 5-year. When you sign up online here through the portal, we waive the onboarding fee.',
+  },
+  {
+    q: 'How does billing work?',
+    a: 'Your first month is paid at checkout. After that, invoices are sent on the 1st of every month and are due within 30 days (Net 30). Sales tax is calculated at invoice time based on your business location.',
+  },
+  {
+    q: 'Can I add phones, backups, or server management?',
+    a: 'Yes. On the sizing step you can add VoIP, Microsoft Teams Phone, eFaxing, Microsoft 365 backups, and per-VM server management to your quote.',
+  },
+  {
+    q: 'What are your support hours?',
+    a: 'Our US-based helpdesk is available Monday–Friday, 8:00 AM–5:00 PM, with 24/7 emergency support. Higher tiers include full 24×7 coverage.',
+  },
+  {
+    q: 'How soon can we get started?',
+    a: 'Onboarding begins as soon as payment is captured, and we coordinate scheduling with you. Most customers are up and running within a few business days.',
+  },
+];
+
 const QuoteBuilder = () => {
   const navigate = useNavigate();
   const { selectedPackage, setSelectedPackage, packages, siteContent } = useQuote();
 
   // packageId -> whether the full feature list is expanded on its card.
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
+  // Which FAQ is open (single-open accordion). First one open by default.
+  const [openFaq, setOpenFaq] = useState<number>(0);
 
   // Newsletter visitor tracker — scoped to this pricing page ONLY. Injected
   // into <head> on mount, removed on unmount (SPA; index.html would load it on
@@ -178,7 +214,43 @@ const QuoteBuilder = () => {
           </div>
         </section>
 
-        <div className="h-16" />
+        {/* What happens next — FAQ */}
+        <section className="pt-16 pb-6">
+          <div className="text-center mb-9">
+            <span className="text-[13px] font-semibold tracking-[0.12em] uppercase text-[#D96626]">
+              Good to know
+            </span>
+            <h2 className="font-heading font-bold text-[30px] tracking-[-0.01em] text-[#16243F] mt-2">
+              What happens next
+            </h2>
+          </div>
+          <div className="max-w-[760px] mx-auto flex flex-col gap-3">
+            {FAQS.map((faq, i) => {
+              const open = openFaq === i;
+              return (
+                <div key={i} className="bg-white border border-[#EAE8E2] rounded-xl overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => setOpenFaq(open ? -1 : i)}
+                    className="w-full flex items-center justify-between gap-4 px-[22px] py-5 bg-transparent border-none cursor-pointer text-left font-heading font-semibold text-[16.5px] text-[#16243F]"
+                  >
+                    <span>{faq.q}</span>
+                    <span className="text-[#D96626] text-[22px] font-normal flex-shrink-0 leading-none">
+                      {open ? '−' : '+'}
+                    </span>
+                  </button>
+                  {open && (
+                    <p className="m-0 px-[22px] pb-[22px] text-[15px] leading-[1.65] text-[#5A6575]">
+                      {faq.a}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        <div className="h-8" />
       </div>
 
       <SiteFooter />
