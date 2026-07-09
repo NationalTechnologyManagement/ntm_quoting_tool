@@ -509,7 +509,15 @@ const Summary = () => {
       }
     } catch (error) {
       console.error("Payment initiation error:", error);
-      toast.error("Unable to process payment. Please try again or contact support.");
+      // Surface the server's actual reason when it sent one (e.g. "no payable
+      // items", an AP config/link failure) instead of a blanket message — the
+      // generic toast made real failures undiagnosable for the customer and us.
+      const detail = error instanceof Error ? error.message : "";
+      toast.error(
+        detail && !/^\d+$/.test(detail)
+          ? `Unable to process payment: ${detail}`
+          : "Unable to process payment. Please try again or contact support.",
+      );
       setLoading(null);
     }
   };

@@ -23,8 +23,9 @@ import {
 } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { aiChatApi, streamMessage, type SessionInfo } from '@/services/ai-chat.client';
-import { leadApi } from '@/services/api';
-import { useQuote, type CustomerInfo } from './QuoteContext';
+import { leadApi, quoteApi } from '@/services/api';
+import { useQuote, computeOnboardingFee, type CustomerInfo } from './QuoteContext';
+import { IS_LEAD_GEN_MODE } from '@/lib/lead-gen';
 
 // Fields collected by the in-chat contact form (collect_contact tool).
 export interface ContactFormValues {
@@ -40,6 +41,92 @@ export interface SizingFormValues {
   desktopUsers: number;
   webUsers: number;
   locations: number;
+}
+
+// One extra recipient collected by the in-chat recipient form
+// (collect_recipients tool) so the agent can email the quote to someone
+// besides the customer.
+export interface RecipientFormValues {
+  name: string;
+  email: string;
+}
+
+// Build the POST /api/quotes payload from chat-collected state. Mirrors the
+// wizard's draft-create shape in Summary.tsx so a chat-created quote behaves
+// identically downstream (email, review, checkout, provisioning). grandTotal
+// is the real due-today sum here (onboarding + one-time + first-month), not
+// the wizard's placeholder 0.
+function buildQuoteCreatePayload(
+  pkg: any,
+  customer: CustomerInfo,
+  selectedAddons: any[],
+  terms: { version: string; id: string; url: string; content: string },
+) {
+  const desktop = customer.userCount || 0;
+  const web = customer.webUserCount ?? 0;
+  const loc = customer.locationCount || 0;
+  const packageCost =
+    pkg.pricePerUser * desktop + (pkg.pricePerUserF3 ?? 0) * web + pkg.pricePerLocation * loc;
+  const onboarding = computeOnboardingFee(pkg, desktop, loc, {
+    waive: !IS_LEAD_GEN_MODE,
+    webUserCount: web,
+  });
+  const addonRecurring = selectedAddons
+    .filter((a) => a.pricingType !== 'one-time-only')
+    .reduce((s, a) => s + (a.recurringPrice || 0) * a.quantity, 0);
+  const addonOneTime = selectedAddons
+    .filter((a) => a.pricingType !== 'recurring-only')
+    .reduce((s, a) => s + (a.setupPrice || 0) * a.quantity, 0);
+  const recurringCosts = packageCost + addonRecurring;
+  const oneTimeCosts = addonOneTime;
+  const onboardingCost = onboarding.final;
+  return {
+    customer: { ...customer, referrerCode: customer.referrerCode || null },
+    selectedPackage: {
+      id: pkg.id,
+      name: pkg.name,
+      pricePerUser: pkg.pricePerUser,
+      pricePerUserF3: pkg.pricePerUserF3 ?? 0,
+      pricePerLocation: pkg.pricePerLocation,
+      frequency: pkg.frequency,
+      features: pkg.features ?? [],
+      featureGroups: pkg.featureGroups ?? [],
+      agreementMonths: pkg.agreementMonths ?? 0,
+      calculatedPrice: packageCost,
+    },
+    selectedAddons: selectedAddons.map((a) => ({
+      id: a.id,
+      name: a.name,
+      description: a.description,
+      price: a.price,
+      quantity: a.quantity,
+      frequency: a.frequency,
+      totalPrice: (a.price || 0) * a.quantity,
+      pricingType: a.pricingType,
+      recurringPrice: a.recurringPrice || null,
+      recurringFrequency: a.recurringFrequency || null,
+      setupPrice: a.setupPrice || null,
+      totalRecurringCost: (a.recurringPrice || 0) * a.quantity,
+      totalSetupCost: (a.setupPrice || 0) * a.quantity,
+    })),
+    onboarding: {
+      userCount: desktop,
+      costPerUser: desktop > 0 ? onboarding.base / desktop : 0,
+      totalCost: onboarding.base,
+      discount: onboarding.waived ? onboarding.base : 0,
+      finalCost: onboarding.final,
+    },
+    appliedPromoCodes: [],
+    totals: {
+      onboardingCost,
+      oneTimeCosts,
+      recurringCosts,
+      discount: 0,
+      grandTotal: onboardingCost + oneTimeCosts + recurringCosts,
+      recurringFrequency: pkg.frequency,
+    },
+    terms,
+  };
 }
 
 // ── Types ─────────────────────────────────────────────────────────────
@@ -87,6 +174,9 @@ interface AiChatContextValue {
   // in-chat sizing form (driven by the collect_sizing tool)
   showSizingForm: boolean;
   submitSizingForm: (values: SizingFormValues) => void;
+  // in-chat additional-recipient form (driven by the collect_recipients tool)
+  showRecipientForm: boolean;
+  submitRecipientForm: (values: RecipientFormValues) => void;
 }
 
 const AiChatContext = createContext<AiChatContextValue | null>(null);
@@ -109,6 +199,7 @@ export const AiChatProvider = ({ children }: { children: ReactNode }) => {
   const [highlightedFieldId, setHighlightedFieldId] = useState<string | null>(null);
   const [showContactForm, setShowContactForm] = useState(false);
   const [showSizingForm, setShowSizingForm] = useState(false);
+  const [showRecipientForm, setShowRecipientForm] = useState(false);
 
   const fieldRegistry = useRef<Map<string, FieldRegistration>>(new Map());
   const abortRef = useRef<AbortController | null>(null);
@@ -123,6 +214,9 @@ export const AiChatProvider = ({ children }: { children: ReactNode }) => {
   const selectedPackageRef = useRef(quote.selectedPackage);
   const contactCapturedRef = useRef(false);
   const sizingCapturedRef = useRef(false);
+  // Quote number created by send_quote, so collect_recipients / the recipient
+  // form can email the SAME quote to additional people without re-creating it.
+  const createdQuoteRef = useRef<string | null>(null);
   useEffect(() => {
     customerInfoRef.current = quote.customerInfo;
   }, [quote.customerInfo]);
@@ -418,6 +512,65 @@ export const AiChatProvider = ({ children }: { children: ReactNode }) => {
           navigate('/summary');
           return { applied: true, note: 'sent to sign-and-pay' };
         }
+        case 'send_quote': {
+          // Create the quote from chat-collected details (if not already
+          // created) and email it to the customer. Guards mirror
+          // go_to_checkout so we never try to build an invalid quote.
+          const pkg = selectedPackageRef.current;
+          if (!pkg) {
+            return { applied: false, note: 'no package selected yet — recommend one and call suggest_package first' };
+          }
+          const c = customerInfoRef.current;
+          const hasSizing = (c.userCount ?? 0) > 0 || (c.webUserCount ?? 0) > 0 || (c.locationCount ?? 0) > 0;
+          if (!hasSizing) {
+            return { applied: false, note: 'no sizing set yet — collect it first' };
+          }
+          if (!c.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c.email)) {
+            return { applied: false, note: 'no valid customer email yet — call collect_contact first' };
+          }
+          // Async create + email; the model was already told (server-side
+          // synthetic result) that it's "being sent". Surface failures as an
+          // assistant line so the customer isn't left thinking it went out.
+          void (async () => {
+            try {
+              let quoteNumber = createdQuoteRef.current;
+              if (!quoteNumber) {
+                const created = await quoteApi.create(
+                  buildQuoteCreatePayload(pkg, c, quote.selectedAddons, {
+                    version: quote.termsContent.version,
+                    id: quote.termsContent.id,
+                    url: `${window.location.origin}/terms`,
+                    content: quote.termsContent.content,
+                  }),
+                );
+                quoteNumber = created.quoteNumber;
+                createdQuoteRef.current = quoteNumber;
+              }
+              await quoteApi.email(quoteNumber);
+            } catch (err) {
+              console.error('send_quote failed:', err);
+              setMessages((m) => [
+                ...m,
+                {
+                  id: `sysq-${m.length}`,
+                  role: 'assistant',
+                  content:
+                    "I ran into a problem emailing your quote just now. Please try again in a moment, or I can set you up with a rep.",
+                },
+              ]);
+            }
+          })();
+          return { applied: true, note: `emailing quote to ${c.email}` };
+        }
+        case 'collect_recipients': {
+          // Show the extra-recipient form. Only valid once a quote has been
+          // created/emailed (send_quote sets createdQuoteRef).
+          if (!createdQuoteRef.current) {
+            return { applied: false, note: 'no quote to forward yet — call send_quote first' };
+          }
+          setShowRecipientForm(true);
+          return { applied: true, note: 'showed recipient form' };
+        }
         case 'request_followup': {
           // The agent has offered to set the customer up with a sales rep.
           // We open the GHL booking widget in a new tab so the customer can
@@ -567,6 +720,36 @@ export const AiChatProvider = ({ children }: { children: ReactNode }) => {
     [quote, send],
   );
 
+  // ── In-chat recipient form submit ───────────────────────────────────
+  // Emails the already-created quote to one additional person, then nudges
+  // the agent to continue. No new quote is created — we reuse createdQuoteRef.
+  const submitRecipientForm = useCallback(
+    (values: RecipientFormValues) => {
+      const quoteNumber = createdQuoteRef.current;
+      setShowRecipientForm(false);
+      const email = values.email.trim();
+      if (!quoteNumber || !email) {
+        void send("Never mind, no other recipient.");
+        return;
+      }
+      quoteApi
+        .email(quoteNumber, { additionalTo: [email] })
+        .catch((err) => {
+          console.error('recipient email failed:', err);
+          setMessages((m) => [
+            ...m,
+            {
+              id: `sysr-${m.length}`,
+              role: 'assistant',
+              content: `I couldn't send it to ${email}. Please double-check the address and try again.`,
+            },
+          ]);
+        });
+      void send(`I've sent it to ${email} too.`);
+    },
+    [send],
+  );
+
   const reset = useCallback(async () => {
     abortRef.current?.abort();
     try { await aiChatApi.endSession(); } catch { /* ignore */ }
@@ -575,8 +758,10 @@ export const AiChatProvider = ({ children }: { children: ReactNode }) => {
     setFallbackActive(false);
     setShowContactForm(false);
     setShowSizingForm(false);
+    setShowRecipientForm(false);
     contactCapturedRef.current = false;
     sizingCapturedRef.current = false;
+    createdQuoteRef.current = null;
     setStatus('idle');
   }, []);
 
@@ -608,8 +793,10 @@ export const AiChatProvider = ({ children }: { children: ReactNode }) => {
       submitContactForm,
       showSizingForm,
       submitSizingForm,
+      showRecipientForm,
+      submitRecipientForm,
     }),
-    [enabled, session, status, open, messages, send, reset, primeGreeting, fallbackActive, registerField, highlightedFieldId, showContactForm, submitContactForm, showSizingForm, submitSizingForm],
+    [enabled, session, status, open, messages, send, reset, primeGreeting, fallbackActive, registerField, highlightedFieldId, showContactForm, submitContactForm, showSizingForm, submitSizingForm, showRecipientForm, submitRecipientForm],
   );
 
   return <AiChatContext.Provider value={value}>{children}</AiChatContext.Provider>;

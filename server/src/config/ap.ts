@@ -37,6 +37,7 @@ export async function getOAuthToken(): Promise<string> {
 
 export async function apFetch(path: string, options: RequestInit = {}): Promise<Response> {
   const token = await getOAuthToken();
+  const method = (options.method || 'GET').toUpperCase();
   const res = await fetch(`${AP_BASE_URL}${path}`, {
     ...options,
     headers: {
@@ -45,6 +46,8 @@ export async function apFetch(path: string, options: RequestInit = {}): Promise<
       ...options.headers,
     },
   });
+  // One line per AP call so a failed checkout is traceable in the logs.
+  console.log(`[AP] ${method} ${path} -> ${res.status}`);
   return res;
 }
 

@@ -199,6 +199,34 @@ const ALL_TOOLS: ToolDef[] = [
   {
     type: 'function',
     function: {
+      name: 'send_quote',
+      description:
+        "Email the customer their quote using the contact + sizing + package they've given you. Call this ONLY after contact info is submitted, sizing is set (at least one of desktop/web users or locations above zero), and a package is selected — it creates the quote from those details and emails it to the address they provided. After it sends, tell them it's on the way in one short line and ask if they'd like it sent to anyone else. Do NOT use this to sign or pay — that stays the customer's own click.",
+      parameters: {
+        type: 'object',
+        properties: {
+          reason: { type: 'string', description: 'Optional one-line reason for the user.' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'collect_recipients',
+      description:
+        "Show a small form in the chat for ONE additional person's email (and optional name) so the quote can be sent to them too. Call this only after send_quote has emailed the customer and the customer said yes, they want it sent to someone else. After you call it, tell them to fill it in, then STOP and wait; the quote is emailed to that person when they submit.",
+      parameters: {
+        type: 'object',
+        properties: {
+          reason: { type: 'string', description: 'Optional one-line reason for the user.' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
       name: 'request_followup',
       description:
         "Offer the customer a scheduled call with an NTM sales rep. Use this when the customer's question isn't answerable from the page snapshot or knowledge base, when they want a human to review their setup, or when they ask for something that goes beyond the standard packages/add-ons. Always include a friendly text reply alongside this call.",

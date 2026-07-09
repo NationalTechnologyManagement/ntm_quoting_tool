@@ -116,11 +116,28 @@ export async function createInvoice(
   // Get the hosted payment link. AP serves these on a branded subdomain
   // (e.g. pay.trustntm.com/<token>) and returns the URL without a scheme,
   // so normalize to a fully-qualified https:// URL before handing it to
-  // the frontend.
+  // the frontend. A failed link fetch (or a blank URL) used to be swallowed
+  // silently — the route then returned 200 with an empty paymentLink and the
+  // customer got a dead "no payment link" error with nothing in the logs.
+  // Throw so the failure is visible and surfaced to the customer as an error.
   const linkRes = await apFetch(`/invoices/${invoice.id}/payment-link`);
-  const linkData = linkRes.ok ? await linkRes.json() : { url: '' };
+  if (!linkRes.ok) {
+    const text = await linkRes.text().catch(() => '');
+    throw new AppError(
+      502,
+      `AP payment-link fetch failed for invoice ${invoice.id} (${linkRes.status}): ${text}`,
+    );
+  }
+  const linkData = await linkRes.json();
+  const paymentLink = ensureHttpsUrl(linkData.url);
+  if (!paymentLink) {
+    throw new AppError(
+      502,
+      `AP returned an empty payment link for invoice ${invoice.id}`,
+    );
+  }
 
-  return { invoiceId: invoice.id, paymentLink: ensureHttpsUrl(linkData.url) };
+  return { invoiceId: invoice.id, paymentLink };
 }
 
 // ── Checkout Token ──────────────────────────────────────────────────
@@ -160,8 +177,18 @@ export async function createCheckout(quote: QuoteData): Promise<{
   paymentLink: string;
   customerId: string;
 }> {
+  const payable =
+    (quote.totals?.onboardingCost ?? 0) +
+    (quote.totals?.oneTimeCosts ?? 0) +
+    (quote.totals?.recurringCosts ?? 0);
+  console.log(
+    `[AP] createCheckout start — quote ${quote.quoteNumber}, payable $${payable.toFixed(2)}`,
+  );
   const customerId = await createCustomer(quote);
   const { invoiceId, paymentLink } = await createInvoice(quote, customerId);
+  console.log(
+    `[AP] checkout ok — quote ${quote.quoteNumber}, customer ${customerId}, invoice ${invoiceId}, link ${paymentLink ? 'yes' : 'MISSING'}`,
+  );
 
   // The checkout token is only used by AP's inline Web SDK. The frontend
   // uses the hosted payment link redirect, so failures here shouldn't block

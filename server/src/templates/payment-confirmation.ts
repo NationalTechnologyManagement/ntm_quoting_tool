@@ -26,7 +26,7 @@ export function buildPaymentConfirmationHtml(
       <div style="background:#fef3c7;border:2px solid #f59e0b;border-radius:12px;padding:24px;margin:24px 0;text-align:center;">
         <h3 style="margin:0 0 8px 0;color:#92400e;font-size:18px;">Action Required: Complete Your Payment</h3>
         <p style="margin:0 0 16px 0;color:#78350f;font-size:14px;">Please complete your payment to activate your services.</p>
-        <a href="${paymentUrl}" style="display:inline-block;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:white;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:600;font-size:16px;">Complete Payment Now</a>
+        <a href="${paymentUrl}" style="display:inline-block;background-color:#6d4bd8;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#ffffff !important;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:600;font-size:16px;">Complete Payment Now</a>
       </div>`
     : '';
 

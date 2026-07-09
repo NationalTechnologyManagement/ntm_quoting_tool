@@ -154,7 +154,12 @@ export function buildQuoteEmailHtml(
           : `<strong>To start your services, complete payment for the amount above.</strong> Services activate once payment is captured. This quote is valid for 30 days from ${formattedDate}.`}</p>
       </div>
 
-      <a href="${ctaUrl}" class="cta-button">${leadGen ? 'Request Booking &rarr;' : `Review &amp; Pay ${formatCurrency(dueToday)} &rarr;`}</a>
+      <!-- Bulletproof CTA: inline styles with a SOLID background-color so the
+           white label stays visible even in clients that strip the <style>
+           block or don't render the gradient (Outlook, some webmail). The
+           earlier class-only button rendered white-on-white = blank. -->
+      <a href="${ctaUrl}" class="cta-button"
+         style="display:block;background-color:#6d4bd8;background:linear-gradient(135deg,#667eea 0%,#764ba2 100%);color:#ffffff !important;text-align:center;padding:18px 36px;text-decoration:none;border-radius:12px;font-weight:600;font-size:16px;margin:32px 0;">${leadGen ? 'Request Booking &rarr;' : `Review &amp; Pay ${formatCurrency(dueToday)} &rarr;`}</a>
       <p style="text-align:center;color:#6b7280;font-size:13px;margin-top:24px;">${leadGen
         ? 'Click the button above to schedule a time with a sales rep.'
         : 'Click the button above to review the full details, digitally sign, and complete secure payment to start your services.'}</p>

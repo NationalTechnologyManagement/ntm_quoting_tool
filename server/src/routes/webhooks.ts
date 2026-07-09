@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { env } from '../config/env.js';
+import { cred } from '../services/integration-credentials.service.js';
 import * as apService from '../services/ap.service.js';
 import * as emailService from '../services/email.service.js';
 import * as quoteService from '../services/quote.service.js';
@@ -14,10 +14,15 @@ const router = Router();
 
 // Alternative Payments webhook
 router.post('/api/webhooks/ap', async (req, res) => {
-  // Verify webhook secret if configured
-  if (env.AP_WEBHOOK_SECRET) {
+  // Verify webhook secret if configured. Read via cred() (DB cache → env) so
+  // a secret set through the admin "register webhook" tool — which stores it
+  // in the integration_credentials table, not process.env — is actually
+  // honored. Previously this read env.AP_WEBHOOK_SECRET directly, so a
+  // DB-only secret meant AP's signed webhooks were never verified.
+  const webhookSecret = cred('AP_WEBHOOK_SECRET');
+  if (webhookSecret) {
     const authHeader = req.headers.authorization;
-    if (authHeader !== `Bearer ${env.AP_WEBHOOK_SECRET}`) {
+    if (authHeader !== `Bearer ${webhookSecret}`) {
       console.error('[AP Webhook] Invalid authorization header');
       res.status(401).json({ error: 'Unauthorized' });
       return;

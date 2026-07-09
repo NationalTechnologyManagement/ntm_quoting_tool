@@ -56,15 +56,10 @@ const QuoteBuilder = () => {
     <div className="min-h-screen bg-background">
       <SiteHeader />
       <div className="max-w-6xl mx-auto space-y-10 py-12 px-4">
-        {/* Header — editable copy comes from siteContent (admin-controlled) */}
+        {/* Header — editable copy comes from siteContent (admin-controlled).
+            The brand logo lives in SiteHeader above; no standalone hero logo
+            here (removed per request — the header carries the branding). */}
         <div className="text-center space-y-4 animate-fade-in">
-          <div className="flex justify-center">
-            <img
-              src="/ntm-logo.png"
-              alt="NTM"
-              className="w-20 h-20 md:w-24 md:h-24 drop-shadow-[0_0_24px_rgba(232,127,55,0.25)]"
-            />
-          </div>
           <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold text-foreground">
             {siteContent.quoteBuilderHeading}
           </h1>

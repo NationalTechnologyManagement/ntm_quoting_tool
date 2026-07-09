@@ -10,7 +10,7 @@ import { Bot, X, Send, AlertTriangle, RefreshCcw, Sparkles, MessageCircle } from
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useAiChat, type ContactFormValues, type SizingFormValues } from '@/contexts/AiChatContext';
+import { useAiChat, type ContactFormValues, type SizingFormValues, type RecipientFormValues } from '@/contexts/AiChatContext';
 
 // The assistant must reply in plain text — no markdown. Models still emit
 // **bold**, ## headings, bullet markers, and en/em dashes despite the prompt,
@@ -34,10 +34,11 @@ function toPlainText(s: string): string {
 const INTRO_DISMISSED_KEY = 'ntm_ai_chat_intro_seen';
 
 export const AiChatWidget = () => {
-  const { enabled, open, setOpen, messages, send, status, fallbackActive, reset, session, primeGreeting, showContactForm, submitContactForm, showSizingForm, submitSizingForm } = useAiChat();
+  const { enabled, open, setOpen, messages, send, status, fallbackActive, reset, session, primeGreeting, showContactForm, submitContactForm, showSizingForm, submitSizingForm, showRecipientForm, submitRecipientForm } = useAiChat();
   const [input, setInput] = useState('');
   const [showIntro, setShowIntro] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
   const route = location.pathname;
   const onLanding = route === '/' || route === '/quote-builder';
@@ -45,6 +46,30 @@ export const AiChatWidget = () => {
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
   }, [messages, open]);
+
+  // Click-outside minimizes the panel back to the launcher so the customer can
+  // see the page again. Listen on mousedown (fires before click, so a
+  // click that both closes the panel and hits a page button doesn't double-
+  // act). Ignore clicks inside the panel itself. Native browser popups the
+  // agent opens (booking tab) are separate windows, so they don't trip this.
+  useEffect(() => {
+    if (!open) return;
+    const onDocMouseDown = (e: MouseEvent) => {
+      const el = panelRef.current;
+      if (el && !el.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    // Defer attaching until the next tick so the same click that opened the
+    // panel (e.g. the launcher button) doesn't immediately close it.
+    const id = window.setTimeout(() => {
+      document.addEventListener('mousedown', onDocMouseDown);
+    }, 0);
+    return () => {
+      window.clearTimeout(id);
+      document.removeEventListener('mousedown', onDocMouseDown);
+    };
+  }, [open, setOpen]);
 
   // When the panel opens, kick off a session so the greeting message lands
   // in the transcript before the customer types anything. No-op if a
@@ -171,6 +196,7 @@ export const AiChatWidget = () => {
       {/* Panel */}
       {open && (
         <div
+          ref={panelRef}
           role="dialog"
           aria-modal="true"
           aria-label="AI assistant"
@@ -222,6 +248,7 @@ export const AiChatWidget = () => {
             ))}
             {showContactForm && <ContactForm onSubmit={submitContactForm} />}
             {showSizingForm && <SizingForm onSubmit={submitSizingForm} />}
+            {showRecipientForm && <RecipientForm onSubmit={submitRecipientForm} />}
             {status === 'streaming' && messages[messages.length - 1]?.role !== 'assistant' && (
               <div className="text-xs text-muted-foreground">…thinking</div>
             )}
@@ -430,6 +457,38 @@ function SizingForm({ onSubmit }: { onSubmit: (values: SizingFormValues) => void
         }}
       >
         Submit
+      </Button>
+    </div>
+  );
+}
+
+// Inline recipient form rendered when the agent calls collect_recipients —
+// one extra person to email the quote to. On submit the context emails the
+// already-created quote to this address and nudges the agent to continue.
+function RecipientForm({ onSubmit }: { onSubmit: (values: RecipientFormValues) => void }) {
+  const [values, setValues] = useState<RecipientFormValues>({ name: '', email: '' });
+  const set = (k: keyof RecipientFormValues) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setValues((v) => ({ ...v, [k]: e.target.value }));
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email);
+
+  return (
+    <div className="rounded-lg border border-border bg-card p-3 space-y-2.5 shadow-sm">
+      <p className="text-xs font-medium text-foreground">Send the quote to someone else</p>
+      <div className="space-y-1">
+        <Label htmlFor="rf-name" className="text-xs">Their name (optional)</Label>
+        <Input id="rf-name" value={values.name} onChange={set('name')} placeholder="Jane Smith" className="h-9 text-sm" />
+      </div>
+      <div className="space-y-1">
+        <Label htmlFor="rf-email" className="text-xs">Their email</Label>
+        <Input id="rf-email" type="email" value={values.email} onChange={set('email')} placeholder="jane@example.com" className="h-9 text-sm" />
+      </div>
+      <Button
+        size="sm"
+        className="w-full mt-1"
+        disabled={!emailOk}
+        onClick={() => { if (emailOk) onSubmit(values); }}
+      >
+        Send
       </Button>
     </div>
   );

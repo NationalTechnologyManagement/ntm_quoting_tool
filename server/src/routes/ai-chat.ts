@@ -280,12 +280,31 @@ router.post(
         // The contact form is async — the customer fills it out on their own
         // time. Tell the model to wait instead of barrelling into the next
         // question; the submitted details arrive in a later snapshot.
-        if (tc.name === 'collect_contact' || tc.name === 'collect_sizing') {
-          const which = tc.name === 'collect_contact' ? 'contact' : 'sizing';
+        if (
+          tc.name === 'collect_contact' ||
+          tc.name === 'collect_sizing' ||
+          tc.name === 'collect_recipients'
+        ) {
+          const which =
+            tc.name === 'collect_contact'
+              ? 'contact'
+              : tc.name === 'collect_sizing'
+                ? 'sizing'
+                : 'recipient';
           return {
             toolCallId: tc.id,
             content:
               `ok — the ${which} form is now showing in the chat. Tell the customer to fill it out (one short line), then STOP. Do NOT ask the next question or call any other tool yet; wait for them to submit it.`,
+          };
+        }
+        // send_quote emails the quote client-side (async). Tell the model to
+        // confirm and ask about extra recipients — but not to assume anything
+        // beyond "it's being sent" since we have no client→server result.
+        if (tc.name === 'send_quote') {
+          return {
+            toolCallId: tc.id,
+            content:
+              "ok — the quote is being emailed to the customer now. In one short line, tell them it's on the way, then ASK if they'd like it sent to anyone else. Do NOT call another tool until they answer.",
           };
         }
         // go_to_checkout can be refused client-side (no package / no sizing
@@ -322,7 +341,15 @@ router.post(
       // own time. Stop the loop here regardless of what the model might do
       // next; their submission starts a fresh turn. This hard-enforces the
       // "wait" so the model can't barrel into the next question.
-      if (info.toolCalls.some((tc) => tc.name === 'collect_contact' || tc.name === 'collect_sizing')) break;
+      if (
+        info.toolCalls.some(
+          (tc) =>
+            tc.name === 'collect_contact' ||
+            tc.name === 'collect_sizing' ||
+            tc.name === 'collect_recipients',
+        )
+      )
+        break;
 
       if (round >= MAX_TOOL_ROUNDS) break; // model is stuck calling tools — stop here
       // Separator so this round's text doesn't mash into the follow-up text

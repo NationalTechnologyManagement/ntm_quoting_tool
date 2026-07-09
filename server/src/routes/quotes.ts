@@ -309,8 +309,26 @@ router.post('/api/quotes/:id/checkout', async (req, res) => {
   // $0 (no package, no addons, no custom items yet) and AP rejects empty
   // invoices — signing first would strand the quote in 'accepted' with a
   // stored signature and no payment path.
+  //
+  // Check the ACTUAL payable amount (what buildLineItems charges =
+  // onboarding + one-time + first-month recurring), NOT totals.grandTotal —
+  // the wizard's draft quote hard-codes grandTotal to 0 while recurringCosts
+  // holds the real first-month charge, so keying off grandTotal rejected
+  // every legitimate new-customer payment.
   const existing = await quoteService.getQuote(quoteId);
-  if ((existing.totals?.grandTotal ?? 0) <= 0) {
+  const payable =
+    (existing.totals?.onboardingCost ?? 0) +
+    (existing.totals?.oneTimeCosts ?? 0) +
+    (existing.totals?.recurringCosts ?? 0);
+  if (payable <= 0) {
+    console.warn(
+      `[checkout] rejected quote ${existing.quoteNumber} — nothing payable`,
+      {
+        onboardingCost: existing.totals?.onboardingCost,
+        oneTimeCosts: existing.totals?.oneTimeCosts,
+        recurringCosts: existing.totals?.recurringCosts,
+      },
+    );
     res.status(400).json({
       error:
         'This quote has no payable items yet. Contact us to finalize the quote before signing.',
@@ -318,6 +336,9 @@ router.post('/api/quotes/:id/checkout', async (req, res) => {
     return;
   }
 
+  console.log(
+    `[checkout] starting for ${existing.quoteNumber} — payable $${payable.toFixed(2)}`,
+  );
   const quote = await quoteService.updateQuoteAgreement(quoteId, payload);
   const result = await apService.createCheckout(quote);
 
@@ -336,7 +357,12 @@ router.get('/api/quotes/:id/payment-link', async (req, res) => {
   }
   const id = req.params.id as string;
   const quote = await quoteService.getQuote(id);
-  if ((quote.totals?.grandTotal ?? 0) <= 0) {
+  const payable =
+    (quote.totals?.onboardingCost ?? 0) +
+    (quote.totals?.oneTimeCosts ?? 0) +
+    (quote.totals?.recurringCosts ?? 0);
+  if (payable <= 0) {
+    console.warn(`[payment-link] rejected quote ${quote.quoteNumber} — nothing payable`);
     res.status(400).json({ error: 'This quote has no payable items yet.' });
     return;
   }
