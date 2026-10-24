@@ -1,3 +1,6 @@
+// The vault import is load-bearing: env.ts depends on vault.js, so ESM cannot
+// evaluate this module (and parse process.env) until the vault load has finished.
+import '../vault.js';
 import { z } from 'zod';
 
 const envSchema = z.object({

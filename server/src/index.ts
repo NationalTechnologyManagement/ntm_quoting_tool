@@ -1,3 +1,5 @@
+// Must stay the first import: reads Azure Key Vault into process.env (see vault.ts).
+import './vault.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import express from 'express';

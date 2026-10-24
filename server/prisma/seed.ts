@@ -1,3 +1,6 @@
+// Must stay the first import: reads Azure Key Vault (INITIAL_ADMIN_PASSWORD) into
+// process.env before main() runs. This script runs on every Railway deploy.
+import '../src/vault.js';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import {
