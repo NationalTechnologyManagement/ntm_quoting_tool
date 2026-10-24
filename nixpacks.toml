@@ -1,4 +1,8 @@
 [phases.setup]
+# Node 22: the Azure Key Vault SDK (server/src/vault.ts) needs the global
+# WebCrypto API (crypto.randomUUID), which Node 18 — the Nixpacks default — lacks.
+# .nvmrc and package.json "engines" pin the same version.
+nixPkgs = ["nodejs_22"]
 # Puppeteer's bundled Chrome needs a long list of shared libraries. Apt-installing
 # `chromium` alone pulls most but not all of them on the Ubuntu image Railway uses,
 # and the chromium binary path varies, so we install the deps explicitly and let
